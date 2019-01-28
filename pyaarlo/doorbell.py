@@ -1,6 +1,6 @@
 
 import pprint
-from pyarlo.device import ArloChildDevice
+from pyaarlo.device import ArloChildDevice
 
 class ArloDoorBell(ArloChildDevice):
 

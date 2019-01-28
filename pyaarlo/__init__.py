@@ -6,21 +6,21 @@ import base64
 import pprint
 import threading
 
-from pyarlo.background import ArloBackground
-from pyarlo.storage import ArloStorage
-from pyarlo.backend import ArloBackEnd
-from pyarlo.media import ArloMediaLibrary
-from pyarlo.base import ArloBase
-from pyarlo.camera import ArloCamera
-from pyarlo.doorbell import ArloDoorBell
+from pyaarlo.background import ArloBackground
+from pyaarlo.storage import ArloStorage
+from pyaarlo.backend import ArloBackEnd
+from pyaarlo.media import ArloMediaLibrary
+from pyaarlo.base import ArloBase
+from pyaarlo.camera import ArloCamera
+from pyaarlo.doorbell import ArloDoorBell
 
-from pyarlo.constant import ( BLANK_IMAGE,
+from pyaarlo.constant import ( BLANK_IMAGE,
                                 DEVICE_KEYS,
                                 DEVICES_URL,
                                 TOTAL_BELLS_KEY,
                                 TOTAL_CAMERAS_KEY )
 
-_LOGGER = logging.getLogger('cc.aarlo.pyarlo')
+_LOGGER = logging.getLogger('pyaarlo')
 
 class PyArlo(object):
 

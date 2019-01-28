@@ -2,9 +2,9 @@
 import threading
 import pprint
 
-from pyarlo.device import ArloChildDevice
-from pyarlo.util import ( http_get )
-from pyarlo.constant import( BRIGHTNESS_KEY,
+from pyaarlo.device import ArloChildDevice
+from pyaarlo.util import ( http_get )
+from pyaarlo.constant import( BRIGHTNESS_KEY,
                                 CAPTURED_TODAY_KEY,
                                 FLIP_KEY,
                                 LAST_CAPTURE_KEY,

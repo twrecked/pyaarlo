@@ -1,8 +1,8 @@
 
 import pprint
-from pyarlo.device import ArloDevice
+from pyaarlo.device import ArloDevice
 
-from pyarlo.constant import ( DEFAULT_MODES,
+from pyaarlo.constant import ( DEFAULT_MODES,
                                 MODES_KEY,
                                 MODE_ID_TO_NAME_KEY,
                                 MODE_KEY,

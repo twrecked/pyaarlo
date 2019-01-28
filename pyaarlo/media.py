@@ -3,9 +3,9 @@ import time
 import threading
 from datetime import datetime
 from datetime import timedelta
-from pyarlo.constant import ( LIBRARY_URL,
+from pyaarlo.constant import ( LIBRARY_URL,
                                 PRELOAD_DAYS )
-from pyarlo.util import ( arlotime_strftime,
+from pyaarlo.util import ( arlotime_strftime,
                             arlotime_to_datetime,
                             http_stream,
                             http_get )

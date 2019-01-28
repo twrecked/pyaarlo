@@ -1,9 +1,9 @@
 
 import pprint
 import threading
-import pyarlo.storage
+import pyaarlo.storage
 
-from pyarlo.constant import( BATTERY_KEY,
+from pyaarlo.constant import( BATTERY_KEY,
                                 PARENT_ID_KEY,
                                 RESOURCE_KEYS,
                                 RESOURCE_UPDATE_KEYS,

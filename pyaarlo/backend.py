@@ -6,8 +6,8 @@ import json
 import requests
 import pprint
 
-from pyarlo.sseclient import ( SSEClient )
-from pyarlo.constant import ( LOGOUT_URL,NOTIFY_URL,
+from pyaarlo.sseclient import ( SSEClient )
+from pyaarlo.constant import ( LOGOUT_URL,NOTIFY_URL,
                                 SUBSCRIBE_URL,
                                 UNSUBSCRIBE_URL,
                                 TRANSID_PREFIX )
