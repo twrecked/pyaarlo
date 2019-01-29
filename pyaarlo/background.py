@@ -12,7 +12,7 @@ class ArloBackgroundWorker(threading.Thread):
 
     def _next_id( self ):
         self._id += 1
-        return str(self._id) + ':' + str(time.monotonic) 
+        return str(self._id) + ':' + str(time.monotonic()) 
 
     def _run_next( self ):
 
@@ -77,6 +77,7 @@ class ArloBackgroundWorker(threading.Thread):
             for prio in self._queue.keys():
                 for run_at,job_id in self._queue[prio].keys():
                     if job_id == to_delete:
+                        print( 'cancelling ' + str(job_id) )
                         del self._queue[prio][ (run_at,job_id) ]
                         return True
         return False
@@ -125,7 +126,7 @@ class ArloBackground(threading.Thread):
     def run_low_every( self,cb,seconds,**kwargs):
         return self._run_every( cb,99,seconds,**kwargs)
 
-    def cancel( self,job_ib ):
-        if job_id is not None:
-            self._worker.stop_job( job_id )
+    def cancel( self,to_delete ):
+        if to_delete is not None:
+            self._worker.stop_job( to_delete )
 

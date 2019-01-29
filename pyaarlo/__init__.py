@@ -21,6 +21,7 @@ from pyaarlo.constant import ( BLANK_IMAGE,
                                 TOTAL_BELLS_KEY,
                                 TOTAL_CAMERAS_KEY )
 
+logging.basicConfig( level=logging.DEBUG )
 _LOGGER = logging.getLogger('pyaarlo')
 
 class PyArlo(object):
