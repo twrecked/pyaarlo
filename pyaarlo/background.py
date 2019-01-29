@@ -72,6 +72,16 @@ class ArloBackgroundWorker(threading.Thread):
             self._lock.notify()
         return job_id
 
+    def stop_job( self,to_delete ):
+        with self._lock:
+            for prio in self._queue.keys():
+                for run_at,job_id in self._queue[prio].keys():
+                    if job_id == to_delete:
+                        del self._queue[prio][ (run_at,job_id) ]
+                        return True
+        return False
+
+
 class ArloBackground(threading.Thread):
  
     def __init__( self,arlo ):
@@ -114,4 +124,8 @@ class ArloBackground(threading.Thread):
         return self._run_every( cb,40,seconds,**kwargs)
     def run_low_every( self,cb,seconds,**kwargs):
         return self._run_every( cb,99,seconds,**kwargs)
+
+    def cancel( self,job_ib ):
+        if job_id is not None:
+            self._worker.stop_job( job_id )
 
