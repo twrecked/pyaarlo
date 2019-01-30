@@ -77,7 +77,7 @@ class ArloBackgroundWorker(threading.Thread):
             for prio in self._queue.keys():
                 for run_at,job_id in self._queue[prio].keys():
                     if job_id == to_delete:
-                        print( 'cancelling ' + str(job_id) )
+                        #print( 'cancelling ' + str(job_id) )
                         del self._queue[prio][ (run_at,job_id) ]
                         return True
         return False
