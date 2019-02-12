@@ -225,6 +225,12 @@ class ArloBackEnd(object):
             return self._notify( base,{ "action":"set","resource":self.sub_id,
                                                                     "publishResponse":False,"properties":{"devices":[base.device_id]} } )
 
+    def async_on_off( self,base,device,privacy_on ):
+        with self.lock_:
+            return self._notify( base,{ "action":"set","resource":device.resource_id,
+                                                                    "publishResponse":True,
+                                                                    "properties":{"privacyActive":privacy_on} } )
+
     # login and set up session
     def login( self,username,password ):
         with self.lock_:
