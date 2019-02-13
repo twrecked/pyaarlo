@@ -5,7 +5,7 @@ import pprint
 
 from pyaarlo.device import ArloChildDevice
 from pyaarlo.util import ( arlotime_to_time,http_get )
-from pyaarlo.constant import( ACTIVITY_STATE,
+from pyaarlo.constant import( ACTIVITY_STATE_KEY,
                                 BRIGHTNESS_KEY,
                                 CAPTURED_TODAY_KEY,
                                 FLIP_KEY,
@@ -207,11 +207,11 @@ class ArloCamera(ArloChildDevice):
 
     @property
     def is_recording( self ):
-        return self._arlo._st.get( [self._device_id,ACTIVITY_STATE],'unknown' ) == 'alertStreamActive'
+        return self._arlo._st.get( [self._device_id,ACTIVITY_STATE_KEY],'unknown' ) == 'alertStreamActive'
 
     @property
     def is_streaming( self ):
-        return self._arlo._st.get( [self._device_id,ACTIVITY_STATE],'unknown' ) == 'userStreamActive'
+        return self._arlo._st.get( [self._device_id,ACTIVITY_STATE_KEY],'unknown' ) == 'userStreamActive'
 
     @property
     def was_recently_active( self ):
