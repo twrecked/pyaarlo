@@ -21,7 +21,6 @@ from pyaarlo.constant import ( BLANK_IMAGE,
                                 TOTAL_BELLS_KEY,
                                 TOTAL_CAMERAS_KEY )
 
-logging.basicConfig( level=logging.DEBUG )
 _LOGGER = logging.getLogger('pyaarlo')
 
 class PyArlo(object):
@@ -29,7 +28,7 @@ class PyArlo(object):
     def __init__( self,username,password,name='aarlo',
                         storage_dir='/config/.aarlo',dump=False,max_days=365,
                         db_motion_time=30,db_ding_time=10,
-                        recent_time=600 ):
+                        recent_time=600,last_format='%m-%d %H:%M' ):
 
         try:
             os.mkdir( storage_dir )
@@ -46,6 +45,7 @@ class PyArlo(object):
         self._cameras     = []
         self._doorbells   = []
         self._recent_time = recent_time
+        self._last_format = last_format
 
         # on day flip we reload image count
         self._today = datetime.date.today()
@@ -55,7 +55,7 @@ class PyArlo(object):
 
         # slow piece.
         # get devices and fill local db, and create device instance
-        self.info('getting devices')
+        self.info('pyaarlo starting')
         self._devices = self._be.get( DEVICES_URL )
         self._parse_devices()
         for device in self._devices:
@@ -63,11 +63,13 @@ class PyArlo(object):
             dtype = device.get('deviceType')
             if device.get('state','unknown') != 'provisioned':
                 self.info('skipping ' + dname + ': state unknown')
-            elif dtype == 'basestation':
+                continue
+
+            if dtype == 'basestation' or device.get('modelId') == 'ABC1000':
                 self._bases.append( ArloBase( dname,self,device ) )
-            elif dtype == 'camera' or dtype == 'arloq' or dtype == 'arloqs':
+            if dtype == 'camera' or dtype == 'arloq' or dtype == 'arloqs':
                 self._cameras.append( ArloCamera( dname,self,device ) )
-            elif dtype == 'doorbell':
+            if dtype == 'doorbell':
                 self._doorbells.append( ArloDoorBell( dname,self,device,
                                             motion_time=db_motion_time,ding_time=db_ding_time ) )
 
@@ -76,14 +78,14 @@ class PyArlo(object):
         self._st.set( ['ARLO',TOTAL_BELLS_KEY],len(self._doorbells) )
 
         # queue up initial config retrieval
-        self.info('getting initial settings' )
-        self._ml.load()
-        self._bg.run_in( self._refresh_cameras,1 )
-        self._bg.run_in( self._run_every_1,2 )
-        self._bg.run_in( self._run_every_15,3 )
+        self.debug('getting initial settings' )
+        self._bg.run_in( self._ml.load,1 )
+        self._bg.run_in( self._refresh_cameras,2 )
+        self._bg.run_in( self._run_every_1,3 )
+        self._bg.run_in( self._run_every_15,4 )
 
         # register house keeping cron jobs
-        self.info('registering cron jobs')
+        self.debug('registering cron jobs')
         self._bg.run_every( self._run_every_1,1*60 )
         self._bg.run_every( self._run_every_15,15*60 )
 
@@ -105,6 +107,10 @@ class PyArlo(object):
             camera.update_last_image()
             camera.update_media()
 
+    def _refresh_ambient_sensors( self ):
+        for camera in self._cameras:
+            camera.update_ambient_sensors()
+
     def _refresh_bases( self ):
         for base in self._bases:
             self._bg.run( self._be.notify,base=base,body={"action":"get","resource":"modes","publishResponse":False} )
@@ -112,22 +118,25 @@ class PyArlo(object):
             self._bg.run( self._be.notify,base=base,body={"action":"get","resource":"doorbells","publishResponse":False} )
 
     def _run_every_1( self ):
-        self.info( 'fast refresh' )
+        self.debug( 'fast refresh' )
         self._st.save()
 
         # alway ping bases
         for base in self._bases:
-            self._bg.run( self._be.ping,base=base )
+            self._bg.run( self._be.async_ping,base=base )
+
+        # get ambient updates
+        self._refresh_ambient_sensors()
 
         # if day changes then reload camera counts
         today = datetime.date.today()
         if self._today != today:
-            self.info( 'day changed!' )
+            self.debug( 'day changed!' )
             self._refresh_cameras()
             self._today = today
 
     def _run_every_15( self ):
-        self.info( 'slow refresh' )
+        self.debug( 'slow refresh' )
         self._refresh_bases()
         #self._bg.run( self._ml.load )
 

@@ -22,7 +22,7 @@ class ArloDoorBell(ArloChildDevice):
             self._dt_job = None
 
     def _event_handler( self,resource,event ):
-        self._arlo.info( self.name + ' DOORBELL got one ' + resource )
+        self._arlo.debug( self.name + ' DOORBELL got one ' + resource )
 
         # create fake motion/button press event...
         if resource.startswith('doorbells/'):
@@ -45,6 +45,10 @@ class ArloDoorBell(ArloChildDevice):
 
         # pass on to lower layer
         super()._event_handler( resource,event )
+
+    @property
+    def resource_id(self):
+        return 'doorbells/' + self._device_id
 
     def has_capability( self,cap ):
         if cap.startswith( 'button' ):
