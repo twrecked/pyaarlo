@@ -19,40 +19,38 @@ class ArloBackEnd(object):
 
     def __init__( self,arlo,username,password,dump,storage_dir ):
 
-        self._arlo = arlo
-        self.request_lock_ = threading.Lock()
-        self.lock_         = threading.Condition()
+        self._arlo     = arlo
+        self._lock     = threading.Condition()
+        self._req_lock = threading.Lock()
 
         self._dump      = dump
         self._dump_file = storage_dir + '/' + 'packets.dump'
 
-        self.requests_      = {}
-        self.subscriptions_ = {}
-        self.callbacks_     = {}
+        self._requests  = {}
+        self._callbacks = {}
 
         # login
-        self.session    = None
+        self._session   = None
         self._connected = self.login( username,password )
         if not self._connected:
             self._arlo.warning( 'failed to log in' )
             return
 
         # event loop thread - started as needed
-        self.ev_thread_ = None
         self._ev_start()
 
     def _request( self,url,method='GET',params={},headers={},stream=False,raw=False,timeout=30 ):
-        with self.request_lock_:
+        with self._req_lock:
             self._arlo.info( 'starting request=' + str(url) )
             try:
                 if method == 'GET':
-                    r = self.session.get( url,params=params,headers=headers,stream=stream,timeout=timeout )
+                    r = self._session.get( url,params=params,headers=headers,stream=stream,timeout=timeout )
                     if stream is True:
                         return r
                 elif method == 'PUT':
-                    r = self.session.put( url,json=params,headers=headers,timeout=timeout )
+                    r = self._session.put( url,json=params,headers=headers,timeout=timeout )
                 elif method == 'POST':
-                    r = self.session.post( url,json=params,headers=headers,timeout=timeout )
+                    r = self._session.post( url,json=params,headers=headers,timeout=timeout )
             except:
                 self._arlo.warning( 'timeout with backend request' )
                 return None
@@ -70,8 +68,8 @@ class ArloBackEnd(object):
             return None
 
     def _create_session( self ):
-        self.session = requests.Session()
-        self.session.mount('https://',requests.adapters.HTTPAdapter(pool_connections=5, pool_maxsize=10) )
+        self._session = requests.Session()
+        self._session.mount('https://',requests.adapters.HTTPAdapter(pool_connections=5, pool_maxsize=10) )
 
     def _update_session_headers( self,token ):
         # build up frequently used data
@@ -84,7 +82,7 @@ class ArloBackEnd(object):
             'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 11_1_2 like Mac OS X) AppleWebKit/604.3.5 (KHTML, like Gecko) Mobile/15B202 NETGEAR/v1 (iOS Vuezone)',
             'Authorization': token
         }
-        self.session.headers.update(headers)
+        self._session.headers.update(headers)
 
     def _gen_trans_id( self, trans_type=TRANSID_PREFIX ):
         return trans_type + '!' + str( uuid.uuid4() )
@@ -104,6 +102,7 @@ class ArloBackEnd(object):
         if resource.startswith('cameras/') or resource.startswith('doorbells/'):
             device_id = resource.split('/')[1]
             responses.append( (device_id,resource,response) )
+
         # this is thumbnail or media library updates
         elif resource == 'mediaUploadNotification':
             device_id = response.get('deviceId')
@@ -139,11 +138,11 @@ class ArloBackEnd(object):
         for device_id,resource,response in responses:
             cbs = []
             self._arlo.debug( 'sending ' + resource + ' to ' + device_id )
-            with self.lock_:
-                if device_id and device_id in self.callbacks_:
-                    cbs.extend( self.callbacks_[ device_id ] )
-                if 'all' in self.callbacks_:
-                    cbs.extend( self.callbacks_[ 'all' ] )
+            with self._lock:
+                if device_id and device_id in self._callbacks:
+                    cbs.extend( self._callbacks[ device_id ] )
+                if 'all' in self._callbacks:
+                    cbs.extend( self._callbacks[ 'all' ] )
             for cb in cbs:
                 cb( resource,response )
 
@@ -152,9 +151,9 @@ class ArloBackEnd(object):
 
                 # stopped?
                 if event is None:
-                    with self.lock_:
-                        self.ev_ok_ = False
-                        self.lock_.notify_all()
+                    with self._lock:
+                        self._ev_ok_ = False
+                        self._lock.notify_all()
                     break
 
                 response = json.loads( event.data )
@@ -164,25 +163,25 @@ class ArloBackEnd(object):
 
                 # logged out? signal exited
                 if response.get('action') == 'logout':
-                    with self.lock_:
-                        self.ev_ok_ = False
-                        self.lock_.notify_all()
+                    with self._lock:
+                        self._ev_ok_ = False
+                        self._lock.notify_all()
                         self._arlo.warning( 'logged out? did you log in from elsewhere?' )
                     break
 
                 # connected - yay!
                 if response.get('status') == 'connected':
-                    with self.lock_:
-                        self.ev_ok_ = True
-                        self.lock_.notify_all()
+                    with self._lock:
+                        self._ev_ok_ = True
+                        self._lock.notify_all()
                     continue
 
                 # is this from a notify?
                 tid = response.get('transId')
-                with self.lock_:
-                    if tid and tid in self.requests_:
-                        self.requests_[ tid ] = response
-                        self.lock_.notify_all()
+                with self._lock:
+                    if tid and tid in self._requests:
+                        self._requests[ tid ] = response
+                        self._lock.notify_all()
                         continue
 
                 self._ev_dispatcher( response )
@@ -191,70 +190,71 @@ class ArloBackEnd(object):
     def _ev_thread( self ):
         while True:
             self._arlo.debug( 'starting event loop' )
-            stream = SSEClient( SUBSCRIBE_URL + self.token,session=self.session )
+            stream = SSEClient( SUBSCRIBE_URL + self._token,session=self._session )
             self._ev_loop( stream )
 
             # try relogging in
-            with self.lock_:
-                self.lock_.wait( 5 )
+            with self._lock:
+                self._lock.wait( 5 )
             self._arlo.debug( 'logging back in' )
             self._connected = self.login( self.username,self.password )
 
     def _ev_start( self ):
-        self.ev_ok_ = False
-        self.ev_thread_ = threading.Thread( name="EventStream",target=self._ev_thread,args=() )
-        self.ev_thread_.setDaemon(True)
-        self.ev_thread_.start()
+        self._ev_ok_ = False
+        self._evt = threading.Thread( name="EventStream",target=self._ev_thread,args=() )
+        self._evt.setDaemon(True)
+        self._evt.start()
 
         # give time to start
-        with self.lock_:
-            self.lock_.wait( 30 )
-        if not self.ev_ok_:
+        with self._lock:
+            self._lock.wait( 30 )
+        if not self._ev_ok_:
             self._arlo.warning( 'event loop failed to start' )
-            self.ev_thread_ = None
+            self._evt = None
             return False
         return True
 
     def _notify( self,base,body ):
         body['to'] = base.device_id
-        body['from'] = self.web_id
+        body['from'] = self._web_id
         body['transId'] = self._gen_trans_id()
         self.post( NOTIFY_URL + base.device_id,body,headers={ "xcloudId":base.xcloud_id } )
         return body.get('transId')
 
     def _notify_and_get_response( self,base,body,timeout=120 ):
         tid = self._notify( base,body )
-        self.requests_[ tid ] = None
+        self._requests[ tid ] = None
         mnow = time.monotonic()
         mend = mnow + timeout
-        while not self.requests_[ tid ]:
-            self.lock_.wait( mend - mnow )
-            if self.requests_[ tid ]:
-                return self.requests_.pop( tid )
+        while not self._requests[ tid ]:
+            self._lock.wait( mend - mnow )
+            if self._requests[ tid ]:
+                return self._requests.pop( tid )
             mnow = time.monotonic()
             if ( mnow >= mend ):
-                return self.requests_.pop( tid )
+                return self._requests.pop( tid )
 
     def ping( self,base ):
-        with self.lock_:
-            return self._notify_and_get_response( base,{ "action":"set","resource":self.sub_id,
+        with self._lock:
+            return self._notify_and_get_response( base,{ "action":"set","resource":self._sub_id,
                                                                     "publishResponse":False,"properties":{"devices":[base.device_id]} } )
 
     def async_ping( self,base ):
-        with self.lock_:
-            return self._notify( base,{ "action":"set","resource":self.sub_id,
+        with self._lock:
+            return self._notify( base,{ "action":"set","resource":self._sub_id,
                                                                     "publishResponse":False,"properties":{"devices":[base.device_id]} } )
 
     def async_on_off( self,base,device,privacy_on ):
-        with self.lock_:
+        with self._lock:
             return self._notify( base,{ "action":"set","resource":device.resource_id,
                                                                     "publishResponse":True,
                                                                     "properties":{"privacyActive":privacy_on} } )
 
     # login and set up session
     def login( self,username,password ):
-        with self.lock_:
+        with self._lock:
 
+            # attempt login
             self.username  = username
             self.password  = password
             self._create_session()
@@ -264,22 +264,20 @@ class ArloBackEnd(object):
                 return False
 
             # save new login information
-            pprint.pprint( body )
             self._update_session_headers( body['token'] )
-            self.token   = body['token']
-            self.user_id = body['userId']
-            self.web_id  = self.user_id + '_web'
-            self.sub_id  = 'subscriptions/' + self.web_id
+            self._token   = body['token']
+            self._user_id = body['userId']
+            self._web_id  = self._user_id + '_web'
+            self._sub_id  = 'subscriptions/' + self._web_id
             return True
 
     def is_connected( self ):
-        with self.lock_:
+        with self._lock:
             return self._connected
 
     def logout( self ):
-        with self.lock_:
-            self.subscriptions_ = {}
-            self.requests_ = {}
+        with self._lock:
+            self._requests = {}
             self.put( LOGOUT_URL )
 
     def get( self,url,params={},headers={},stream=False,raw=False,timeout=30 ):
@@ -292,24 +290,24 @@ class ArloBackEnd(object):
         return self._request( url,'POST',params,headers,False,raw,timeout )
 
     def notify( self,base,body ):
-        with self.lock_:
+        with self._lock:
             return self._notify( base,body )
 
     def notify_and_get_response( self,base,body,timeout=60 ):
-        with self.lock_:
+        with self._lock:
             return self._notify_and_get_response( base,body,timeout )
 
     def add_listener( self,device,callback ):
-        with self.lock_:
-            if device.device_id not in self.callbacks_:
-                self.callbacks_[device.device_id] = []
-            self.callbacks_[device.device_id].append( callback )
+        with self._lock:
+            if device.device_id not in self._callbacks:
+                self._callbacks[device.device_id] = []
+            self._callbacks[device.device_id].append( callback )
 
     def add_any_listener( self,callback ):
-        with self.lock_:
-            if 'all' not in self.callbacks_:
-                self.callbacks_['all'] = []
-            self.callbacks_['all'].append( callback )
+        with self._lock:
+            if 'all' not in self._callbacks:
+                self._callbacks['all'] = []
+            self._callbacks['all'].append( callback )
 
     def del_listener( self,device,callback ):
         pass
