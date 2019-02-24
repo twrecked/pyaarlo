@@ -7,7 +7,9 @@ import requests
 import pprint
 
 from pyaarlo.sseclient import ( SSEClient )
-from pyaarlo.constant import ( LOGOUT_URL,NOTIFY_URL,
+from pyaarlo.constant import ( LOGIN_URL,
+                                LOGOUT_URL,
+                                NOTIFY_URL,
                                 SUBSCRIBE_URL,
                                 UNSUBSCRIBE_URL,
                                 TRANSID_PREFIX )
@@ -18,7 +20,6 @@ class ArloBackEnd(object):
     def __init__( self,arlo,username,password,dump,storage_dir ):
 
         self._arlo = arlo
-        self.session       = requests.Session()
         self.request_lock_ = threading.Lock()
         self.lock_         = threading.Condition()
 
@@ -29,11 +30,8 @@ class ArloBackEnd(object):
         self.subscriptions_ = {}
         self.callbacks_     = {}
 
-        # increase pool size
-        adapter = requests.adapters.HTTPAdapter(pool_connections=100, pool_maxsize=100)
-        self.session.mount('https://',adapter)
-
         # login
+        self.session    = None
         self._connected = self.login( username,password )
         if not self._connected:
             self._arlo.warning( 'failed to log in' )
@@ -43,16 +41,21 @@ class ArloBackEnd(object):
         self.ev_thread_ = None
         self._ev_start()
 
-    def _request( self,url,method='GET',params={},headers={},stream=False,raw=False ):
+    def _request( self,url,method='GET',params={},headers={},stream=False,raw=False,timeout=30 ):
         with self.request_lock_:
-            if method == 'GET':
-                r = self.session.get( url,params=params,headers=headers,stream=stream)
-                if stream is True:
-                    return r
-            elif method == 'PUT':
-                r = self.session.put( url,json=params,headers=headers )
-            elif method == 'POST':
-                r = self.session.post( url,json=params,headers=headers )
+            self._arlo.info( 'starting request=' + str(url) )
+            try:
+                if method == 'GET':
+                    r = self.session.get( url,params=params,headers=headers,stream=stream,timeout=timeout )
+                    if stream is True:
+                        return r
+                elif method == 'PUT':
+                    r = self.session.put( url,json=params,headers=headers,timeout=timeout )
+                elif method == 'POST':
+                    r = self.session.post( url,json=params,headers=headers,timeout=timeout )
+            except:
+                self._arlo.warning( 'timeout with backend request' )
+                return None
             
             if r.status_code != 200:
                 self._arlo.warning( 'error with request' )
@@ -65,6 +68,23 @@ class ArloBackEnd(object):
                 if 'data' in body:
                     return body['data']
             return None
+
+    def _create_session( self ):
+        self.session = requests.Session()
+        self.session.mount('https://',requests.adapters.HTTPAdapter(pool_connections=5, pool_maxsize=10) )
+
+    def _update_session_headers( self,token ):
+        # build up frequently used data
+        headers = {
+            'DNT': '1',
+            'schemaVersion': '1',
+            'Host': 'arlo.netgear.com',
+            'Content-Type': 'application/json; charset=utf-8;',
+            'Referer': 'https://arlo.netgear.com/',
+            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 11_1_2 like Mac OS X) AppleWebKit/604.3.5 (KHTML, like Gecko) Mobile/15B202 NETGEAR/v1 (iOS Vuezone)',
+            'Authorization': token
+        }
+        self.session.headers.update(headers)
 
     def _gen_trans_id( self, trans_type=TRANSID_PREFIX ):
         return trans_type + '!' + str( uuid.uuid4() )
@@ -169,8 +189,6 @@ class ArloBackEnd(object):
 
 
     def _ev_thread( self ):
-        #try:
-
         while True:
             self._arlo.debug( 'starting event loop' )
             stream = SSEClient( SUBSCRIBE_URL + self.token,session=self.session )
@@ -181,8 +199,6 @@ class ArloBackEnd(object):
                 self.lock_.wait( 5 )
             self._arlo.debug( 'logging back in' )
             self._connected = self.login( self.username,self.password )
-        #except:
-            #print( 'connection issues' )
 
     def _ev_start( self ):
         self.ev_ok_ = False
@@ -241,23 +257,15 @@ class ArloBackEnd(object):
 
             self.username  = username
             self.password  = password
-            body = self.post( 'https://arlo.netgear.com/hmsweb/login/v2', { 'email':self.username,'password':self.password } )
-            if not body:
+            self._create_session()
+            body = self.post( LOGIN_URL, { 'email':self.username,'password':self.password } )
+            if body is None:
                 self._arlo.debug( 'login failed' )
                 return False
 
-            # build up frequently used data
-            headers = {
-                'DNT': '1',
-                'schemaVersion': '1',
-                'Host': 'arlo.netgear.com',
-                'Content-Type': 'application/json; charset=utf-8;',
-                'Referer': 'https://arlo.netgear.com/',
-                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 11_1_2 like Mac OS X) AppleWebKit/604.3.5 (KHTML, like Gecko) Mobile/15B202 NETGEAR/v1 (iOS Vuezone)',
-                'Authorization': body['token']
-            }
-            self.session.headers.update(headers)
-
+            # save new login information
+            pprint.pprint( body )
+            self._update_session_headers( body['token'] )
             self.token   = body['token']
             self.user_id = body['userId']
             self.web_id  = self.user_id + '_web'
@@ -274,20 +282,20 @@ class ArloBackEnd(object):
             self.requests_ = {}
             self.put( LOGOUT_URL )
 
-    def get( self,url,params={},headers={},stream=False,raw=False ):
-        return self._request( url,'GET',params,headers,stream,raw )
+    def get( self,url,params={},headers={},stream=False,raw=False,timeout=30 ):
+        return self._request( url,'GET',params,headers,stream,raw,timeout )
 
-    def put( self,url,params={},headers={},raw=False ):
-        return self._request( url,'PUT',params,headers,raw )
+    def put( self,url,params={},headers={},raw=False,timeout=30 ):
+        return self._request( url,'PUT',params,headers,False,raw,timeout )
 
-    def post( self,url,params={},headers={},raw=False ):
-        return self._request( url,'POST',params,headers,raw )
+    def post( self,url,params={},headers={},raw=False,timeout=30 ):
+        return self._request( url,'POST',params,headers,False,raw,timeout )
 
     def notify( self,base,body ):
         with self.lock_:
             return self._notify( base,body )
 
-    def notify_and_get_response( self,base,body,timeout=120 ):
+    def notify_and_get_response( self,base,body,timeout=60 ):
         with self.lock_:
             return self._notify_and_get_response( base,body,timeout )
 
