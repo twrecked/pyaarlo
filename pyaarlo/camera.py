@@ -73,26 +73,6 @@ class ArloCamera(ArloChildDevice):
         self._save_and_do_callbacks( LAST_CAPTURE_KEY,last_captured )
         self._do_callbacks( 'mediaUploadNotification',True )
 
-        # is this capture considered recent? if so signal recently seen
-        now = int( time.time() )
-        self._arlo.info( 'now=' + str(now) + ',last=' + str(last_time) )
-        if now >= last_time:
-            delta = now - last_time
-        else:
-            delta = 1
-        recent = self._arlo._recent_time
-
-        self._arlo.debug( 'delta=' + str(delta) + ',recent=' + str(recent) )
-        if delta < recent:
-            with self._lock:
-                self._recent = True
-                self._arlo._bg.cancel( self._recent_job )
-                self._recent_job = self._arlo._bg.run_in( self._clear_recent,recent - delta )
-            self._arlo.info( 'turning recent ON for ' + self._name )
-            self._do_callbacks( 'recentActivity',True )
-        else:
-            self._clear_recent()
-
     def _update_last_image( self ):
         self._arlo.debug('getting image for ' + self.name )
         img = None
