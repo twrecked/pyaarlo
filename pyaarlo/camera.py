@@ -285,12 +285,12 @@ class ArloCamera(ArloChildDevice):
             'action': 'set',
             'from': self.web_id,
             'properties': {'activityState': 'fullFrameSnapshot'},
-            'publishResponse': 'true',
+            'publishResponse': True,
             'resource': self.resource_id,
-            'to': self.device_id,
+            'to': self.parent_id,
             'transId': self._arlo._be._gen_trans_id()
         }
-        self._arlo._bg.run( self._arlo._be.post,url=SNAPSHOT_URL,params=body,headers={ "xcloudId":self.base_station.xcloud_id } )
+        self._arlo._bg.run( self._arlo._be.post,url=SNAPSHOT_URL,params=body,headers={ "xcloudId":self.xcloud_id } )
 
     @property
     def is_taking_snapshot( self ):
