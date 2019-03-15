@@ -1,19 +1,20 @@
 
-import time
 import threading
 import pprint
 import base64
 import zlib
 
 from pyaarlo.device import ArloChildDevice
-from pyaarlo.util import ( arlotime_to_time,http_get )
+from pyaarlo.util import ( now_strftime,http_get )
 from pyaarlo.constant import( ACTIVITY_STATE_KEY,
                                 BRIGHTNESS_KEY,
                                 CAPTURED_TODAY_KEY,
                                 FLIP_KEY,
+                                IDLE_SNAPSHOT_URL,
                                 LAST_CAPTURE_KEY,
                                 LAST_IMAGE_DATA_KEY,
                                 LAST_IMAGE_KEY,
+                                LAST_IMAGE_SRC_KEY,
                                 MEDIA_COUNT_KEY,
                                 MEDIA_UPLOAD_KEYS,
                                 MIRROR_KEY,
@@ -21,7 +22,8 @@ from pyaarlo.constant import( ACTIVITY_STATE_KEY,
                                 POWER_SAVE_KEY,
                                 PRELOAD_DAYS,
                                 SNAPSHOT_KEY,
-                                SNAPSHOT_URL )
+                                STREAM_SNAPSHOT_KEY,
+                                STREAM_SNAPSHOT_URL )
 
 class ArloCamera(ArloChildDevice):
 
@@ -31,6 +33,7 @@ class ArloCamera(ArloChildDevice):
         self._recent_job = None
         self._cache_count = None
         self._cached_videos = None
+        self._snapshot_state = None
         self._min_days_vdo_cache = PRELOAD_DAYS
         self._lock = threading.Lock()
         self._arlo._bg.run_in( self._update_media,10 )
@@ -57,11 +60,9 @@ class ArloCamera(ArloChildDevice):
         if videos:
             captured_today = len([video for video in videos if video.created_today])
             last_captured = videos[0].created_at_pretty( self._arlo._last_format )
-            last_time = arlotime_to_time( videos[0].created_at )
         else:
             captured_today = 0
             last_captured = None
-            last_time = 0
 
         # update local copies
         with self._lock:
@@ -84,6 +85,7 @@ class ArloCamera(ArloChildDevice):
             img = self._arlo.blank_image
 
         # signal up if nedeed
+        self._arlo._st.set( [self.device_id,LAST_IMAGE_SRC_KEY],'capture/' + now_strftime(self._arlo._last_format) )
         self._save_and_do_callbacks( LAST_IMAGE_DATA_KEY,img )
 
     def _update_last_image_from_snapshot( self ):
@@ -93,7 +95,14 @@ class ArloCamera(ArloChildDevice):
             img = http_get( url )
             if img is not None:
                 # signal up if nedeed
+                self._arlo._st.set( [self.device_id,LAST_IMAGE_SRC_KEY],'snapshot/' + now_strftime(self._arlo._last_format) )
                 self._save_and_do_callbacks( LAST_IMAGE_DATA_KEY,img )
+
+        # we saved state around the snapshot
+        if self._snapshot_state is not None and self.is_taking_snapshot:
+            self._arlo.debug( 'our snapshot finished, restoring state' )
+            self._save_and_do_callbacks( ACTIVITY_STATE_KEY,self._snapshot_state )
+            self._snapshot_state = None
 
     def _parse_statistic( self,data,scale ):
         """Parse binary statistics returned from the history API"""
@@ -154,7 +163,14 @@ class ArloCamera(ArloChildDevice):
             # recording stopped then reload library
             if event.get('recordingStopped',False) == True:
                 self._arlo.debug( 'recording stopped, updating library' )
-                self._arlo._ml.queue_load( self._update_media )
+                self._arlo._ml.queue_update( self._update_media )
+
+            # snapshot happened?
+            value = event.get(STREAM_SNAPSHOT_KEY,'')
+            if '/snapshots/' in value:
+                self._arlo.debug( 'our snapshot finished, downloading it' )
+                self._arlo._st.set( [self.device_id,SNAPSHOT_KEY],value )
+                self._arlo._bg.run_low( self._update_last_image_from_snapshot )
 
             # something just happened!
             self._set_recent( self._arlo._recent_time )
@@ -192,6 +208,10 @@ class ArloCamera(ArloChildDevice):
     @property
     def last_image_from_cache(self):
         return self._arlo._st.get( [self._device_id,LAST_IMAGE_DATA_KEY],self._arlo.blank_image )
+
+    @property
+    def last_image_source(self):
+        return self._arlo._st.get( [self._device_id,LAST_IMAGE_SRC_KEY],'' )
 
     @property
     def last_video(self):
@@ -280,7 +300,18 @@ class ArloCamera(ArloChildDevice):
             return True
         return super().has_capability( cap )
 
-    def take_snapshot( self ):
+    def take_streaming_snapshot( self ):
+        body = {
+            'xcloudId': self.xcloud_id,
+            'parentId': self.parent_id,
+            'deviceId': self.device_id,
+            'olsonTimeZone': self.timezone,
+        }
+        self._snapshot_state = self._arlo._st.get( [self._device_id,ACTIVITY_STATE_KEY],'unknown' );
+        self._save_and_do_callbacks( ACTIVITY_STATE_KEY,'fullFrameSnapshot' )
+        self._arlo._bg.run( self._arlo._be.post,url=STREAM_SNAPSHOT_URL,params=body,headers={ "xcloudId":self.xcloud_id } )
+
+    def take_idle_snapshot( self ):
         body = {
             'action': 'set',
             'from': self.web_id,
@@ -290,7 +321,16 @@ class ArloCamera(ArloChildDevice):
             'to': self.parent_id,
             'transId': self._arlo._be._gen_trans_id()
         }
-        self._arlo._bg.run( self._arlo._be.post,url=SNAPSHOT_URL,params=body,headers={ "xcloudId":self.xcloud_id } )
+        self._snapshot_state = self._arlo._st.get( [self._device_id,ACTIVITY_STATE_KEY],'unknown' );
+        self._arlo._bg.run( self._arlo._be.post,url=IDLE_SNAPSHOT_URL,params=body,headers={ "xcloudId":self.xcloud_id } )
+
+    def take_snapshot( self ):
+        if self.is_streaming or self.is_recording:
+            self._arlo.debug('streaming snapshot')
+            self.take_streaming_snapshot()
+        elif not self.is_taking_snapshot:
+            self.take_idle_snapshot()
+            self._arlo.debug('idle snapshot')
 
     @property
     def is_taking_snapshot( self ):

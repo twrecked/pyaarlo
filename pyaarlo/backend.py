@@ -8,7 +8,8 @@ import pprint
 
 #from sseclient import ( SSEClient )
 from pyaarlo.sseclient import ( SSEClient )
-from pyaarlo.constant import ( LOGIN_URL,
+from pyaarlo.constant import ( EVENT_STREAM_TIMEOUT,
+                                LOGIN_URL,
                                 LOGOUT_URL,
                                 NOTIFY_URL,
                                 SUBSCRIBE_URL,
@@ -18,7 +19,8 @@ from pyaarlo.constant import ( LOGIN_URL,
 # include token and session details
 class ArloBackEnd(object):
 
-    def __init__( self,arlo,username,password,dump,storage_dir ):
+    def __init__( self,arlo,username,password,dump,storage_dir,
+                        request_timeout,stream_timeout):
 
         self._arlo     = arlo
         self._lock     = threading.Condition()
@@ -26,6 +28,9 @@ class ArloBackEnd(object):
 
         self._dump      = dump
         self._dump_file = storage_dir + '/' + 'packets.dump'
+
+        self._request_timeout = request_timeout
+        self._stream_timeout  = stream_timeout
 
         self._requests  = {}
         self._callbacks = {}
@@ -40,7 +45,9 @@ class ArloBackEnd(object):
         # event loop thread - started as needed
         self._ev_start()
 
-    def _request( self,url,method='GET',params={},headers={},stream=False,raw=False,timeout=30 ):
+    def _request( self,url,method='GET',params={},headers={},stream=False,raw=False,timeout=None ):
+        if timeout is None:
+            timeout = self._request_timeout
         with self._req_lock:
             self._arlo.debug( 'starting request=' + str(url) )
             try:
@@ -54,6 +61,7 @@ class ArloBackEnd(object):
                     r = self._session.post( url,json=params,headers=headers,timeout=timeout )
             except:
                 self._arlo.warning( 'timeout with backend request' )
+                #self._ev_stream.close()
                 self._ev_stream.resp.close()
                 return None
 
@@ -68,23 +76,6 @@ class ArloBackEnd(object):
                 if 'data' in body:
                     return body['data']
             return None
-
-    def _create_session( self ):
-        self._session = requests.Session()
-        self._session.mount('https://',requests.adapters.HTTPAdapter(pool_connections=5, pool_maxsize=10) )
-
-    def _update_session_headers( self,token ):
-        # build up frequently used data
-        headers = {
-            'DNT': '1',
-            'schemaVersion': '1',
-            'Host': 'arlo.netgear.com',
-            'Content-Type': 'application/json; charset=utf-8;',
-            'Referer': 'https://arlo.netgear.com/',
-            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 11_1_2 like Mac OS X) AppleWebKit/604.3.5 (KHTML, like Gecko) Mobile/15B202 NETGEAR/v1 (iOS Vuezone)',
-            'Authorization': token
-        }
-        self._session.headers.update(headers)
 
     def _gen_trans_id( self, trans_type=TRANSID_PREFIX ):
         return trans_type + '!' + str( uuid.uuid4() )
@@ -179,13 +170,14 @@ class ArloBackEnd(object):
                         self._lock.notify_all()
                     continue
 
-                # is this from a notify?
+                # is this from a notify? then signal to waiting entity, also
+                # pass into dispatcher
                 tid = response.get('transId')
                 with self._lock:
                     if tid and tid in self._requests:
                         self._requests[ tid ] = response
                         self._lock.notify_all()
-                        continue
+                        #continue
 
                 self._ev_dispatcher( response )
 
@@ -195,22 +187,23 @@ class ArloBackEnd(object):
         self._arlo.debug( 'starting event loop' )
         while True:
 
-            # login again if not first iteration
+            # login again if not first iteration, this will also create a new session
             while not self._connected:
                 with self._lock:
                     self._lock.wait( 5 )
                 self._arlo.debug( 're-logging in' )
                 self._connected = self.login( self.username,self.password )
 
-            # recreate session
-            self._arlo.debug( 're-creating session' )
-            self._create_session()
-            self._update_session_headers( self._token )
-
-            # get stream, restart after 2 minutes of inactivity or forced close
+            # get stream, restart after requested seconds of inactivity or forced close
             try:
-                #  self._ev_stream = SSEClient( self.get( SUBSCRIBE_URL + self._token,stream=True,raw=True,timeout=121 ) )
-                self._ev_stream = SSEClient( SUBSCRIBE_URL + self._token,session=self._session,timeout=121 )
+                if self._stream_timeout == 0:
+                    self._arlo.debug( 'starting stream with no timeout' )
+                    #self._ev_stream = SSEClient( self.get( SUBSCRIBE_URL + self._token,stream=True,raw=True ) )
+                    self._ev_stream = SSEClient( self._arlo,SUBSCRIBE_URL + self._token,session=self._session )
+                else:
+                    self._arlo.debug( 'starting stream with {} timeout'.format( self._stream_timeout ) )
+                    #self._ev_stream = SSEClient( self.get( SUBSCRIBE_URL + self._token,stream=True,raw=True,timeout=self._stream_timeout ) )
+                    self._ev_stream = SSEClient( self._arlo,SUBSCRIBE_URL + self._token,session=self._session,timeout=self._stream_timeout )
                 self._ev_loop( self._ev_stream )
             except requests.exceptions.ConnectionError as e:
                 self._arlo.warning( 'event loop timeout' )
@@ -218,6 +211,7 @@ class ArloBackEnd(object):
                 self._arlo.warning( 'forced close' )
 
             # restart login...
+            self._ev_stream = None
             self._connected = False
 
     def _ev_start( self ):
@@ -243,7 +237,9 @@ class ArloBackEnd(object):
         self.post( NOTIFY_URL + base.device_id,body,headers={ "xcloudId":base.xcloud_id } )
         return body.get('transId')
 
-    def _notify_and_get_response( self,base,body,timeout=120 ):
+    def _notify_and_get_response( self,base,body,timeout=None ):
+        if timeout is None:
+            timeout = self._request_timeout
         tid = self._notify( base,body )
         self._requests[ tid ] = None
         mnow = time.monotonic()
@@ -277,9 +273,10 @@ class ArloBackEnd(object):
         with self._lock:
 
             # attempt login
-            self.username  = username
-            self.password  = password
-            self._create_session()
+            self.username = username
+            self.password = password
+            self._session = requests.Session()
+            self._session.mount('https://',requests.adapters.HTTPAdapter(pool_connections=5, pool_maxsize=10) )
             body = self.post( LOGIN_URL, { 'email':self.username,'password':self.password } )
             if body is None:
                 self._arlo.debug( 'login failed' )
@@ -290,7 +287,19 @@ class ArloBackEnd(object):
             self._user_id = body['userId']
             self._web_id  = self._user_id + '_web'
             self._sub_id  = 'subscriptions/' + self._web_id
-            self._update_session_headers( self._token )
+
+            # update sessions headers
+            # XXX allow different user agent
+            headers = {
+                'DNT': '1',
+                'schemaVersion': '1',
+                'Host': 'arlo.netgear.com',
+                'Content-Type': 'application/json; charset=utf-8;',
+                'Referer': 'https://arlo.netgear.com/',
+                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 11_1_2 like Mac OS X) AppleWebKit/604.3.5 (KHTML, like Gecko) Mobile/15B202 NETGEAR/v1 (iOS Vuezone)',
+                'Authorization': self._token
+            }
+            self._session.headers.update(headers)
             return True
 
     def is_connected( self ):
@@ -302,20 +311,20 @@ class ArloBackEnd(object):
             self._requests = {}
             self.put( LOGOUT_URL )
 
-    def get( self,url,params={},headers={},stream=False,raw=False,timeout=30 ):
+    def get( self,url,params={},headers={},stream=False,raw=False,timeout=None ):
         return self._request( url,'GET',params,headers,stream,raw,timeout )
 
-    def put( self,url,params={},headers={},raw=False,timeout=30 ):
+    def put( self,url,params={},headers={},raw=False,timeout=None ):
         return self._request( url,'PUT',params,headers,False,raw,timeout )
 
-    def post( self,url,params={},headers={},raw=False,timeout=30 ):
+    def post( self,url,params={},headers={},raw=False,timeout=None ):
         return self._request( url,'POST',params,headers,False,raw,timeout )
 
     def notify( self,base,body ):
         with self._lock:
             return self._notify( base,body )
 
-    def notify_and_get_response( self,base,body,timeout=60 ):
+    def notify_and_get_response( self,base,body,timeout=None ):
         with self._lock:
             return self._notify_and_get_response( base,body,timeout )
 
