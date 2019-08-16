@@ -2,5 +2,6 @@
 #
 # small script to fix pyaarlo imports while testing hass-aarlo
 
-sed -i.old -e 's@from custom_components.aarlo.pyaarlo@from pyaarlo@' *py
-sed -i.old -e 's@import custom_components.aarlo.pyaarlo@import pyaarlo@' *py
+echo "this shouldn't be needed, import from develop for now"
+#sed -i.old -e 's@from custom_components.aarlo.pyaarlo@from pyaarlo@' *py
+#sed -i.old -e 's@import custom_components.aarlo.pyaarlo@import pyaarlo@' *py
