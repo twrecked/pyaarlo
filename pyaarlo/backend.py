@@ -5,6 +5,7 @@ import time
 import uuid
 
 import requests
+import requests.adapters
 
 from .constant import (LOGIN_URL, LOGOUT_URL,
                        NOTIFY_URL, SUBSCRIBE_URL, TRANSID_PREFIX, DEVICES_URL)
@@ -92,6 +93,10 @@ class ArloBackEnd(object):
 
     def gen_trans_id(self, trans_type=TRANSID_PREFIX):
         return trans_type + '!' + str(uuid.uuid4())
+
+    def _ev_reconnected(self):
+        self._arlo.debug('Fetching device list after ev-reconnect')
+        self.get(DEVICES_URL + "?t={}".format(time_to_arlotime()))
 
     def _ev_dispatcher(self, response):
 
@@ -206,21 +211,21 @@ class ArloBackEnd(object):
                     self._lock.wait(5)
                 self._arlo.debug('re-logging in')
                 self._logged_in = self._login()
-                if self._logged_in:
-                    self.get(DEVICES_URL + "?t={}".format(time_to_arlotime()))
 
             # get stream, restart after requested seconds of inactivity or forced close
             try:
                 if self._arlo.cfg.stream_timeout == 0:
                     self._arlo.debug('starting stream with no timeout')
                     # self._ev_stream = SSEClient( self.get( SUBSCRIBE_URL + self._token,stream=True,raw=True ) )
-                    self._ev_stream = SSEClient(self._arlo, SUBSCRIBE_URL + self._token, session=self._session)
+                    self._ev_stream = SSEClient(self._arlo, SUBSCRIBE_URL + self._token, session=self._session,
+                                                reconnect_cb=self._ev_reconnected)
                 else:
                     self._arlo.debug('starting stream with {} timeout'.format(self._arlo.cfg.stream_timeout))
                     # self._ev_stream = SSEClient(
                     #     self.get(SUBSCRIBE_URL + self._token, stream=True, raw=True,
                     #              timeout=self._arlo.cfg.stream_timeout))
                     self._ev_stream = SSEClient(self._arlo, SUBSCRIBE_URL + self._token, session=self._session,
+                                                reconnect_cb=self._ev_reconnected,
                                                 timeout=self._arlo.cfg.stream_timeout)
                 self._ev_loop(self._ev_stream)
             except requests.exceptions.ConnectionError:
@@ -237,7 +242,7 @@ class ArloBackEnd(object):
     def _ev_start(self):
         self._ev_stream = None
         self._ev_connected_ = False
-        self._ev_thread = threading.Thread(name="EventStream", target=self._ev_thread, args=())
+        self._ev_thread = threading.Thread(name="ArloEventStream", target=self._ev_thread, args=())
         self._ev_thread.setDaemon(True)
         self._ev_thread.start()
 
@@ -338,6 +343,8 @@ class ArloBackEnd(object):
                                      'Chrome/72.0.3626.81 Safari/537.36')
 
         self._session.headers.update(headers)
+        self._arlo.debug('Fetching device list after login (seems to make arming/disarming more stable)')
+        self.get(DEVICES_URL + "?t={}".format(time_to_arlotime()))
         return True
 
     def is_connected(self):
