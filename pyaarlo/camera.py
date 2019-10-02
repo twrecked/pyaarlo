@@ -3,15 +3,14 @@ import threading
 import time
 import zlib
 
-from .constant import (ACTIVITY_STATE_KEY, BATTERY_TECH_KEY, BRIGHTNESS_KEY,
-                       CAPTURED_TODAY_KEY, CHARGER_KEY, CHARGING_KEY,
-                       FLIP_KEY, IDLE_SNAPSHOT_URL, LAST_CAPTURE_KEY,
+from .constant import (ACTIVITY_STATE_KEY, BRIGHTNESS_KEY,
+                       CAPTURED_TODAY_KEY, FLIP_KEY, IDLE_SNAPSHOT_PATH, LAST_CAPTURE_KEY,
                        LAST_IMAGE_DATA_KEY, LAST_IMAGE_KEY,
                        LAST_IMAGE_SRC_KEY, MEDIA_COUNT_KEY,
                        MEDIA_UPLOAD_KEYS, MIRROR_KEY, MOTION_SENS_KEY,
-                       POWER_SAVE_KEY, PRELOAD_DAYS,
-                       SNAPSHOT_KEY, STREAM_SNAPSHOT_KEY,
-                       STREAM_SNAPSHOT_URL, STREAM_START_URL, CAMERA_MEDIA_DELAY)
+                       POWER_SAVE_KEY, PRELOAD_DAYS, PRIVACY_KEY,
+                       SNAPSHOT_KEY, SIREN_STATE_KEY, STREAM_SNAPSHOT_KEY,
+                       STREAM_SNAPSHOT_PATH, STREAM_START_PATH, CAMERA_MEDIA_DELAY)
 from .device import ArloChildDevice
 from .util import http_get, http_get_img
 
@@ -220,8 +219,8 @@ class ArloCamera(ArloChildDevice):
         super()._event_handler(resource, event)
 
     @property
-    def resource_id(self):
-        return 'cameras/' + self._device_id
+    def resource_type(self):
+        return "cameras"
 
     @property
     def last_image(self):
@@ -293,26 +292,6 @@ class ArloCamera(ArloChildDevice):
     def recent(self):
         return self._recent
 
-    @property
-    def battery_tech(self):
-        return self._arlo.st.get([self._device_id, BATTERY_TECH_KEY], 'None')
-
-    @property
-    def charging(self):
-        return self._arlo.st.get([self._device_id, CHARGING_KEY], 'off').lower() == 'on'
-
-    @property
-    def charger_type(self):
-        return self._arlo.st.get([self._device_id, CHARGER_KEY], 'None')
-
-    @property
-    def wired(self):
-        return self.charger_type.lower() != 'none'
-
-    @property
-    def wired_only(self):
-        return self.battery_tech.lower() == 'none' and self.wired
-
     @min_days_vdo_cache.setter
     def min_days_vdo_cache(self, value):
         self._min_days_vdo_cache = value
@@ -336,14 +315,19 @@ class ArloCamera(ArloChildDevice):
                                     "publishResponse": False})
 
     def has_capability(self, cap):
+        if cap in 'motionDetected':
+            return True
         if cap in ('last_capture', 'captured_today', 'recent_activity', 'battery_level', 'signal_strength'):
             return True
         if cap in ('temperature', 'humidity', 'air_quality', 'airQuality') and self.model_id == 'ABC1000':
             return True
         if cap in ('audio', 'audioDetected', 'sound'):
-            if self.model_id.startswith('VMC4030') or self.model_id.startswith('VMC5040') or self.model_id == 'ABC1000':
+            if self.model_id.startswith('VMC4030') or self.model_id.startswith('VMC5040') or self.model_id.startswith('VMC4040') or self.model_id == 'ABC1000':
                 return True
             if self.device_type.startswith('arloq'):
+                return True
+        if cap in 'siren':
+            if self.model_id.startswith('VMC5040') or self.model_id.startswith('VMC4040'):
                 return True
         return super().has_capability(cap)
 
@@ -355,7 +339,7 @@ class ArloCamera(ArloChildDevice):
             'olsonTimeZone': self.timezone,
         }
         self._save_and_do_callbacks(ACTIVITY_STATE_KEY, 'fullFrameSnapshot')
-        self._arlo.bg.run(self._arlo.be.post, url=STREAM_SNAPSHOT_URL, params=body,
+        self._arlo.bg.run(self._arlo.be.post, path=STREAM_SNAPSHOT_PATH, params=body,
                           headers={"xcloudId": self.xcloud_id})
 
     def take_idle_snapshot(self):
@@ -368,7 +352,7 @@ class ArloCamera(ArloChildDevice):
             'to': self.parent_id,
             'transId': self._arlo.be.gen_trans_id()
         }
-        self._arlo.bg.run(self._arlo.be.post, url=IDLE_SNAPSHOT_URL, params=body,
+        self._arlo.bg.run(self._arlo.be.post, path=IDLE_SNAPSHOT_PATH, params=body,
                           headers={"xcloudId": self.xcloud_id})
 
     def _request_snapshot(self):
@@ -439,7 +423,7 @@ class ArloCamera(ArloChildDevice):
             'to': self.parent_id,
             'transId': self._arlo.be.gen_trans_id()
         }
-        reply = self._arlo.be.post(STREAM_START_URL, body, headers={"xcloudId": self.xcloud_id})
+        reply = self._arlo.be.post(STREAM_START_PATH, body, headers={"xcloudId": self.xcloud_id})
         if reply is None:
             return None
         url = reply['url'].replace("rtsp://", "rtsps://")
@@ -462,3 +446,39 @@ class ArloCamera(ArloChildDevice):
                               'resource': self.resource_id,
                           })
         return True
+
+    @property
+    def siren_resource_id(self):
+        return "siren/{}".format(self.device_id)
+
+    @property
+    def siren_state(self):
+        return self._arlo.st.get([self._device_id, SIREN_STATE_KEY], "off")
+
+    def siren_on(self, duration=300, volume=8):
+        body = {
+            'action': 'set',
+            'resource': self.siren_resource_id,
+            'publishResponse': True,
+            'properties': {'sirenState': 'on', 'duration': int(duration), 'volume': int(volume), 'pattern': 'alarm'}
+        }
+        self._arlo.bg.run(self._arlo.be.notify, base=self, body=body)
+
+    def siren_off(self):
+        body = {
+            'action': 'set',
+            'resource': self.siren_resource_id,
+            'publishResponse': True,
+            'properties': {'sirenState': 'off'}
+        }
+        self._arlo.bg.run(self._arlo.be.notify, base=self, body=body)
+
+    @property
+    def is_on(self):
+        return not self._arlo.st.get([self._device_id, PRIVACY_KEY], False)
+
+    def turn_on(self):
+        self._arlo.bg.run(self._arlo.be.async_on_off, base=self.base_station, device=self, privacy_on=False)
+
+    def turn_off(self):
+        self._arlo.bg.run(self._arlo.be.async_on_off, base=self.base_station, device=self, privacy_on=True)
