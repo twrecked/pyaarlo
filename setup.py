@@ -9,9 +9,9 @@ def readme():
 
 
 setup(
-    name='pyarlo',
-    packages=['pyarlo'],
-    version='0.1',
+    name='pyaarlo',
+    packages=['pyaarlo'],
+    version='0.6.9',
     description='Python Aarlo is a library that provides asynchronous access to Netgear Arlo cameras.',
     long_description=readme(),
     author='Steve Herrell'
