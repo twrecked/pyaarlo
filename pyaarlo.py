@@ -17,6 +17,7 @@ opts = {
 
     "storage-dir": "./",
 
+    "compact": False,
     "verbose": 0,
 }
 
@@ -49,12 +50,20 @@ def login():
         _exit("unable to login to Arlo")
     return ar
 
+def print_item(name,item):
+    if opts["compact"]:
+        print( " {};did={};mid={}/{};sno={}".format(item.name,item.device_id,item.model_id,item.hw_version,item.serial_number))
+    else:
+        print( " {}".format(item.name))
+        print( "  device-id:{}".format(item.device_id))
+        print( "  model-id:{}/{}".format(item.model_id,item.hw_version))
+        print( "  serial-number:{}".format(item.serial_number))
+
 def list_items(name,items):
     print("{}:".format(name))
-    if items is None:
-        print(" no found")
-    else:
-        print(" some found")
+    if items is not None:
+        for item in items:
+            print_item(name,item)
 
 
 @click.group()
@@ -62,14 +71,18 @@ def list_items(name,items):
               help="Arlo username")
 @click.option('-p','--password',required=True,
               help="Arlo password")
+@click.option('--compact/--no-compact',default=False,
+              help="Minimize lists")
 @click.option('-s','--storage-dir',
               default="./", show_default='current dir',
               help="Where to store Arlo state and packet dump")
 @click.option("-v", "--verbose", count=True,
               help="Be chatty. More is more chatty!")
-def cli( username,password,verbose,storage_dir ):
+def cli( username,password,compact,storage_dir,verbose ):
     opts['username'] = username
     opts['password'] = password
+    if compact is not None:
+        opts['compact'] = compact
     if storage_dir is not None:
         opts['storage-dir'] = storage_dir
     if verbose is not None:
