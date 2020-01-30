@@ -5,11 +5,23 @@ import sys
 import click
 import pprint
 import logging
+import base64
 
 from pyaarlo import PyArlo
 
 logging.basicConfig(level=logging.ERROR)
 _LOGGER = logging.getLogger('pyaarlo')
+
+
+PUBLIC_KEY = """-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1oYXnbQPxREiVPUIRkgk
+h+ehjxHnwz34NsjhjgN1oSKmHpf4cL4L/V4tMnj5NELEmLyTrzAZbeewUMwyiwXO
+3l+cSjjoDKcPBSj4uxjWsq74Q5TLHGjOtkFwaqqxtvsVn3fGFWBO405xpvp7jPUc
+BOvBQaUBUaR9Tbw5anMOzeavUwUTRp2rjtbWyj2P7PEp49Ixzw0w+RjIVrzzevAo
+AD7SVb6U8P77fht4k9krbIFckC/ByY48HhmF+edh1GZAgLCHuf43tGg2upuH5wf+
+AGv/Xlc+9ScTjEp37uPiCpHcB1ur83AFTjcceDIm+VDKF4zQrj88zmL7JqZy+Upx
+UQIDAQAB
+-----END PUBLIC KEY-----"""
 
 opts = {
     "username": None,
@@ -42,6 +54,24 @@ def _info(args):
 def _exit(args):
     sys.exit("ERROR:{}".format(args))
 
+
+def encrypt_RSA(message):
+    from Crypto.PublicKey import RSA
+    from Crypto.Cipher import PKCS1_OAEP
+    rsakey = RSA.importKey(PUBLIC_KEY)
+    rsakey = PKCS1_OAEP.new(rsakey)
+    encrypted = rsakey.encrypt(message)
+    return base64.encodebytes(encrypted)
+
+def decrypt_RSA(private_key_loc, encrypted):
+    from Crypto.PublicKey import RSA
+    from Crypto.Cipher import PKCS1_OAEP
+    encrypted = base64.b64decode(encrypted)
+    key = open(private_key_loc, "r").read()
+    rsakey = RSA.importKey(key)
+    rsakey = PKCS1_OAEP.new(rsakey)
+    message = rsakey.decrypt(encrypted)
+    return message
 
 def login():
     _info("logging in")
@@ -96,14 +126,17 @@ def cli( username,password,compact,storage_dir,verbose ):
 
 
 @cli.command()
-def dump():
-    _info("logging in")
-    #ar = PyArlo( username=opts["username"], password=opts["password"], storage_dir=opts["storage-dir"], dump=True )
-    #_pprint( ar._devices )
-    #_pprint(opts)
-    print("** device list")
-    #pprint(ar._devices)
-    print("")
+@click.argument('item', default='raw',
+                type=click.Choice(['raw', 'all', 'cameras', 'bases', 'lights', 'doorbells'], case_sensitive=False))
+def dump(item):
+
+    ar = login()
+
+    out = ""
+    if item == 'raw':
+        out = pprint.pformat( ar._devices )
+
+    print( encrypt_RSA(out.encode()))
 
 
 @cli.command()
