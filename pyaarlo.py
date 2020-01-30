@@ -56,12 +56,22 @@ def _exit(args):
 
 
 def encrypt_RSA(message):
+    from Crypto.Cipher import AES
+    from Crypto.Random import get_random_bytes
     from Crypto.PublicKey import RSA
     from Crypto.Cipher import PKCS1_OAEP
+
+    nonce = get_random_bytes(16)
+    cipher = AES.new(nonce)
+    message = message.encode() + b' ' * (16 - len(message) % 16)
+    message = base64.encodebytes(cipher.encrypt(message))
+
     rsakey = RSA.importKey(PUBLIC_KEY)
     rsakey = PKCS1_OAEP.new(rsakey)
-    encrypted = rsakey.encrypt(message)
-    return base64.encodebytes(encrypted)
+    nonce = base64.encodebytes(rsakey.encrypt(nonce))
+
+    return nonce.decode().rstrip(),message.decode().rstrip()
+
 
 def decrypt_RSA(private_key_loc, encrypted):
     from Crypto.PublicKey import RSA
@@ -136,7 +146,13 @@ def dump(item):
     if item == 'raw':
         out = pprint.pformat( ar._devices )
 
-    print( encrypt_RSA(out.encode()))
+    key,msg = encrypt_RSA(out)
+    print("-----BEGIN KEY-----")
+    print(key)
+    print("-----END KEY-----")
+    print("-----BEGIN ARLO DUMP-----")
+    print(msg)
+    print("-----END ARLO DUMP-----")
 
 
 @cli.command()
