@@ -6,12 +6,15 @@ import click
 import pprint
 import logging
 import base64
+import pickle
 
 from pyaarlo import PyArlo
 
 logging.basicConfig(level=logging.ERROR)
 _LOGGER = logging.getLogger('pyaarlo')
 
+BEGIN_PYAARLO_DUMP = "-----BEGIN PYAARLO DUMP-----"
+END_PYAARLO_DUMP = "-----END PYAARLO DUMP-----"
 
 PUBLIC_KEY = """-----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1oYXnbQPxREiVPUIRkgk
@@ -55,33 +58,52 @@ def _exit(args):
     sys.exit("ERROR:{}".format(args))
 
 
-def encrypt_RSA(message):
+def encrypt_to_string(obj):
     from Crypto.Cipher import AES
     from Crypto.Random import get_random_bytes
     from Crypto.PublicKey import RSA
     from Crypto.Cipher import PKCS1_OAEP
 
+    # pickle and resize object
+    obj = pickle.dumps( obj )
+    obj += b' ' * (16 - len(obj) % 16)
+
+    # create nonce and encrypt pickled object with it
     nonce = get_random_bytes(16)
     cipher = AES.new(nonce)
-    message = message.encode() + b' ' * (16 - len(message) % 16)
-    message = base64.encodebytes(cipher.encrypt(message))
+    obj = cipher.encrypt(obj)
 
-    rsakey = RSA.importKey(PUBLIC_KEY)
-    rsakey = PKCS1_OAEP.new(rsakey)
-    nonce = base64.encodebytes(rsakey.encrypt(nonce))
+    # encrypt nonce with public key
+    key = RSA.importKey(PUBLIC_KEY)
+    key = PKCS1_OAEP.new(key)
+    nonce = key.encrypt(nonce)
 
-    return nonce.decode().rstrip(),message.decode().rstrip()
+    # create nonce/object dictionary, pickle and base64 encode
+    nonce_obj = pickle.dumps( { "n":nonce, "o":obj } )
+    return base64.encodebytes( nonce_obj ).decode().rstrip()
 
 
-def decrypt_RSA(private_key_loc, encrypted):
+def decrypt_from_string(private_key_loc, nonce_obj):
+    from Crypto.Cipher import AES
     from Crypto.PublicKey import RSA
     from Crypto.Cipher import PKCS1_OAEP
-    encrypted = base64.b64decode(encrypted)
+
+    # decode nonce/object dictionary then unpickle it
+    nonce_obj = base64.b64decode(nonce_obj)
+    nonce_obj = pickle.loads( nonce_obj )
+
+    # import private key and decrypt nonce
     key = open(private_key_loc, "r").read()
     rsakey = RSA.importKey(key)
     rsakey = PKCS1_OAEP.new(rsakey)
-    message = rsakey.decrypt(encrypted)
-    return message
+    nonce = rsakey.decrypt(nonce_obj["n"])
+
+    # decrypt object and unpickle
+    cipher = AES.new(nonce)
+    obj = cipher.decrypt(nonce_obj["o"])
+    obj = pickle.loads(obj)
+    return obj
+
 
 def login():
     _info("logging in")
@@ -89,6 +111,7 @@ def login():
     if ar is None:
         _exit("unable to login to Arlo")
     return ar
+
 
 def print_item(name,item):
     if opts["compact"]:
@@ -146,13 +169,10 @@ def dump(item):
     if item == 'raw':
         out = pprint.pformat( ar._devices )
 
-    key,msg = encrypt_RSA(out)
-    print("-----BEGIN KEY-----")
-    print(key)
-    print("-----END KEY-----")
-    print("-----BEGIN ARLO DUMP-----")
+    msg = encrypt_to_string(out)
+    print("-----BEGIN PYAARLO DUMP-----")
     print(msg)
-    print("-----END ARLO DUMP-----")
+    print("-----END PYAARLO DUMP-----")
 
 
 @cli.command()
@@ -169,6 +189,17 @@ def list(item):
         list_items("lights",ar.lights)
     if item == "all" or item == "doorbells":
         list_items("doorbells",ar.doorbells)
+
+@cli.command()
+def test():
+    print("**encrypting")
+    ins = {"testing123":"this is a quick test" }
+    pprint.pprint(ins)
+    msg = encrypt_to_string( ins )
+    print("msg\n{}".format(msg))
+    print("**decrypting")
+    out = decrypt_from_string("./rsa.private",msg)
+    pprint.pprint(out)
 
 
 if __name__ == '__main__':
