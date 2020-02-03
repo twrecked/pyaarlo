@@ -33,30 +33,9 @@ opts = {
     "storage-dir": "./",
 
     "compact": False,
+    "encrypt": False,
     "verbose": 0,
 }
-
-
-def _vpprint(obj):
-    if opts["verbose"] > 2:
-        _LOGGER.debug("\n" + pprint.pformat(obj,indent=1))
-
-def _pprint(obj):
-    _LOGGER.debug("\n" + pprint.pformat(obj,indent=1))
-
-def _vverbose(args):
-    if opts["verbose"] > 2:
-        _LOGGER.debug("{}".format(args))
-
-def _verbose(args):
-    _LOGGER.debug("{}".format(args))
-
-def _info(args):
-    _LOGGER.info("{}".format(args))
-
-def _exit(args):
-    sys.exit("ERROR:{}".format(args))
-
 
 def encrypt_to_string(obj):
     from Crypto.Cipher import AES
@@ -105,6 +84,32 @@ def decrypt_from_string(private_key_loc, nonce_obj):
     return obj
 
 
+def _debug(args):
+    _LOGGER.debug("{}".format(args))
+
+def _vdebug(args):
+    if opts["verbose"] > 2:
+        _debug(args)
+
+def _info(args):
+    _LOGGER.info("{}".format(args))
+
+def _exit(args):
+    sys.exit("ERROR:{}".format(args))
+
+
+def _pprint(msg,obj):
+    print("{}\n{}".format(msg,pprint.pformat(obj,indent=1)) )
+
+def _epprint(msg,obj):
+    if opts["encrypt"]:
+        print("-----BEGIN PYAARLO DATA-----")
+        print(encrypt_to_string(obj))
+        print("-----END PYAARLO DATA-----")
+    else:
+        _pprint(msg,obj)
+
+
 def login():
     _info("logging in")
     ar = PyArlo( username=opts["username"], password=opts["password"], storage_dir=opts["storage-dir"], dump=True )
@@ -129,23 +134,36 @@ def list_items(name,items):
             print_item(name,item)
 
 
+# list [all|cameras|bases]
+# describe device
+# capture [encrpyted|to-file|wait]
+#   all devices logs events
+# encrypt [from-file|to-file]
+#   encrypt 
+# decrypt [from-file|to-file]
+#   decrypt 
+
 @click.group()
 @click.option('-u','--username',required=True,
               help="Arlo username")
 @click.option('-p','--password',required=True,
               help="Arlo password")
-@click.option('--compact/--no-compact',default=False,
+@click.option('-c','--compact/--no-compact',default=False,
               help="Minimize lists")
+@click.option('-e','--encrypt/--no-encrypt',default=False,
+              help="Where possible, encrypt output")
 @click.option('-s','--storage-dir',
               default="./", show_default='current dir',
               help="Where to store Arlo state and packet dump")
 @click.option("-v", "--verbose", count=True,
               help="Be chatty. More is more chatty!")
-def cli( username,password,compact,storage_dir,verbose ):
+def cli( username,password,compact,encrypt,storage_dir,verbose ):
     opts['username'] = username
     opts['password'] = password
     if compact is not None:
         opts['compact'] = compact
+    if encrypt is not None:
+        opts['encrypt'] = encrypt
     if storage_dir is not None:
         opts['storage-dir'] = storage_dir
     if verbose is not None:
@@ -159,20 +177,17 @@ def cli( username,password,compact,storage_dir,verbose ):
 
 
 @cli.command()
-@click.argument('item', default='raw',
-                type=click.Choice(['raw', 'all', 'cameras', 'bases', 'lights', 'doorbells'], case_sensitive=False))
+@click.argument('item', default='all',
+                type=click.Choice(['all', 'cameras', 'bases', 'lights', 'doorbells'], case_sensitive=False))
 def dump(item):
 
+    out = {}
     ar = login()
 
-    out = ""
-    if item == 'raw':
-        out = pprint.pformat( ar._devices )
+    if item == 'all':
+        out = ar._devices
 
-    msg = encrypt_to_string(out)
-    print("-----BEGIN PYAARLO DUMP-----")
-    print(msg)
-    print("-----END PYAARLO DUMP-----")
+    _epprint(item,out)
 
 
 @cli.command()
@@ -189,6 +204,7 @@ def list(item):
         list_items("lights",ar.lights)
     if item == "all" or item == "doorbells":
         list_items("doorbells",ar.doorbells)
+
 
 @cli.command()
 def test():
