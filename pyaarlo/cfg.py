@@ -1,4 +1,4 @@
-from .constant import DEFAULT_HOST
+from .constant import DEFAULT_HOST, TFA_HOST
 
 
 class ArloCfg(object):
@@ -107,3 +107,11 @@ class ArloCfg(object):
     @property
     def hide_deprecated_services(self, default=False):
         return self._kw.get('hide_deprecated_services', default)
+
+    @property
+    def tfa_host(self, default=TFA_HOST):
+        return self._kw.get('tfa_host', default)
+
+    @property
+    def tfa_token(self, default=None):
+        return self._kw.get('tfa_token', default)

@@ -20,7 +20,14 @@ TRANSID_PREFIX = 'web'
 
 AUTH_HOST = 'https://ocapi-app.arlo.com'
 AUTH_PATH = '/api/auth'
+AUTH_START_PATH = '/api/startAuth'
+AUTH_FINISH_PATH = '/api/finishAuth'
+AUTH_GET_FACTORS = '/api/getFactors'
 AUTH_VALIDATE_PATH = '/api/validateAccessToken'
+
+TFA_HOST = "https://pyaarlo-tfa.appspot.com/"
+TFA_CODE_PATH = "/get"
+TFA_CLEAR_PATH = "/clear"
 
 PRELOAD_DAYS = 30
 
