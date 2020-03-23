@@ -115,3 +115,11 @@ class ArloCfg(object):
     @property
     def tfa_token(self, default=None):
         return self._kw.get('tfa_token', default)
+
+    @property
+    def tfa_timeout(self, default=3):
+        return self._kw.get('tfa_timeout', default)
+
+    @property
+    def tfa_total_timeout(self, default=60):
+        return self._kw.get('tfa_total_timeout', default)

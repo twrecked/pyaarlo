@@ -90,20 +90,21 @@ class ArloBackEnd(object):
         if raw:
             return body
 
-        # New auth style
+        # New auth style and TFA helper
         if 'meta' in body:
             if body['meta']['code'] == 200:
                 return body['data']
+            else:
+                self._arlo.warning('error in new response=' + str(body))
 
-        if 'success' in body:
+        # Original response type
+        elif 'success' in body:
             if body['success']:
                 if 'data' in body:
                     return body['data']
-                # From TFA server
-                if 'code' in body:
-                    return body
             else:
                 self._arlo.warning('error in response=' + str(body))
+
         return None
 
     def gen_trans_id(self, trans_type=TRANSID_PREFIX):
@@ -376,15 +377,23 @@ class ArloBackEnd(object):
 
         # Looks like we need 2FA. So, request a code be sent to our email address.
         if not body['authCompleted']:
+            self._arlo.debug('need 2FA...')
 
-            # update headers
-            self._arlo.debug('need 2FA')
+            # update headers and create tfa helper params
             headers['Authorization'] = self._token64
+            tfa_params = "?email={}&token={}".format(urllib.parse.quote(self._arlo.cfg.username),self._arlo.cfg.tfa_token)
+
+            # clear the current token
+            self._arlo.debug('clearing current token')
+            self.tfa_get(TFA_CLEAR_PATH + tfa_params)
+
+            # get available 2fa choices,
+            self._arlo.debug('getting tfa choices')
             factors = self.auth_get( AUTH_GET_FACTORS + "?data = {}".format(int(time.time())), {}, headers)
             if factors is None:
                 return False
 
-            # look for email and startAuth on it
+            # look for email choice
             self._arlo.debug('looking for email')
             factor_id = None
             for factor in factors['items']:
@@ -393,10 +402,7 @@ class ArloBackEnd(object):
             if factor_id is None:
                 return False
 
-            # clear current token
-            self.tfa_get(TFA_CLEAR_PATH + "?email={}&token={}".format(urllib.parse.quote(self._arlo.cfg.username),self._arlo.cfg.tfa_token))
-
-            # start authentication
+            # start authentication with email
             self._arlo.debug('starting auth on email')
             body = self.auth_post(AUTH_START_PATH, {'factorId': factor_id}, headers)
             if body is None:
@@ -404,19 +410,19 @@ class ArloBackEnd(object):
             factor_auth_code = body['factorAuthCode']
 
             # wait for code... give it 1 min to arrive...
-            self._arlo.debug('waiting on code to arrive')
+            self._arlo.debug('waiting for code to arrive')
             code = None
             start = time.time()
             while code is None:
-                result = self.tfa_get(TFA_CODE_PATH + "?email={}&token={}".format(urllib.parse.quote(self._arlo.cfg.username),self._arlo.cfg.tfa_token))
+                result = self.tfa_get(TFA_CODE_PATH + tfa_params)
                 if result:
-                    self._arlo.debug("result is valud...")
+                    self._arlo.debug("result is valid...")
                     if result['success']:
                         code = result['code']
                         self._arlo.debug("code={}".format(code))
                         break
-                time.sleep(5)
-                if time.time() > (start + 60):
+                time.sleep(self._arlo.cfg.tfa_timeout)
+                if time.time() > (start + self._arlo.cfg.tfa_total_timeout):
                     return False
 
             # finish authentication
@@ -479,7 +485,6 @@ class ArloBackEnd(object):
             self._arlo.debug('validation failed')
             return False
 
-
         # update sessions headers
         headers = {
             'Accept': 'application/json, text/plain, */*',
@@ -491,82 +496,6 @@ class ArloBackEnd(object):
             'User-Agent': self._user_agent,
             'Authorization': self._token
         }
-        self._session.headers.update(headers)
-
-        return True
-
-
-    # login and set up session
-    def _login_old(self):
-
-        # attempt login
-        self._session = requests.Session()
-        if self._arlo.cfg.http_connections != 0 and self._arlo.cfg.http_max_size != 0:
-            self._arlo.debug(
-                'custom connections {}:{}'.format(self._arlo.cfg.http_connections, self._arlo.cfg.http_max_size))
-            self._session.mount('https://',
-                                requests.adapters.HTTPAdapter(
-                                    pool_connections=self._arlo.cfg.http_connections,
-                                    pool_maxsize=self._arlo.cfg.http_max_size))
-
-        # New login....
-        body = self.auth_post(AUTH_PATH, {'email': self._arlo.cfg.username,
-                                          'password': to_b64(self._arlo.cfg.password),
-                                          'language': "en",
-                                          'EnvSource': 'prod' },
-                                         {'Auth-Version':'2',
-                                          'Accept': 'application/json, text/plain, */*',
-                                          'Referer': self._arlo.cfg.host,
-                                          'User-Agent': ('Mozilla/5.0 (iPhone; CPU iPhone OS 11_1_2 like Mac OS X) '
-                                                            'AppleWebKit/604.3.5 (KHTML, like Gecko) Mobile/15B202 NETGEAR/v1 '
-                                                            '(iOS Vuezone)'),
-                                          'Source': 'arloCamWeb' } )
-
-        if body is None:
-            self._arlo.debug('login failed')
-            return False
-
-        # save new login information
-        self._token = body['token']
-        self._token64 = to_b64(body['token'])
-        self._user_id = body['userId']
-        self._web_id = self._user_id + '_web'
-        self._sub_id = 'subscriptions/' + self._web_id
-
-        # Validate it!
-        validated = self.auth_get( AUTH_VALIDATE_PATH + "?data = {}".format(int(time.time())), {},
-                                         {'Auth-Version':'2',
-                                          'Accept': 'application/json, text/plain, */*',
-                                          'Authorization': self._token64,
-                                          'Referer': self._arlo.cfg.host,
-                                          'User-Agent': ('Mozilla/5.0 (iPhone; CPU iPhone OS 11_1_2 like Mac OS X) '
-                                                            'AppleWebKit/604.3.5 (KHTML, like Gecko) Mobile/15B202 NETGEAR/v1 '
-                                                            '(iOS Vuezone)'),
-                                          'Source': 'arloCamWeb' } )
-        if validated is None:
-            self._arlo.debug('login failed')
-            return False
-
-        # update sessions headers
-        # XXX allow different user agent
-        headers = {
-            # 'DNT': '1',
-            'Accept': 'application/json, text/plain, */*',
-            'Auth-Version': '2',
-            'schemaVersion': '1',
-            'Host': re.sub('https?://', '', self._arlo.cfg.host),
-            'Content-Type': 'application/json; charset=utf-8;',
-            'Referer': self._arlo.cfg.host,
-            'Authorization': self._token
-        }
-        if self._arlo.cfg.user_agent == 'apple':
-            headers['User-Agent'] = ('Mozilla/5.0 (iPhone; CPU iPhone OS 11_1_2 like Mac OS X) '
-                                     'AppleWebKit/604.3.5 (KHTML, like Gecko) Mobile/15B202 NETGEAR/v1 '
-                                     '(iOS Vuezone)')
-        else:
-            headers['User-Agent'] = ('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) '
-                                     'Chrome/72.0.3626.81 Safari/537.36')
-
         self._session.headers.update(headers)
 
         return True
