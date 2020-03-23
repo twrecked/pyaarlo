@@ -384,8 +384,9 @@ class ArloBackEnd(object):
             tfa_params = "?email={}&token={}".format(urllib.parse.quote(self._arlo.cfg.username),self._arlo.cfg.tfa_token)
 
             # clear the current token
-            self._arlo.debug('clearing current token')
-            self.tfa_get(TFA_CLEAR_PATH + tfa_params)
+            if self._arlo.cfg.tfa_source != 'console':
+                self._arlo.debug('clearing current token')
+                self.tfa_get(TFA_CLEAR_PATH + tfa_params)
 
             # get available 2fa choices,
             self._arlo.debug('getting tfa choices')
@@ -394,36 +395,40 @@ class ArloBackEnd(object):
                 return False
 
             # look for email choice
-            self._arlo.debug('looking for email')
+            self._arlo.debug('looking for {}'.format(self._arlo.cfg.tfa_type))
             factor_id = None
             for factor in factors['items']:
-                if factor['factorType'] == 'EMAIL':
+                if factor['factorType'].lower() == self._arlo.cfg.tfa_type:
                     factor_id = factor['factorId']
             if factor_id is None:
                 return False
 
             # start authentication with email
-            self._arlo.debug('starting auth on email')
+            self._arlo.debug('starting auth with {}'.format(self._arlo.cfg.tfa_type))
             body = self.auth_post(AUTH_START_PATH, {'factorId': factor_id}, headers)
             if body is None:
                 return False
             factor_auth_code = body['factorAuthCode']
 
-            # wait for code... give it 1 min to arrive...
-            self._arlo.debug('waiting for code to arrive')
-            code = None
-            start = time.time()
-            while code is None:
-                result = self.tfa_get(TFA_CODE_PATH + tfa_params)
-                if result:
-                    self._arlo.debug("result is valid...")
-                    if result['success']:
-                        code = result['code']
-                        self._arlo.debug("code={}".format(code))
-                        break
-                time.sleep(self._arlo.cfg.tfa_timeout)
-                if time.time() > (start + self._arlo.cfg.tfa_total_timeout):
-                    return False
+            if self._arlo.cfg.tfa_source != 'console':
+                # wait for code... give it tfa_timeout to arrive...
+                self._arlo.debug('waiting for code to arrive')
+                code = None
+                start = time.time()
+                while code is None:
+                    result = self.tfa_get(TFA_CODE_PATH + tfa_params)
+                    if result:
+                        self._arlo.debug("result is valid...")
+                        if result['success']:
+                            code = result['code']
+                            self._arlo.debug("code={}".format(code))
+                            break
+                    time.sleep(self._arlo.cfg.tfa_timeout)
+                    if time.time() > (start + self._arlo.cfg.tfa_total_timeout):
+                        return False
+            else:
+                # wait for user input
+                code = input('Enter Code: ')
 
             # finish authentication
             self._arlo.debug('finishing auth')
@@ -525,7 +530,7 @@ class ArloBackEnd(object):
         return self._request(path, 'GET', params, headers, stream, raw, timeout, AUTH_HOST)
 
     def tfa_get(self, path, params=None, headers=None, stream=False, raw=False, timeout=None):
-        return self._request(path, 'GET', params, headers, stream, raw, timeout, self._arlo.cfg.tfa_host)
+        return self._request(path, 'GET', params, headers, stream, raw, timeout, self._arlo.cfg.tfa_source)
 
     @property
     def session(self):

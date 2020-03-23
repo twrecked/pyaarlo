@@ -109,8 +109,12 @@ class ArloCfg(object):
         return self._kw.get('hide_deprecated_services', default)
 
     @property
-    def tfa_host(self, default=TFA_HOST):
-        return self._kw.get('tfa_host', default)
+    def tfa_source(self, default=TFA_HOST):
+        return self._kw.get('tfa_source', default)
+
+    @property
+    def tfa_type(self, default='EMAIL'):
+        return self._kw.get('tfa_type', default).lower()
 
     @property
     def tfa_token(self, default=None):
@@ -123,3 +127,4 @@ class ArloCfg(object):
     @property
     def tfa_total_timeout(self, default=60):
         return self._kw.get('tfa_total_timeout', default)
+
