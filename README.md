@@ -8,7 +8,7 @@ It is based on the [pyarlo library](https://github.com/tchellomello/python-arlo)
 ### Installation
 
 ```bash
-pip install git+https://https://github.com/twrecked/pyaarlo
+pip install git+https://github.com/twrecked/pyaarlo
 ```
 
 ### Usage
