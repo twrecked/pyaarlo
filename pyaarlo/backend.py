@@ -295,14 +295,7 @@ class ArloBackEnd(object):
         self._ev_thread = threading.Thread(name="ArloEventStream", target=self._ev_thread, args=())
         self._ev_thread.setDaemon(True)
         self._ev_thread.start()
-
-        # give time to start
-        with self._lock:
-            self._lock.wait(30)
-        if not self._ev_connected_:
-            self._arlo.warning('event loop failed to start')
-            self._ev_thread = None
-            return False
+        # No need to wait with new auth mechanism
         return True
 
     def notify(self, base, body, trans_id=None):
@@ -350,6 +343,13 @@ class ArloBackEnd(object):
                                   "publishResponse": True,
                                   "properties": {"privacyActive": privacy_on}})
 
+    def _update_auth_info(self,body):
+        self._token = body['token']
+        self._token64 = to_b64(self._token)
+        self._user_id = body['userId']
+        self._web_id = self._user_id + '_web'
+        self._sub_id = 'subscriptions/' + self._web_id
+
     def _auth(self):
 
         # Headers
@@ -369,11 +369,7 @@ class ArloBackEnd(object):
             return False
 
         # save new login information
-        self._token = body['token']
-        self._token64 = to_b64(self._token)
-        self._user_id = body['userId']
-        self._web_id = self._user_id + '_web'
-        self._sub_id = 'subscriptions/' + self._web_id
+        self._update_auth_info(body)
 
         # Looks like we need 2FA. So, request a code be sent to our email address.
         if not body['authCompleted']:
@@ -437,12 +433,8 @@ class ArloBackEnd(object):
             if body is None:
                 return False
 
-            # update login information
-            self._token = body['token']
-            self._token64 = to_b64(self._token)
-            self._user_id = body['userId']
-            self._web_id = self._user_id + '_web'
-            self._sub_id = 'subscriptions/' + self._web_id
+            # save new login information
+            self._update_auth_info(body)
 
         return True
 

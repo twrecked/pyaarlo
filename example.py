@@ -40,5 +40,5 @@ for camera in ar.cameras:
     print("camera: name={},device_id={}".format(camera.name,camera.device_id))
     camera.add_attr_callback('motionDetected', camera_update_state)
 
-time.sleep( 60 )
+time.sleep( 300 )
 
