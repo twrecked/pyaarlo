@@ -19,7 +19,7 @@ setup(
     url='https://github.com/twrecked/pyaarlo.git',
     license='LGPLv3+',
     include_package_data=True,
-    install_requires=['requests'],
+    install_requires=['requests','six'],
     test_suite='tests',
     keywords=[
         'arlo',
