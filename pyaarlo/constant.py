@@ -24,9 +24,10 @@ AUTH_FINISH_PATH = '/api/finishAuth'
 AUTH_GET_FACTORS = '/api/getFactors'
 AUTH_VALIDATE_PATH = '/api/validateAccessToken'
 
-TFA_HOST = "https://pyaarlo-tfa.appspot.com/"
-TFA_CODE_PATH = "/get"
-TFA_CLEAR_PATH = "/clear"
+TFA_CONSOLE_SOURCE = 'console'
+TFA_IMAP_SOURCE = 'imap'
+TFA_EMAIL_TYPE = 'EMAIL'
+TFA_SMS_TYPE = 'SMS'
 
 PRELOAD_DAYS = 30
 

@@ -10,9 +10,9 @@ import urllib.parse
 
 from .constant import (AUTH_HOST, AUTH_PATH, AUTH_VALIDATE_PATH, AUTH_GET_FACTORS, AUTH_START_PATH, AUTH_FINISH_PATH,
                        DEFAULT_RESOURCES, LOGIN_PATH, LOGOUT_PATH,
-                       NOTIFY_PATH, SUBSCRIBE_PATH, TRANSID_PREFIX, DEVICES_PATH,
-                       TFA_HOST, TFA_CLEAR_PATH, TFA_CODE_PATH)
+                       NOTIFY_PATH, SUBSCRIBE_PATH, TRANSID_PREFIX, DEVICES_PATH)
 from .sseclient import SSEClient
+from .tfa import Arlo2FA
 from .util import time_to_arlotime, now_strftime, to_b64
 
 
@@ -373,64 +373,57 @@ class ArloBackEnd(object):
 
         # Looks like we need 2FA. So, request a code be sent to our email address.
         if not body['authCompleted']:
+
+            # update headers and create 2fa instance
             self._arlo.debug('need 2FA...')
-
-            # update headers and create tfa helper params
             headers['Authorization'] = self._token64
-            tfa_params = "?email={}&token={}".format(urllib.parse.quote(self._arlo.cfg.username),self._arlo.cfg.tfa_token)
-
-            # clear the current token
-            if self._arlo.cfg.tfa_source != 'console':
-                self._arlo.debug('clearing current token')
-                self.tfa_get(TFA_CLEAR_PATH + tfa_params)
+            tfa = Arlo2FA(self._arlo)
 
             # get available 2fa choices,
             self._arlo.debug('getting tfa choices')
             factors = self.auth_get( AUTH_GET_FACTORS + "?data = {}".format(int(time.time())), {}, headers)
             if factors is None:
+                self._arlo.debug('couldnt find tfa choices')
                 return False
 
-            # look for email choice
+            # look for code source choice
             self._arlo.debug('looking for {}'.format(self._arlo.cfg.tfa_type))
             factor_id = None
             for factor in factors['items']:
                 if factor['factorType'].lower() == self._arlo.cfg.tfa_type:
                     factor_id = factor['factorId']
             if factor_id is None:
+                self._arlo.debug('couldnt find tfa choice')
+                return False
+
+            # snapshot 2fa before sending in request
+            if not tfa.start():
+                self._arlo.debug('tfa start failed')
                 return False
 
             # start authentication with email
             self._arlo.debug('starting auth with {}'.format(self._arlo.cfg.tfa_type))
             body = self.auth_post(AUTH_START_PATH, {'factorId': factor_id}, headers)
             if body is None:
+                self._arlo.debug('startAuth failed')
                 return False
             factor_auth_code = body['factorAuthCode']
 
-            if self._arlo.cfg.tfa_source != 'console':
-                # wait for code... give it tfa_timeout to arrive...
-                self._arlo.debug('waiting for code to arrive')
-                code = None
-                start = time.time()
-                while code is None:
-                    result = self.tfa_get(TFA_CODE_PATH + tfa_params)
-                    if result:
-                        self._arlo.debug("result is valid...")
-                        if result['success']:
-                            code = result['code']
-                            self._arlo.debug("code={}".format(code))
-                            break
-                    time.sleep(self._arlo.cfg.tfa_timeout)
-                    if time.time() > (start + self._arlo.cfg.tfa_total_timeout):
-                        return False
-            else:
-                # wait for user input
-                code = input('Enter Code: ')
+            # get code from TFA source
+            code = tfa.get()
+            if code is None:
+                self._arlo.debug('tfa get failed')
+                return False
+
+            # tidy 2fa
+            tfa.stop()
 
             # finish authentication
             self._arlo.debug('finishing auth')
             body = self.auth_post(AUTH_FINISH_PATH, {'factorAuthCode': factor_auth_code,
                                                      'otp': code }, headers)
             if body is None:
+                self._arlo.debug('finishAuth failed')
                 return False
 
             # save new login information
