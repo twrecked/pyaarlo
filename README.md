@@ -13,7 +13,14 @@ pip install git+https://github.com/twrecked/pyaarlo
 
 ### 2FA
 
-Support is mostly there. If you're just doing quick testing from the console you're good to go, see [here](https://github.com/twrecked/pyaarlo/blob/master/example.py). I'm just finish up support for automatic 2FA.
+Support is mostly there, it just needs testing. Pass the following parameters Aarlo to try:
+
+```python
+tfa_source='imap',tfa_type='email',
+imap_host='imap.host.com',imap_username='your-user-name',imap_password='your-imap-password'
+```
+
+If you're just doing quick testing from the console you're good to go, see [here](https://github.com/twrecked/pyaarlo/blob/master/example.py).
 
 
 ### Usage
