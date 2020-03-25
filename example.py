@@ -22,7 +22,8 @@ _LOGGER = logging.getLogger('pyaarlo')
 # directly on the console
 print("logging on")
 ar = pyaarlo.PyArlo( username=USERNAME,password=PASSWORD,
-                        tfa_type='SMS',tfa_source='console',
+                        tfa_type='SMS',tfa_source='console',verbose_debug=True,
+                        save_state=False,dump=False,
                         storage_dir='aarlo' )
 if not ar.is_connected:
     print('failed to connect')
@@ -33,6 +34,4 @@ print("base stations")
 for base in ar.base_stations:
     print("base: name={},device_id={},mode={}".format(base.name,base.device_id,base.mode))
 
-print("sleeping")
 time.sleep( 20 )
-
