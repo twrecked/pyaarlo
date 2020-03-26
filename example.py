@@ -3,8 +3,13 @@
 
 import os
 import time
+import logging
 
 import pyaarlo
+
+logging.basicConfig(level=logging.DEBUG,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+_LOGGER = logging.getLogger('pyaarlo')
 
 USERNAME = os.environ.get('ARLO_USERNAME','test.login@gmail.com')
 PASSWORD = os.environ.get('ARLO_PASSWORD','test-password')
@@ -26,6 +31,11 @@ for base in arlo.base_stations:
         first_base = base
         original_mode = base.mode
 
+url = None
+for camera in arlo.cameras:
+    if url is None:
+        url = camera.get_stream()
+
 time.sleep(30)
 print('arming')
 first_base.mode = 'armed'
@@ -38,4 +48,4 @@ time.sleep(10)
 print('setting original mode')
 first_base.mode = original_mode
 
-time.sleep(10)
+time.sleep(600)
