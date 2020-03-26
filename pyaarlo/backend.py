@@ -102,6 +102,8 @@ class ArloBackEnd(object):
             if body['success']:
                 if 'data' in body:
                     return body['data']
+                # success, but no data so fake empty data
+                return {}
             else:
                 self._arlo.warning('error in response=' + str(body))
 
@@ -318,7 +320,8 @@ class ArloBackEnd(object):
         body['to'] = base.device_id
         body['from'] = self._web_id
         body['transId'] = trans_id
-        self.post(NOTIFY_PATH + base.device_id, body, headers={"xcloudId": base.xcloud_id})
+        if self.post(NOTIFY_PATH + base.device_id, body, headers={"xcloudId": base.xcloud_id}) is None:
+            return None
         return trans_id
 
     def notify_and_get_response(self, base, body, timeout=None):
@@ -341,11 +344,6 @@ class ArloBackEnd(object):
                 mnow = time.monotonic()
                 if mnow >= mend:
                     return self._requests.pop(tid)
-
-    def ping(self, base):
-        return self.notify_and_get_response(base, {"action": "set", "resource": self._sub_id,
-                                                   "publishResponse": False,
-                                                   "properties": {"devices": [base.device_id]}})
 
     def async_ping(self, base):
         return self.notify(base, {"action": "set", "resource": self._sub_id,

@@ -558,10 +558,10 @@ class ArloCamera(ArloChildDevice):
         return not self._load(PRIVACY_KEY, False)
 
     def turn_on(self):
-        self._arlo.bg.run(self._arlo.be.async_on_off, base=self.base_station, device=self, privacy_on=False)
+        self._arlo.bg.run(self.base_station.async_on_off, device=self, privacy_on=False)
 
     def turn_off(self):
-        self._arlo.bg.run(self._arlo.be.async_on_off, base=self.base_station, device=self, privacy_on=True)
+        self._arlo.bg.run(self.base_station.async_on_off, device=self, privacy_on=True)
 
     def get_audio_playback_status(self):
         """Gets the current playback status and available track list"""
