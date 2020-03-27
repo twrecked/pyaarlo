@@ -9,10 +9,10 @@ import uuid
 import urllib.parse
 
 from .constant import (AUTH_HOST, AUTH_PATH, AUTH_VALIDATE_PATH, AUTH_GET_FACTORS, AUTH_START_PATH, AUTH_FINISH_PATH,
-                       DEFAULT_RESOURCES, LOGIN_PATH, LOGOUT_PATH,
-                       NOTIFY_PATH, SUBSCRIBE_PATH, TRANSID_PREFIX, DEVICES_PATH,
-                       TFA_HOST, TFA_CLEAR_PATH, TFA_CODE_PATH)
+                       DEFAULT_RESOURCES, LOGIN_PATH, LOGOUT_PATH, SESSION_PATH,
+                       NOTIFY_PATH, SUBSCRIBE_PATH, TRANSID_PREFIX, DEVICES_PATH)
 from .sseclient import SSEClient
+from .tfa import Arlo2FA
 from .util import time_to_arlotime, now_strftime, to_b64
 
 
@@ -25,7 +25,7 @@ class ArloBackEnd(object):
         self._lock = threading.Condition()
         self._req_lock = threading.Lock()
 
-        self._dump_file = self._arlo.cfg.storage_dir + '/' + 'packets.dump'
+        self._dump_file = self._arlo.cfg.dump_file
 
         self._requests = {}
         self._callbacks = {}
@@ -102,6 +102,8 @@ class ArloBackEnd(object):
             if body['success']:
                 if 'data' in body:
                     return body['data']
+                # success, but no data so fake empty data
+                return {}
             else:
                 self._arlo.warning('error in response=' + str(body))
 
@@ -205,6 +207,13 @@ class ArloBackEnd(object):
                 cb(resource, response)
 
     def _ev_loop(self, stream):
+
+        # say we're starting
+        if self._dump_file is not None:
+            with open(self._dump_file, 'a') as dump:
+                time_stamp = now_strftime("%Y-%m-%d %H:%M:%S.%f")
+                dump.write("{}: {}\n".format(time_stamp,"ev_loop start"))
+
         # for event in stream.events():
         for event in stream:
 
@@ -216,7 +225,7 @@ class ArloBackEnd(object):
                 break
 
             response = json.loads(event.data)
-            if self._arlo.cfg.dump:
+            if self._dump_file is not None:
                 with open(self._dump_file, 'a') as dump:
                     time_stamp = now_strftime("%Y-%m-%d %H:%M:%S.%f")
                     dump.write("{}: {}\n".format(time_stamp,pprint.pformat(response, indent=2)))
@@ -294,8 +303,14 @@ class ArloBackEnd(object):
         self._ev_connected_ = False
         self._ev_thread = threading.Thread(name="ArloEventStream", target=self._ev_thread, args=())
         self._ev_thread.setDaemon(True)
-        self._ev_thread.start()
-        # No need to wait with new auth mechanism
+
+        with self._lock:
+            self._ev_thread.start()
+            if not self._ev_connected_:
+                self._arlo.debug('waiting for stream up')
+                self._lock.wait( 30 )
+
+        self._arlo.debug('stream up')
         return True
 
     def notify(self, base, body, trans_id=None):
@@ -305,7 +320,8 @@ class ArloBackEnd(object):
         body['to'] = base.device_id
         body['from'] = self._web_id
         body['transId'] = trans_id
-        self.post(NOTIFY_PATH + base.device_id, body, headers={"xcloudId": base.xcloud_id})
+        if self.post(NOTIFY_PATH + base.device_id, body, headers={"xcloudId": base.xcloud_id}) is None:
+            return None
         return trans_id
 
     def notify_and_get_response(self, base, body, timeout=None):
@@ -329,20 +345,6 @@ class ArloBackEnd(object):
                 if mnow >= mend:
                     return self._requests.pop(tid)
 
-    def ping(self, base):
-        return self.notify_and_get_response(base, {"action": "set", "resource": self._sub_id,
-                                                   "publishResponse": False,
-                                                   "properties": {"devices": [base.device_id]}})
-
-    def async_ping(self, base):
-        return self.notify(base, {"action": "set", "resource": self._sub_id,
-                                  "publishResponse": False, "properties": {"devices": [base.device_id]}})
-
-    def async_on_off(self, base, device, privacy_on):
-        return self.notify(base, {"action": "set", "resource": device.resource_id,
-                                  "publishResponse": True,
-                                  "properties": {"privacyActive": privacy_on}})
-
     def _update_auth_info(self,body):
         self._token = body['token']
         self._token64 = to_b64(self._token)
@@ -351,8 +353,6 @@ class ArloBackEnd(object):
         self._sub_id = 'subscriptions/' + self._web_id
 
     def _auth(self):
-
-        # Headers
         headers = {'Auth-Version':'2',
                    'Accept': 'application/json, text/plain, */*',
                    'Referer': 'https://my.arlo.com',
@@ -373,64 +373,57 @@ class ArloBackEnd(object):
 
         # Looks like we need 2FA. So, request a code be sent to our email address.
         if not body['authCompleted']:
+
+            # update headers and create 2fa instance
             self._arlo.debug('need 2FA...')
-
-            # update headers and create tfa helper params
             headers['Authorization'] = self._token64
-            tfa_params = "?email={}&token={}".format(urllib.parse.quote(self._arlo.cfg.username),self._arlo.cfg.tfa_token)
-
-            # clear the current token
-            if self._arlo.cfg.tfa_source != 'console':
-                self._arlo.debug('clearing current token')
-                self.tfa_get(TFA_CLEAR_PATH + tfa_params)
+            tfa = Arlo2FA(self._arlo)
 
             # get available 2fa choices,
             self._arlo.debug('getting tfa choices')
             factors = self.auth_get( AUTH_GET_FACTORS + "?data = {}".format(int(time.time())), {}, headers)
             if factors is None:
+                self._arlo.debug('couldnt find tfa choices')
                 return False
 
-            # look for email choice
+            # look for code source choice
             self._arlo.debug('looking for {}'.format(self._arlo.cfg.tfa_type))
             factor_id = None
             for factor in factors['items']:
                 if factor['factorType'].lower() == self._arlo.cfg.tfa_type:
                     factor_id = factor['factorId']
             if factor_id is None:
+                self._arlo.debug('couldnt find tfa choice')
+                return False
+
+            # snapshot 2fa before sending in request
+            if not tfa.start():
+                self._arlo.debug('tfa start failed')
                 return False
 
             # start authentication with email
             self._arlo.debug('starting auth with {}'.format(self._arlo.cfg.tfa_type))
             body = self.auth_post(AUTH_START_PATH, {'factorId': factor_id}, headers)
             if body is None:
+                self._arlo.debug('startAuth failed')
                 return False
             factor_auth_code = body['factorAuthCode']
 
-            if self._arlo.cfg.tfa_source != 'console':
-                # wait for code... give it tfa_timeout to arrive...
-                self._arlo.debug('waiting for code to arrive')
-                code = None
-                start = time.time()
-                while code is None:
-                    result = self.tfa_get(TFA_CODE_PATH + tfa_params)
-                    if result:
-                        self._arlo.debug("result is valid...")
-                        if result['success']:
-                            code = result['code']
-                            self._arlo.debug("code={}".format(code))
-                            break
-                    time.sleep(self._arlo.cfg.tfa_timeout)
-                    if time.time() > (start + self._arlo.cfg.tfa_total_timeout):
-                        return False
-            else:
-                # wait for user input
-                code = input('Enter Code: ')
+            # get code from TFA source
+            code = tfa.get()
+            if code is None:
+                self._arlo.debug('tfa get failed')
+                return False
+
+            # tidy 2fa
+            tfa.stop()
 
             # finish authentication
             self._arlo.debug('finishing auth')
             body = self.auth_post(AUTH_FINISH_PATH, {'factorAuthCode': factor_auth_code,
                                                      'otp': code }, headers)
             if body is None:
+                self._arlo.debug('finishAuth failed')
                 return False
 
             # save new login information
@@ -439,8 +432,6 @@ class ArloBackEnd(object):
         return True
 
     def _validate(self):
-
-        # Headers
         headers = {'Auth-Version':'2',
                    'Accept': 'application/json, text/plain, */*',
                    'Authorization': self._token64,
@@ -452,6 +443,10 @@ class ArloBackEnd(object):
         validated = self.auth_get( AUTH_VALIDATE_PATH + "?data = {}".format(int(time.time())), {},
                                             headers )
         return validated is not None
+
+    def _v2_session(self):
+        v2_session = self.get( SESSION_PATH )
+        return v2_session is not None
 
     def _login(self):
 
@@ -495,6 +490,10 @@ class ArloBackEnd(object):
         }
         self._session.headers.update(headers)
 
+        if not self._v2_session():
+            self._arlo.debug('v2 session failed')
+            return False
+
         return True
 
     def is_connected(self):
@@ -521,12 +520,13 @@ class ArloBackEnd(object):
     def auth_get(self, path, params=None, headers=None, stream=False, raw=False, timeout=None):
         return self._request(path, 'GET', params, headers, stream, raw, timeout, AUTH_HOST)
 
-    def tfa_get(self, path, params=None, headers=None, stream=False, raw=False, timeout=None):
-        return self._request(path, 'GET', params, headers, stream, raw, timeout, self._arlo.cfg.tfa_source)
-
     @property
     def session(self):
         return self._session
+
+    @property
+    def sub_id(self):
+        return self._sub_id
 
     def add_listener(self, device, callback):
         with self._lock:

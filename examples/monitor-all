@@ -1,0 +1,60 @@
+#!/usr/bin/env python
+#
+
+import os
+import time
+import logging
+import sys
+
+# for examples, import relative to starting path
+sys.path.append('.')
+import pyaarlo
+
+
+USERNAME = os.environ.get('ARLO_USERNAME','test.login@gmail.com')
+PASSWORD = os.environ.get('ARLO_PASSWORD','test-password')
+
+
+# set up logging
+logging.basicConfig(level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+_LOGGER = logging.getLogger('pyaarlo')
+
+
+# function to catch all callbacks
+def attribute_changed(device, attr, value):
+    print('attribute_changed', time.strftime("%H:%M:%S"), device.name + ':' + attr + ':' + str(value)[:80])
+
+
+print('logging in')
+arlo = pyaarlo.PyArlo( username=USERNAME,password=PASSWORD,
+                        tfa_type='SMS',tfa_source='console',
+                        save_state=False,dump=False,storage_dir='aarlo' )
+
+
+print('monitoring bases')
+for base in arlo.base_stations:
+    print("base: name={},device_id={},state={}".format(base.name, base.device_id, base.state))
+    base.add_attr_callback('*', attribute_changed)
+
+
+print('monitoring cameras')
+for camera in arlo.cameras:
+    print("camera: name={},device_id={},state={}".format(camera.name, camera.device_id, camera.state))
+    camera.add_attr_callback('*', attribute_changed)
+
+
+print('monitoring doorbells')
+for doorbell in arlo.doorbells:
+    print("doorbell: name={},device_id={},state={}".format(doorbell.name, doorbell.device_id, doorbell.state))
+    doorbell.add_attr_callback('*', attribute_changed)
+
+
+print('monitoring lights')
+for light in arlo.lights:
+    print("light: name={},device_id={},state={}".format(light.name, light.device_id, light.state))
+    light.add_attr_callback('*', attribute_changed)
+
+
+# hang around for 10 minutes
+time.sleep(600)

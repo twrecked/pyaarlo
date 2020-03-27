@@ -5,6 +5,7 @@ DEFINITIONS_PATH = '/hmsweb/users/automation/definitions'
 AUTOMATION_PATH = '/hmsweb/users/devices/automation/active'
 LIBRARY_PATH = '/hmsweb/users/library'
 LOGIN_PATH = '/hmsweb/login/v2'
+SESSION_PATH = "/hmsweb/users/session/v2"
 LOGOUT_PATH = '/hmsweb/logout'
 NOTIFY_PATH = '/hmsweb/users/devices/notify/'
 SUBSCRIBE_PATH = '/hmsweb/client/subscribe'
@@ -24,9 +25,10 @@ AUTH_FINISH_PATH = '/api/finishAuth'
 AUTH_GET_FACTORS = '/api/getFactors'
 AUTH_VALIDATE_PATH = '/api/validateAccessToken'
 
-TFA_HOST = "https://pyaarlo-tfa.appspot.com/"
-TFA_CODE_PATH = "/get"
-TFA_CLEAR_PATH = "/clear"
+TFA_CONSOLE_SOURCE = 'console'
+TFA_IMAP_SOURCE = 'imap'
+TFA_EMAIL_TYPE = 'EMAIL'
+TFA_SMS_TYPE = 'SMS'
 
 PRELOAD_DAYS = 30
 
@@ -48,6 +50,7 @@ AUDIO_DETECTED_KEY = 'audioDetected'
 BATTERY_KEY = 'batteryLevel'
 BATTERY_TECH_KEY = 'batteryTech'
 BRIGHTNESS_KEY = 'brightness'
+BUTTON_PRESSED_KEY = 'buttonPressed'
 CHARGER_KEY = 'chargerTech'
 CHARGING_KEY = 'chargingState'
 CONNECTION_KEY = 'connectionState'
@@ -66,6 +69,8 @@ LIGHT_MODE_KEY = 'lightMode'
 SIGNAL_STR_KEY = 'signalStrength'
 SIREN_STATE_KEY = 'sirenState'
 TEMPERATURE_KEY = 'temperature'
+NIGHTLIGHT_KEY = 'nightLight'
+MEDIA_PLAYER_KEY = 'mediaPlayer'
 
 AUDIO_CONFIG_KEY = 'config'
 AUDIO_PLAYLIST_KEY = 'playlist'
@@ -104,7 +109,7 @@ SNAPSHOT_KEY = 'presignedFullFrameSnapshotUrl'
 STREAM_SNAPSHOT_KEY = 'presignedContentUrl'
 XCLOUD_ID_KEY = 'xCloudId'
 
-DEVICE_KEYS = [DEVICE_ID_KEY, DEVICE_NAME_KEY, DEVICE_TYPE_KEY,
+DEVICE_KEYS = [ACTIVITY_STATE_KEY, DEVICE_ID_KEY, DEVICE_NAME_KEY, DEVICE_TYPE_KEY,
                MEDIA_COUNT_KEY, PARENT_ID_KEY, UNIQUE_ID_KEY,
                USER_ID_KEY, LAST_IMAGE_KEY, SNAPSHOT_KEY, XCLOUD_ID_KEY, ]
 
@@ -117,9 +122,11 @@ MODE_KEY = 'activeMode'
 MODES_KEY = 'configuredMode'
 LAST_IMAGE_DATA_KEY = 'presignedLastImageData'
 LAST_IMAGE_SRC_KEY = 'lastImageSource'
+MEDIA_UPLOAD_KEY = 'mediaUploadNotification'
 MODE_NAME_TO_ID_KEY = 'modeNameToId'
 MODE_ID_TO_NAME_KEY = 'modeIdToName'
 MODE_IS_SCHEDULE_KEY = 'modeIsSchedule'
+RECENT_ACTIVITY_KEY = 'recentActivity'
 SCHEDULE_KEY = 'activeSchedule'
 TOTAL_BELLS_KEY = 'totalDoorBells'
 TOTAL_CAMERAS_KEY = 'totalCameras'

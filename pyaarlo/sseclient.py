@@ -1,8 +1,9 @@
 import codecs
 import re
+import time
+import warnings
+
 import requests
-#import six
-#import six.moves.http_client
 import http.client
 import time
 import warnings
