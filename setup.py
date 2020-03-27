@@ -11,15 +11,15 @@ def readme():
 setup(
     name='pyaarlo',
     packages=['pyaarlo'],
-    version='0.6.9',
+    version='0.6.14',
     description='Python Aarlo is a library that provides asynchronous access to Netgear Arlo cameras.',
     long_description=readme(),
-    author='Steve Herrell'
+    author='Steve Herrell',
     author_email='steve.herrell@gmail.com',
     url='https://github.com/twrecked/pyaarlo.git',
     license='LGPLv3+',
     include_package_data=True,
-    install_requires=['requests', 'sseclient' ],
+    install_requires=['requests','six'],
     test_suite='tests',
     keywords=[
         'arlo',

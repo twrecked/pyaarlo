@@ -175,6 +175,10 @@ class ArloDevice(object):
     def turn_off(self):
         pass
 
+    @property
+    def is_unavailable(self):
+        return self._load(CONNECTION_KEY, 'unknown') == 'unavailable'
+
 
 class ArloChildDevice(ArloDevice):
 
@@ -248,7 +252,7 @@ class ArloChildDevice(ArloDevice):
 
     @property
     def is_unavailable(self):
-        return self._load(CONNECTION_KEY, 'unknown') == 'unavailable'
+        return self.base_station.is_unavailable or self._load(CONNECTION_KEY, 'unknown') == 'unavailable'
 
     @property
     def too_cold(self):
