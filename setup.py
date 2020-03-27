@@ -19,7 +19,7 @@ setup(
     url='https://github.com/twrecked/pyaarlo.git',
     license='LGPLv3+',
     include_package_data=True,
-    install_requires=['requests','six'],
+    install_requires=['requests','six','click','pycrypto'],
     test_suite='tests',
     keywords=[
         'arlo',
@@ -40,4 +40,9 @@ setup(
         'Programming Language :: Python :: 3.7',
         'Topic :: Software Development :: Libraries :: Python Modules'
         ],
+    entry_points={
+        'console_scripts': [
+            'pyaarlo = pyaarlo.main:main_func',
+        ],
+    }
 )

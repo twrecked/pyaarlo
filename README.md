@@ -23,6 +23,14 @@ imap_host='imap.host.com',imap_username='your-user-name',imap_password='your-ima
 If you're just doing quick testing from the console you're good to go, see [here](https://github.com/twrecked/pyaarlo/blob/master/example.py).
 
 
+### Pyaarlo binary
+
+**This needs updating...**
+
+```bash
+pyaarlo --help
+```
+
 ### Usage
 
 **This needs updating...**

@@ -8,7 +8,7 @@ import logging
 import base64
 import pickle
 
-from pyaarlo import PyArlo
+from . import PyArlo
 
 logging.basicConfig(level=logging.ERROR)
 _LOGGER = logging.getLogger('pyaarlo')
@@ -31,6 +31,8 @@ opts = {
     "password": None,
 
     "storage-dir": "./",
+    "save-state": False,
+    "dump-packets": False,
 
     "compact": False,
     "encrypt": False,
@@ -131,7 +133,8 @@ def login():
     _info("logging in")
     if opts["username"] is None or opts["password"] is None:
         _fatal("please supply a username and password")
-    ar = PyArlo( username=opts["username"], password=opts["password"], storage_dir=opts["storage-dir"], dump=True )
+    ar = PyArlo( username=opts["username"], password=opts["password"],
+                    storage_dir=opts["storage-dir"], save_state=opts['save-state'], dump=opts['dump-packets'] )
     if ar is None:
         _fatal("unable to login to Arlo")
     return ar
@@ -243,7 +246,7 @@ def list(item):
 def encrypt():
     in_text = sys.stdin.read()
     enc_text = encrypt_to_string(in_text).rstrip()
-    print("{}".format(enc_text))
+    print("{}\n{}\n{}".format(BEGIN_PYAARLO_DUMP,enc_text,END_PYAARLO_DUMP))
 
 @cli.command()
 def decrypt():
@@ -263,6 +266,8 @@ def test():
     out = decrypt_from_string(msg)
     pprint.pprint(out)
 
+def main_func():
+    cli()
 
 if __name__ == '__main__':
     cli()
