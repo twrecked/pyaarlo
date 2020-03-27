@@ -110,9 +110,6 @@ class SSEClient(object):
 
         return msg
 
-    #  if six.PY2:
-        #  next = __next__
-
 
 class Event(object):
     sse_line_pattern = re.compile('(?P<name>[^:]*):?( ?(?P<value>.*))?')
