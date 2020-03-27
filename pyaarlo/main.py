@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 #
 
+import os
 import sys
 import click
 import pprint
@@ -68,6 +69,11 @@ def _epprint(msg,obj):
         print("-----END PYAARLO DATA-----")
     else:
         _pprint(msg,obj)
+
+def _casecmp(s1,s2):
+    if s1 is None or s2 is None:
+        return False
+    return str(s1).lower() == str(s2).lower()
 
 
 def encrypt_to_string(obj):
@@ -250,6 +256,7 @@ def encrypt():
     enc_text = encrypt_to_string(in_text).rstrip()
     print("{}\n{}\n{}".format(BEGIN_PYAARLO_DUMP,enc_text,END_PYAARLO_DUMP))
 
+
 @cli.command()
 def decrypt():
     lines = ""
@@ -263,6 +270,52 @@ def decrypt():
             lines += line
     dec_text = decrypt_from_string(lines)
     print("{}".format(dec_text),end='')
+
+
+@cli.command()
+@click.option('-n','--name',required=False,
+              help='camera name')
+@click.option('-d','--device-id',required=False,
+              help='camera device id')
+@click.option('-f','--start-ffmpeg/--no-start-ffmpeg',required=False,default=False,
+              help='start ffmpeg for stream')
+@click.argument('action', type=click.Choice(['start-stream', 'stop-stream', 'last-thumbnail'], case_sensitive=False))
+def camera(name,device_id,start_ffmpeg,action):
+    camera = None
+    ar = login()
+    for c in ar.cameras:
+        if _casecmp(c.name, name) or _casecmp(c.device_id, device_id):
+            camera = c
+            break
+    if camera is None:
+        print('cannot find camera')
+        return 0
+
+    if action == 'start-stream':
+        print('starting a stream')
+        stream_url = camera.get_stream()
+        if stream_url is None:
+            print(' failed to start stream')
+            return 0
+        print("stream-url={}".format(stream_url))
+
+        if start_ffmpeg:
+            print('starting ffmpeg')
+            os.system("mkdir video_dir")
+            os.system("ffmpeg -i '{}' ".format(stream_url) +
+                        "-fflags flush_packets -max_delay 2 -flags -global_header " +
+                        "-hls_time 2 -hls_list_size 3 -vcodec copy -y video_dir/video.m3u8")
+
+    elif action == 'stop-stream':
+        pass
+
+    elif action == 'last-thumbnail':
+        last_thumbnail = camera.last_thumbnail
+        if last_thumbnail:
+            print("last-thumbnail={}".format(last_thumbnail))
+        else:
+            print(' error getting thumbnail')
+
 
 def main_func():
     cli()
