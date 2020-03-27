@@ -108,3 +108,5 @@ venv.bak/
 .*.sw?
 aarlo/
 *.diff
+rsa.*
+diffs
