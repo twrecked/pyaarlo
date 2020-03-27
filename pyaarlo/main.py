@@ -231,7 +231,6 @@ def dump(item):
 def list(item):
 
     ar = login()
-
     if item == "all" or item == "bases":
         list_items("bases",ar.base_stations)
     if item == "all" or item == "cameras":
@@ -250,21 +249,17 @@ def encrypt():
 
 @cli.command()
 def decrypt():
-    in_text = sys.stdin.read()
-    dec_text = decrypt_from_string(in_text)
-    print("{}".format(dec_text))
-
-
-@cli.command()
-def test():
-    print("**encrypting")
-    ins = {"testing123":"this is a quick test" }
-    pprint.pprint(ins)
-    msg = encrypt_to_string( ins )
-    print("msg\n{}".format(msg))
-    print("**decrypting")
-    out = decrypt_from_string(msg)
-    pprint.pprint(out)
+    lines = ""
+    save_lines = False
+    for line in sys.stdin.readlines():
+        if line.startswith(BEGIN_PYAARLO_DUMP):
+            save_lines = True
+        elif line.startswith(END_PYAARLO_DUMP):
+            save_lines = False
+        elif save_lines:
+            lines += line
+    dec_text = decrypt_from_string(lines)
+    print("{}".format(dec_text),end='')
 
 def main_func():
     cli()
