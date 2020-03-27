@@ -268,18 +268,21 @@ class ArloBase(ArloDevice):
         self._arlo.debug(str(body))
         self._arlo.bg.run(self._arlo.be.notify, base=self, body=body)
 
-    def async_ping(self):
-        """ Run in calling thread
-        """
-        if self._arlo.be.async_ping(base=self) is None:
+    def _ping_and_check_reply(self):
+        body = {
+            'action': 'set',
+            'resource': self._arlo.be.sub_id,
+            'publishResponse': False,
+            'properties': {'devices': [self.device_id]}
+        }
+        self._arlo.debug(str(body))
+        if self._arlo.be.notify(base=self, body=body) is None:
             self._save_and_do_callbacks(CONNECTION_KEY, 'unavailable')
         else:
             self._save_and_do_callbacks(CONNECTION_KEY, 'available')
 
-    def async_on_off(self, device, privacy_on):
-        """ Run in calling thread
-        """
-        self._arlo.be.async_on_off(base=self, device=device, privacy_on=privacy_on)
+    def ping(self):
+        self._arlo.bg.run(self._ping_and_check_reply)
 
     @property
     def state(self):

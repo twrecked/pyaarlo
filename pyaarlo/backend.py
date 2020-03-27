@@ -345,15 +345,6 @@ class ArloBackEnd(object):
                 if mnow >= mend:
                     return self._requests.pop(tid)
 
-    def async_ping(self, base):
-        return self.notify(base, {"action": "set", "resource": self._sub_id,
-                                  "publishResponse": False, "properties": {"devices": [base.device_id]}})
-
-    def async_on_off(self, base, device, privacy_on):
-        return self.notify(base, {"action": "set", "resource": device.resource_id,
-                                  "publishResponse": True,
-                                  "properties": {"privacyActive": privacy_on}})
-
     def _update_auth_info(self,body):
         self._token = body['token']
         self._token64 = to_b64(self._token)
@@ -362,8 +353,6 @@ class ArloBackEnd(object):
         self._sub_id = 'subscriptions/' + self._web_id
 
     def _auth(self):
-
-        # Headers
         headers = {'Auth-Version':'2',
                    'Accept': 'application/json, text/plain, */*',
                    'Referer': 'https://my.arlo.com',
@@ -443,8 +432,6 @@ class ArloBackEnd(object):
         return True
 
     def _validate(self):
-
-        # Headers
         headers = {'Auth-Version':'2',
                    'Accept': 'application/json, text/plain, */*',
                    'Authorization': self._token64,
@@ -533,12 +520,13 @@ class ArloBackEnd(object):
     def auth_get(self, path, params=None, headers=None, stream=False, raw=False, timeout=None):
         return self._request(path, 'GET', params, headers, stream, raw, timeout, AUTH_HOST)
 
-    def tfa_get(self, path, params=None, headers=None, stream=False, raw=False, timeout=None):
-        return self._request(path, 'GET', params, headers, stream, raw, timeout, self._arlo.cfg.tfa_source)
-
     @property
     def session(self):
         return self._session
+
+    @property
+    def sub_id(self):
+        return self._sub_id
 
     def add_listener(self, device, callback):
         with self._lock:

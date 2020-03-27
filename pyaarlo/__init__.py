@@ -138,7 +138,7 @@ class PyArlo(object):
 
     def _ping_bases(self):
         for base in self._bases:
-            self._bg.run(base.async_ping)
+            base.ping()
 
     def _refresh_bases(self, initial):
         for base in self._bases:
