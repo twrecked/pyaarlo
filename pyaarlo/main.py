@@ -10,7 +10,9 @@ import pickle
 
 from . import PyArlo
 
-logging.basicConfig(level=logging.ERROR)
+
+logging.basicConfig(level=logging.ERROR,
+        format='%(asctime)s:%(name)s:%(levelname)s: %(message)s')
 _LOGGER = logging.getLogger('pyaarlo')
 
 BEGIN_PYAARLO_DUMP = "-----BEGIN PYAARLO DUMP-----"
@@ -134,7 +136,8 @@ def login():
     if opts["username"] is None or opts["password"] is None:
         _fatal("please supply a username and password")
     ar = PyArlo( username=opts["username"], password=opts["password"],
-                    storage_dir=opts["storage-dir"], save_state=opts['save-state'], dump=opts['dump-packets'] )
+                    storage_dir=opts["storage-dir"], save_state=opts['save-state'], dump=opts['dump-packets']
+                    )
     if ar is None:
         _fatal("unable to login to Arlo")
     return ar

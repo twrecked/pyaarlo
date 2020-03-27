@@ -3,7 +3,7 @@ import time
 from .constant import (AUTOMATION_PATH, DEFAULT_MODES, DEFINITIONS_PATH, CONNECTION_KEY,
                        MODE_ID_TO_NAME_KEY, MODE_KEY,
                        MODE_NAME_TO_ID_KEY, MODE_IS_SCHEDULE_KEY,
-                       SCHEDULE_KEY, SIREN_STATE_KEY)
+                       SCHEDULE_KEY, SIREN_STATE_KEY, TEMPERATURE_KEY, HUMIDITY_KEY, AIR_QUALITY_KEY)
 from .device import ArloDevice
 from .util import time_to_arlotime
 
@@ -233,17 +233,6 @@ class ArloBase(ArloDevice):
         if isinstance(value, (int, float)):
             self._refresh_rate = value
 
-    def has_capability(self, cap):
-        if cap in ('temperature', 'humidity', 'air_quality'):
-            if self.model_id == 'ABC1000':
-                return True
-        if cap in 'siren':
-            if self.model_id.startswith('VMB400'):
-                return True
-            if self.model_id.startswith('VMB450'):
-                return True
-        return super().has_capability(cap)
-
     @property
     def siren_state(self):
         return self._load(SIREN_STATE_KEY, "off")
@@ -289,3 +278,12 @@ class ArloBase(ArloDevice):
         if self.is_unavailable:
             return 'unavailable'
         return 'available'
+
+    def has_capability(self, cap):
+        if cap in (TEMPERATURE_KEY, HUMIDITY_KEY, AIR_QUALITY_KEY):
+            if self.model_id.startswith('ABC1000'):
+                return True
+        if cap in (SIREN_STATE_KEY):
+            if self.model_id.startswith(('VMB400', 'VMB450')):
+                return True
+        return super().has_capability(cap)
