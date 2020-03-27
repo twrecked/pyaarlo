@@ -164,4 +164,3 @@ class ArloCfg(object):
         if self.dump:
             return self.storage_dir + '/' + 'packets.dump'
         return None
-

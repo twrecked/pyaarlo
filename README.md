@@ -58,6 +58,14 @@ ar = pyaarlo.PyArlo( username=USERNAME, password=PASSWORD,
 ```
 
 
+### Pyaarlo binary
+
+**This needs updating...**
+
+```bash
+pyaarlo --help
+```
+
 ### Usage
 
 **This needs updating...**
