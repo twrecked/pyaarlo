@@ -114,7 +114,7 @@ class ArloBase(ArloDevice):
         elif resource == 'activeAutomations':
             self._set_mode_or_schedule(event)
 
-        # schdule has changed, so reload
+        # schedule has changed, so reload
         elif resource == 'automationRevisionUpdate':
             self.update_modes()
 
