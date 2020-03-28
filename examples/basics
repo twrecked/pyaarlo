@@ -18,7 +18,7 @@ PASSWORD = os.environ.get('ARLO_PASSWORD','test-password')
 
 
 # set up logging, change INFO to DEBUG for a *lot* more information
-logging.basicConfig(level=logging.INFO,
+logging.basicConfig(level=logging.DEBUG,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 _LOGGER = logging.getLogger('pyaarlo')
 
@@ -28,7 +28,7 @@ _LOGGER = logging.getLogger('pyaarlo')
 # add `dump=True` to enable event stream packet dumps
 arlo = pyaarlo.PyArlo( username=USERNAME,password=PASSWORD,
                         tfa_type='SMS',tfa_source='console',
-                        save_state=False,dump=False,storage_dir='aarlo' )
+                        save_state=False,dump=False,storage_dir='aarlo',verbose_debug=True )
 
 
 print('list bases')

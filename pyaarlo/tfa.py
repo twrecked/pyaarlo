@@ -8,7 +8,7 @@ from .constant import (
     TFA_IMAP_SOURCE)
 
 
-class Arlo2FA():
+class Arlo2FA:
 
     def __init__(self, arlo):
         self._arlo = arlo
@@ -89,7 +89,7 @@ class Arlo2FA():
                             for line in part.get_payload().splitlines():
 
                                 # match code in email, this might need some work if the email changes
-                                code = re.match('^\W*(\d{6})\W*$', line)
+                                code = re.match(r'^\W*(\d{6})\W*$', line)
                                 if code is not None:
                                     self._arlo.debug("code={}".format(code.group(1)))
                                     return code.group(1)
