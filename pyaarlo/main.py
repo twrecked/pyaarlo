@@ -1,19 +1,19 @@
 #!/usr/bin/env python
 #
 
-import os
-import sys
-import click
-import pprint
-import logging
 import base64
+import logging
+import os
 import pickle
+import pprint
+import sys
+
+import click
 
 from . import PyArlo
 
-
 logging.basicConfig(level=logging.ERROR,
-        format='%(asctime)s:%(name)s:%(levelname)s: %(message)s')
+                    format='%(asctime)s:%(name)s:%(levelname)s: %(message)s')
 _LOGGER = logging.getLogger('pyaarlo')
 
 BEGIN_PYAARLO_DUMP = "-----BEGIN PYAARLO DUMP-----"
@@ -49,28 +49,34 @@ opts = {
 def _debug(args):
     _LOGGER.debug("{}".format(args))
 
+
 def _vdebug(args):
     if opts["verbose"] > 2:
         _debug(args)
 
+
 def _info(args):
     _LOGGER.info("{}".format(args))
+
 
 def _fatal(args):
     sys.exit("FATAL-ERROR:{}".format(args))
 
-def _pprint(msg,obj):
-    print("{}\n{}".format(msg,pprint.pformat(obj,indent=1)) )
 
-def _epprint(msg,obj):
+def _pprint(msg, obj):
+    print("{}\n{}".format(msg, pprint.pformat(obj, indent=1)))
+
+
+def _epprint(msg, obj):
     if opts["encrypt"]:
         print("-----BEGIN PYAARLO DATA-----")
         print(encrypt_to_string(obj))
         print("-----END PYAARLO DATA-----")
     else:
-        _pprint(msg,obj)
+        _pprint(msg, obj)
 
-def _casecmp(s1,s2):
+
+def _casecmp(s1, s2):
     if s1 is None or s2 is None:
         return False
     return str(s1).lower() == str(s2).lower()
@@ -84,7 +90,7 @@ def encrypt_to_string(obj):
 
     try:
         # pickle and resize object
-        obj = pickle.dumps( obj )
+        obj = pickle.dumps(obj)
         obj += b' ' * (16 - len(obj) % 16)
 
         # create nonce and encrypt pickled object with it
@@ -102,8 +108,8 @@ def encrypt_to_string(obj):
         nonce = key.encrypt(nonce)
 
         # create nonce/object dictionary, pickle and base64 encode
-        nonce_obj = pickle.dumps( { "n":nonce, "o":obj } )
-        return base64.encodebytes( nonce_obj ).decode().rstrip()
+        nonce_obj = pickle.dumps({"n": nonce, "o": obj})
+        return base64.encodebytes(nonce_obj).decode().rstrip()
     except ValueError as err:
         _fatal("encrypt error {}".format(err))
     except:
@@ -118,11 +124,11 @@ def decrypt_from_string(nonce_obj):
     try:
         # decode nonce/object dictionary then unpickle it
         nonce_obj = base64.b64decode(nonce_obj)
-        nonce_obj = pickle.loads( nonce_obj )
+        nonce_obj = pickle.loads(nonce_obj)
 
         # import private key and decrypt nonce
         key = open(opts["private-key"], "r").read()
-        rsakey = RSA.importKey(key,passphrase=opts["pass-phrase"])
+        rsakey = RSA.importKey(key, passphrase=opts["pass-phrase"])
         rsakey = PKCS1_OAEP.new(rsakey)
         nonce = rsakey.decrypt(nonce_obj["n"])
 
@@ -141,28 +147,30 @@ def login():
     _info("logging in")
     if opts["username"] is None or opts["password"] is None:
         _fatal("please supply a username and password")
-    ar = PyArlo( username=opts["username"], password=opts["password"],
-                    storage_dir=opts["storage-dir"], save_state=opts['save-state'], dump=opts['dump-packets']
-                    )
+    ar = PyArlo(username=opts["username"], password=opts["password"],
+                storage_dir=opts["storage-dir"], save_state=opts['save-state'], dump=opts['dump-packets']
+                )
     if ar is None:
         _fatal("unable to login to Arlo")
     return ar
 
 
-def print_item(name,item):
+def print_item(name, item):
     if opts["compact"]:
-        print( " {};did={};mid={}/{};sno={}".format(item.name,item.device_id,item.model_id,item.hw_version,item.serial_number))
+        print(" {};did={};mid={}/{};sno={}".format(item.name, item.device_id, item.model_id, item.hw_version,
+                                                   item.serial_number))
     else:
-        print( " {}".format(item.name))
-        print( "  device-id:{}".format(item.device_id))
-        print( "  model-id:{}/{}".format(item.model_id,item.hw_version))
-        print( "  serial-number:{}".format(item.serial_number))
+        print(" {}".format(item.name))
+        print("  device-id:{}".format(item.device_id))
+        print("  model-id:{}/{}".format(item.model_id, item.hw_version))
+        print("  serial-number:{}".format(item.serial_number))
 
-def list_items(name,items):
+
+def list_items(name, items):
     print("{}:".format(name))
     if items is not None:
         for item in items:
-            print_item(name,item)
+            print_item(name, item)
 
 
 # list [all|cameras|bases]
@@ -175,26 +183,26 @@ def list_items(name,items):
 #   decrypt 
 
 @click.group()
-@click.option('-u','--username',required=False,
+@click.option('-u', '--username', required=False,
               help="Arlo username")
-@click.option('-p','--password',required=False,
+@click.option('-p', '--password', required=False,
               help="Arlo password")
-@click.option('-c','--compact/--no-compact',default=False,
+@click.option('-c', '--compact/--no-compact', default=False,
               help="Minimize lists")
-@click.option('-e','--encrypt/--no-encrypt',default=False,
+@click.option('-e', '--encrypt/--no-encrypt', default=False,
               help="Where possible, encrypt output")
-@click.option('-k','--public-key',required=False,
+@click.option('-k', '--public-key', required=False,
               help="Public key for encryption")
-@click.option('-K','--private-key',required=False,
+@click.option('-K', '--private-key', required=False,
               help="Private key for decryption")
-@click.option('-P','--pass-phrase',required=False,
+@click.option('-P', '--pass-phrase', required=False,
               help="Pass phrase for private key")
-@click.option('-s','--storage-dir',
+@click.option('-s', '--storage-dir',
               default="./", show_default='current dir',
               help="Where to store Arlo state and packet dump")
 @click.option("-v", "--verbose", count=True,
               help="Be chatty. More is more chatty!")
-def cli( username,password,compact,encrypt,public_key,private_key,pass_phrase,storage_dir,verbose ):
+def cli(username, password, compact, encrypt, public_key, private_key, pass_phrase, storage_dir, verbose):
     if username is not None:
         opts['username'] = username
     if password is not None:
@@ -225,36 +233,34 @@ def cli( username,password,compact,encrypt,public_key,private_key,pass_phrase,st
 @click.argument('item', default='all',
                 type=click.Choice(['all', 'cameras', 'bases', 'lights', 'doorbells'], case_sensitive=False))
 def dump(item):
-
     out = {}
     ar = login()
 
     if item == 'all':
         out = ar._devices
 
-    _epprint(item,out)
+    _epprint(item, out)
 
 
 @cli.command()
 @click.argument('item', type=click.Choice(['all', 'cameras', 'bases', 'lights', 'doorbells'], case_sensitive=False))
 def list(item):
-
     ar = login()
     if item == "all" or item == "bases":
-        list_items("bases",ar.base_stations)
+        list_items("bases", ar.base_stations)
     if item == "all" or item == "cameras":
-        list_items("cameras",ar.cameras)
+        list_items("cameras", ar.cameras)
     if item == "all" or item == "lights":
-        list_items("lights",ar.lights)
+        list_items("lights", ar.lights)
     if item == "all" or item == "doorbells":
-        list_items("doorbells",ar.doorbells)
+        list_items("doorbells", ar.doorbells)
 
 
 @cli.command()
 def encrypt():
     in_text = sys.stdin.read()
     enc_text = encrypt_to_string(in_text).rstrip()
-    print("{}\n{}\n{}".format(BEGIN_PYAARLO_DUMP,enc_text,END_PYAARLO_DUMP))
+    print("{}\n{}\n{}".format(BEGIN_PYAARLO_DUMP, enc_text, END_PYAARLO_DUMP))
 
 
 @cli.command()
@@ -269,18 +275,18 @@ def decrypt():
         elif save_lines:
             lines += line
     dec_text = decrypt_from_string(lines)
-    print("{}".format(dec_text),end='')
+    print("{}".format(dec_text), end='')
 
 
 @cli.command()
-@click.option('-n','--name',required=False,
+@click.option('-n', '--name', required=False,
               help='camera name')
-@click.option('-d','--device-id',required=False,
+@click.option('-d', '--device-id', required=False,
               help='camera device id')
-@click.option('-f','--start-ffmpeg/--no-start-ffmpeg',required=False,default=False,
+@click.option('-f', '--start-ffmpeg/--no-start-ffmpeg', required=False, default=False,
               help='start ffmpeg for stream')
 @click.argument('action', type=click.Choice(['start-stream', 'stop-stream', 'last-thumbnail'], case_sensitive=False))
-def camera(name,device_id,start_ffmpeg,action):
+def camera(name, device_id, start_ffmpeg, action):
     camera = None
     ar = login()
     for c in ar.cameras:
@@ -303,8 +309,8 @@ def camera(name,device_id,start_ffmpeg,action):
             print('starting ffmpeg')
             os.system("mkdir video_dir")
             os.system("ffmpeg -i '{}' ".format(stream_url) +
-                        "-fflags flush_packets -max_delay 2 -flags -global_header " +
-                        "-hls_time 2 -hls_list_size 3 -vcodec copy -y video_dir/video.m3u8")
+                      "-fflags flush_packets -max_delay 2 -flags -global_header " +
+                      "-hls_time 2 -hls_list_size 3 -vcodec copy -y video_dir/video.m3u8")
 
     elif action == 'stop-stream':
         pass
@@ -319,6 +325,7 @@ def camera(name,device_id,start_ffmpeg,action):
 
 def main_func():
     cli()
+
 
 if __name__ == '__main__':
     cli()
