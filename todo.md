@@ -1,5 +1,8 @@
 
 # TODO
+- [ ] better authentication failure logging
+- [ ] trap authentication failures and return early
+- [ ] add light commans to pyaarlo binary
 
 * add choices at start up
   * storage location (storage-file=/config/.aarlo)
