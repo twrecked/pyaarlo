@@ -7,6 +7,7 @@ import os
 import pickle
 import pprint
 import sys
+import io
 
 import click
 
@@ -36,7 +37,9 @@ opts = {
     "storage-dir": "./",
     "save-state": False,
     "dump-packets": False,
+    "wait-for-initial-setup": True,
 
+    "anonymize": False,
     "compact": False,
     "encrypt": False,
     "public-key": None,
@@ -44,6 +47,12 @@ opts = {
     "pass-phrase": None,
     "verbose": 0,
 }
+
+# where we store before encrypting or anonymizing
+_out = None
+
+# arlo instance...
+_arlo = None
 
 
 def _debug(args):
@@ -63,17 +72,38 @@ def _fatal(args):
     sys.exit("FATAL-ERROR:{}".format(args))
 
 
-def _pprint(msg, obj):
-    print("{}\n{}".format(msg, pprint.pformat(obj, indent=1)))
+def _print_start(encrypt_or_anonymize=False):
+    #if encrypt_or_anonymize:
+    if opts['anonymize'] or opts['encrypt']:
+        global _out
+        _out = io.StringIO()
 
 
-def _epprint(msg, obj):
-    if opts["encrypt"]:
-        print("-----BEGIN PYAARLO DATA-----")
-        print(encrypt_to_string(obj))
-        print("-----END PYAARLO DATA-----")
+def _print(msg):
+    if _out is None:
+        print("{}".format(msg))
     else:
-        _pprint(msg, obj)
+        _out.write(msg)
+        _out.write("\n")
+
+
+def _pprint(msg, obj):
+    _print("{}\n{}".format(msg, pprint.pformat(obj, indent=1)))
+
+
+def _print_end():
+    if _out is not None:
+        _out.seek(0,0)
+        out_text = _out.read()
+
+        if opts['anonymize']:
+            out_text = anonymize_from_string(out_text)
+        if opts['encrypt']:
+            print(BEGIN_PYAARLO_DUMP)
+            out_text = encrypt_to_string(out_text)
+        print(out_text)
+        if opts['encrypt']:
+            print(END_PYAARLO_DUMP)
 
 
 def _casecmp(s1, s2):
@@ -143,31 +173,55 @@ def decrypt_from_string(nonce_obj):
         _fatal("unexpected decrypt error:", sys.exc_info()[0])
 
 
+def anonymize_from_string(obj):
+    
+    # get device list
+    keys = ['deviceId', 'uniqueId', 'userId', 'xCloudId']
+    valuables = {}
+    for device in _arlo._devices:
+        for key in keys:
+            value = device.get(key, None)
+            if value and value not in valuables:
+                valuables[value] = "X" * len(value)
+        owner_id = device.get('owner',{}).get('ownerId',None)
+        if owner_id:
+            valuables[owner_id] = "X" * len(owner_id)
+
+    anon = obj
+    for valuable in valuables:
+        anon = anon.replace(valuable,valuables[valuable])
+    return anon
+
+
 def login():
     _info("logging in")
     if opts["username"] is None or opts["password"] is None:
         _fatal("please supply a username and password")
-    ar = PyArlo(username=opts["username"], password=opts["password"],
-                storage_dir=opts["storage-dir"], save_state=opts['save-state'], dump=opts['dump-packets']
+    global _arlo
+    _arlo = PyArlo(username=opts["username"], password=opts["password"],
+                storage_dir=opts["storage-dir"],
+                save_state=opts['save-state'],
+                wait_for_initial_setup=opts['wait-for-initial-setup'],
+                dump=opts['dump-packets']
                 )
-    if ar is None:
+    if _arlo is None:
         _fatal("unable to login to Arlo")
-    return ar
+    return _arlo
 
 
 def print_item(name, item):
     if opts["compact"]:
-        print(" {};did={};mid={}/{};sno={}".format(item.name, item.device_id, item.model_id, item.hw_version,
+        _print(" {};did={};mid={}/{};sno={}".format(item.name, item.device_id, item.model_id, item.hw_version,
                                                    item.serial_number))
     else:
-        print(" {}".format(item.name))
-        print("  device-id:{}".format(item.device_id))
-        print("  model-id:{}/{}".format(item.model_id, item.hw_version))
-        print("  serial-number:{}".format(item.serial_number))
+        _print(" {}".format(item.name))
+        _print("  device-id:{}".format(item.device_id))
+        _print("  model-id:{}/{}".format(item.model_id, item.hw_version))
+        _print("  serial-number:{}".format(item.serial_number))
 
 
 def list_items(name, items):
-    print("{}:".format(name))
+    _print("{}:".format(name))
     if items is not None:
         for item in items:
             print_item(name, item)
@@ -187,6 +241,8 @@ def list_items(name, items):
               help="Arlo username")
 @click.option('-p', '--password', required=False,
               help="Arlo password")
+@click.option('-a', '--anonymize/--no-anonymize', default=False,
+              help="Anonimize ids")
 @click.option('-c', '--compact/--no-compact', default=False,
               help="Minimize lists")
 @click.option('-e', '--encrypt/--no-encrypt', default=False,
@@ -200,13 +256,17 @@ def list_items(name, items):
 @click.option('-s', '--storage-dir',
               default="./", show_default='current dir',
               help="Where to store Arlo state and packet dump")
+@click.option('-w', '--wait/--no-wait', default=True,
+              help="Wait for all information to arrive starting up")
 @click.option("-v", "--verbose", count=True,
               help="Be chatty. More is more chatty!")
-def cli(username, password, compact, encrypt, public_key, private_key, pass_phrase, storage_dir, verbose):
+def cli(username, password, anonymize, compact, encrypt, public_key, private_key, pass_phrase, storage_dir, wait, verbose):
     if username is not None:
         opts['username'] = username
     if password is not None:
         opts['password'] = password
+    if anonymize is not None:
+        opts['anonymize'] = anonymize
     if compact is not None:
         opts['compact'] = compact
     if encrypt is not None:
@@ -219,8 +279,10 @@ def cli(username, password, compact, encrypt, public_key, private_key, pass_phra
         opts['pass-phrase'] = pass_phrase
     if storage_dir is not None:
         opts['storage-dir'] = storage_dir
+    if wait is not None:
+        opts['wait-for-initial-setup'] = wait
     if verbose is not None:
-        opts["verbose"] = verbose
+        opts['verbose'] = verbose
         if verbose == 0:
             _LOGGER.setLevel(logging.ERROR)
         if verbose == 1:
@@ -239,13 +301,16 @@ def dump(item):
     if item == 'all':
         out = ar._devices
 
-    _epprint(item, out)
+    _print_start()
+    _pprint(item, out)
+    _print_end()
 
 
 @cli.command()
 @click.argument('item', type=click.Choice(['all', 'cameras', 'bases', 'lights', 'doorbells'], case_sensitive=False))
 def list(item):
     ar = login()
+    _print_start()
     if item == "all" or item == "bases":
         list_items("bases", ar.base_stations)
     if item == "all" or item == "cameras":
@@ -254,6 +319,7 @@ def list(item):
         list_items("lights", ar.lights)
     if item == "all" or item == "doorbells":
         list_items("doorbells", ar.doorbells)
+    _print_end()
 
 
 @cli.command()
@@ -274,8 +340,18 @@ def decrypt():
             save_lines = False
         elif save_lines:
             lines += line
-    dec_text = decrypt_from_string(lines)
-    print("{}".format(dec_text), end='')
+    if lines == "":
+        _fatal('no encrypted input found')
+    else:
+        dec_text = decrypt_from_string(lines)
+        print("{}".format(dec_text), end='')
+
+
+@cli.command()
+def anonymize():
+    login()
+    in_text = sys.stdin.read()
+    print(anonymize_from_string(in_text))
 
 
 @cli.command()
