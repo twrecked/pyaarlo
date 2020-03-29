@@ -2,12 +2,12 @@
 #
 
 import base64
+import io
 import logging
 import os
 import pickle
 import pprint
 import sys
-import io
 
 import click
 
@@ -51,7 +51,7 @@ opts = {
 # where we store before encrypting or anonymizing
 _out = None
 
-# arlo instance...
+# Arlo instance...
 _arlo = None
 
 
@@ -72,8 +72,7 @@ def _fatal(args):
     sys.exit("FATAL-ERROR:{}".format(args))
 
 
-def _print_start(encrypt_or_anonymize=False):
-    #if encrypt_or_anonymize:
+def _print_start():
     if opts['anonymize'] or opts['encrypt']:
         global _out
         _out = io.StringIO()
@@ -93,7 +92,7 @@ def _pprint(msg, obj):
 
 def _print_end():
     if _out is not None:
-        _out.seek(0,0)
+        _out.seek(0, 0)
         out_text = _out.read()
 
         if opts['anonymize']:
@@ -141,9 +140,9 @@ def encrypt_to_string(obj):
         nonce_obj = pickle.dumps({"n": nonce, "o": obj})
         return base64.encodebytes(nonce_obj).decode().rstrip()
     except ValueError as err:
-        _fatal("encrypt error {}".format(err))
-    except:
-        _fatal("unexpected encrypt error:", sys.exc_info()[0])
+        _fatal("encrypt error: {}".format(err))
+    except Exception:
+        _fatal("unexpected encrypt error: {}".format(sys.exc_info()[0]))
 
 
 def decrypt_from_string(nonce_obj):
@@ -169,12 +168,11 @@ def decrypt_from_string(nonce_obj):
         return obj
     except ValueError as err:
         _fatal("decrypt error {}".format(err))
-    except:
-        _fatal("unexpected decrypt error:", sys.exc_info()[0])
+    except Exception:
+        _fatal("unexpected decrypt error: {}".format(sys.exc_info()[0]))
 
 
 def anonymize_from_string(obj):
-    
     # get device list
     keys = ['deviceId', 'uniqueId', 'userId', 'xCloudId']
     valuables = {}
@@ -183,13 +181,13 @@ def anonymize_from_string(obj):
             value = device.get(key, None)
             if value and value not in valuables:
                 valuables[value] = "X" * len(value)
-        owner_id = device.get('owner',{}).get('ownerId',None)
+        owner_id = device.get('owner', {}).get('ownerId', None)
         if owner_id:
             valuables[owner_id] = "X" * len(owner_id)
 
     anon = obj
     for valuable in valuables:
-        anon = anon.replace(valuable,valuables[valuable])
+        anon = anon.replace(valuable, valuables[valuable])
     return anon
 
 
@@ -199,20 +197,20 @@ def login():
         _fatal("please supply a username and password")
     global _arlo
     _arlo = PyArlo(username=opts["username"], password=opts["password"],
-                storage_dir=opts["storage-dir"],
-                save_state=opts['save-state'],
-                wait_for_initial_setup=opts['wait-for-initial-setup'],
-                dump=opts['dump-packets']
-                )
+                   storage_dir=opts["storage-dir"],
+                   save_state=opts['save-state'],
+                   wait_for_initial_setup=opts['wait-for-initial-setup'],
+                   dump=opts['dump-packets']
+                   )
     if _arlo is None:
         _fatal("unable to login to Arlo")
     return _arlo
 
 
-def print_item(name, item):
+def print_item(_name, item):
     if opts["compact"]:
         _print(" {};did={};mid={}/{};sno={}".format(item.name, item.device_id, item.model_id, item.hw_version,
-                                                   item.serial_number))
+                                                    item.serial_number))
     else:
         _print(" {}".format(item.name))
         _print("  device-id:{}".format(item.device_id))
@@ -260,7 +258,8 @@ def list_items(name, items):
               help="Wait for all information to arrive starting up")
 @click.option("-v", "--verbose", count=True,
               help="Be chatty. More is more chatty!")
-def cli(username, password, anonymize, compact, encrypt, public_key, private_key, pass_phrase, storage_dir, wait, verbose):
+def cli(username, password, anonymize, compact, encrypt, public_key, private_key, pass_phrase, storage_dir, wait,
+        verbose):
     if username is not None:
         opts['username'] = username
     if password is not None:
