@@ -6,6 +6,8 @@ import os
 import sys
 
 # for examples, import relative to starting path
+import time
+
 sys.path.append('.')
 import pyaarlo
 
@@ -24,22 +26,29 @@ _LOGGER = logging.getLogger('pyaarlo')
 arlo = pyaarlo.PyArlo(username=USERNAME, password=PASSWORD,
                       tfa_type='SMS', tfa_source='console',
                       save_state=False, dump=False, storage_dir='aarlo', verbose_debug=True)
-if not arlo.is_connected:
-    print("failed to login({})".format(arlo._last_error))
-    sys.exit(-1)
 
-print('list bases')
-for base in arlo.base_stations:
-    print("base: name={},device_id={},state={}".format(base.name, base.device_id, base.state))
+packet = {
+    'action': 'is',
+    'from': 'XXXXXXXXXXXXX',
+    'properties': [{'blockNotifications': {'block': False,
+                                           'duration': 0,
+                                           'endTime': 0},
+                    'callLedEnable': True,
+                    'chimes': {},
+                    'liveFeed': True,
+                    'pirLedEnable': True,
+                    'silentMode': {},
+                    'sipCallActive': False,
+                    'states': {},
+                    'traditionalChime': True,
+                    'traditionalChimeDuration': 10000,
+                    'traditionalChimeType': 'digital',
+                    'voiceMailEnabled': False}],
+    'resource': 'doorbells',
+    'to': 'XXXXXXXXXXXXX',
+    'transId': '12345'
+}
 
-print('list cameras')
-for camera in arlo.cameras:
-    print("camera: name={},device_id={},state={}".format(camera.name, camera.device_id, camera.state))
-
-print('list doorbells')
-for doorbell in arlo.doorbells:
-    print("doorbell: name={},device_id={},state={}".format(doorbell.name, doorbell.device_id, doorbell.state))
-
-print('list lights')
-for light in arlo.lights:
-    print("light: name={},device_id={},state={}".format(light.name, light.device_id, light.state))
+time.sleep(5)
+arlo.inject_response(packet)
+time.sleep(5)
