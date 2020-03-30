@@ -29,7 +29,7 @@ arlo = pyaarlo.PyArlo(username=USERNAME, password=PASSWORD,
 
 packet = {
     'action': 'is',
-    'from': '5MJ189WK03543',
+    'from': 'XXXXXXXXXXXXX',
     'properties': [{'blockNotifications': {'block': False,
                                            'duration': 0,
                                            'endTime': 0},
@@ -45,7 +45,7 @@ packet = {
                     'traditionalChimeType': 'digital',
                     'voiceMailEnabled': False}],
     'resource': 'doorbells',
-    'to': '5MJ189WK03543',
+    'to': 'XXXXXXXXXXXXX',
     'transId': '12345'
 }
 
