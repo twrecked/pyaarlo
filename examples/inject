@@ -1,0 +1,54 @@
+#!/usr/bin/env python
+#
+
+import logging
+import os
+import sys
+
+# for examples, import relative to starting path
+import time
+
+sys.path.append('.')
+import pyaarlo
+
+# set these from the environment to log in
+USERNAME = os.environ.get('ARLO_USERNAME', 'test.login@gmail.com')
+PASSWORD = os.environ.get('ARLO_PASSWORD', 'test-password')
+
+# set up logging, change INFO to DEBUG for a *lot* more information
+logging.basicConfig(level=logging.DEBUG,
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+_LOGGER = logging.getLogger('pyaarlo')
+
+# log in
+# add `verbose_debug=True` to enable even more debugging
+# add `dump=True` to enable event stream packet dumps
+arlo = pyaarlo.PyArlo(username=USERNAME, password=PASSWORD,
+                      tfa_type='SMS', tfa_source='console',
+                      save_state=False, dump=False, storage_dir='aarlo', verbose_debug=True)
+
+packet = {
+    'action': 'is',
+    'from': '5MJ189WK03543',
+    'properties': [{'blockNotifications': {'block': False,
+                                           'duration': 0,
+                                           'endTime': 0},
+                    'callLedEnable': True,
+                    'chimes': {},
+                    'liveFeed': True,
+                    'pirLedEnable': True,
+                    'silentMode': {},
+                    'sipCallActive': False,
+                    'states': {},
+                    'traditionalChime': True,
+                    'traditionalChimeDuration': 10000,
+                    'traditionalChimeType': 'digital',
+                    'voiceMailEnabled': False}],
+    'resource': 'doorbells',
+    'to': '5MJ189WK03543',
+    'transId': '12345'
+}
+
+time.sleep(5)
+arlo.inject_response(packet)
+time.sleep(5)

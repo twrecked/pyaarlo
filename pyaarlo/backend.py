@@ -10,9 +10,9 @@ import requests.adapters
 
 from .constant import (AUTH_HOST, AUTH_PATH, AUTH_VALIDATE_PATH, AUTH_GET_FACTORS, AUTH_START_PATH, AUTH_FINISH_PATH,
                        DEFAULT_RESOURCES, LOGOUT_PATH, SESSION_PATH,
-                       NOTIFY_PATH, SUBSCRIBE_PATH, TRANSID_PREFIX, DEVICES_PATH)
+                       NOTIFY_PATH, SUBSCRIBE_PATH, TRANSID_PREFIX, DEVICES_PATH, TFA_CONSOLE_SOURCE, TFA_IMAP_SOURCE)
 from .sseclient import SSEClient
-from .tfa import Arlo2FA
+from .tfa import Arlo2FAConsole, Arlo2FAImap
 from .util import time_to_arlotime, now_strftime, to_b64
 
 
@@ -161,7 +161,7 @@ class ArloBackEnd(object):
             prop_or_props = response.get('properties', [])
             if isinstance(prop_or_props, list):
                 for prop in prop_or_props:
-                    device_id = prop.get('serialNumber',None)
+                    device_id = prop.get('serialNumber', None)
                     if device_id is None:
                         device_id = response.get('from', None)
                     responses.append((device_id, resource, prop))
@@ -347,6 +347,16 @@ class ArloBackEnd(object):
                 if mnow >= mend:
                     return self._requests.pop(tid)
 
+    def _get_tfa(self):
+        """ Return the 2FA type we're using. """
+        tfa_type = self._arlo.cfg.tfa_source
+        if tfa_type == TFA_CONSOLE_SOURCE:
+            return Arlo2FAConsole(self._arlo)
+        elif tfa_type == TFA_IMAP_SOURCE:
+            return Arlo2FAImap(self._arlo)
+        else:
+            return tfa_type
+
     def _update_auth_info(self, body):
         self._token = body['token']
         self._token64 = to_b64(self._token)
@@ -375,11 +385,11 @@ class ArloBackEnd(object):
 
         # Looks like we need 2FA. So, request a code be sent to our email address.
         if not body['authCompleted']:
+            self._arlo.debug('need 2FA...')
 
             # update headers and create 2fa instance
-            self._arlo.debug('need 2FA...')
             headers['Authorization'] = self._token64
-            tfa = Arlo2FA(self._arlo)
+            tfa = self._get_tfa()
 
             # get available 2fa choices,
             self._arlo.debug('getting tfa choices')
