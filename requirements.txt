@@ -1,4 +1,3 @@
 requests
-six
 click
 pycrypto
