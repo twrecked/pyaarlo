@@ -122,48 +122,49 @@ def encrypt_to_string(obj):
         obj = pickle.dumps(obj)
         obj += b' ' * (16 - len(obj) % 16)
 
-        # create nonce and encrypt pickled object with it
-        nonce = get_random_bytes(16)
-        cipher = AES.new(nonce)
-        obj = cipher.encrypt(obj)
+        # create key and encrypt pickled object with it
+        key = get_random_bytes(16)
+        aes_cipher = AES.new(key,AES.MODE_EAX)
+        obj, tag = aes_cipher.encrypt_and_digest(obj)
+        nonce = aes_cipher.nonce
 
-        # encrypt nonce with public key
+        # encrypt key with public key
         if opts["public-key"] is None:
-            key = RSA.importKey(PUBLIC_KEY)
+            rsa_cipher = RSA.importKey(PUBLIC_KEY)
         else:
-            key = open(opts["public-key"], 'r').read()
-            key = RSA.importKey(key)
-        key = PKCS1_OAEP.new(key)
-        nonce = key.encrypt(nonce)
+            rsa_cipher = open(opts["public-key"], 'r').read()
+            rsa_cipher = RSA.importKey(rsa_cipher)
+        rsa_cipher = PKCS1_OAEP.new(rsa_cipher)
+        key = rsa_cipher.encrypt(key)
 
-        # create nonce/object dictionary, pickle and base64 encode
-        nonce_obj = pickle.dumps({"n": nonce, "o": obj})
-        return base64.encodebytes(nonce_obj).decode().rstrip()
+        # create key/object dictionary, pickle and base64 encode
+        key_obj = pickle.dumps({'k': key, 'n': nonce, 'o': obj, 't': tag})
+        return base64.encodebytes(key_obj).decode().rstrip()
     except ValueError as err:
         _fatal("encrypt error: {}".format(err))
     except Exception:
         _fatal("unexpected encrypt error: {}".format(sys.exc_info()[0]))
 
 
-def decrypt_from_string(nonce_obj):
+def decrypt_from_string(key_obj):
     from Crypto.Cipher import AES
     from Crypto.PublicKey import RSA
     from Crypto.Cipher import PKCS1_OAEP
 
     try:
-        # decode nonce/object dictionary then unpickle it
-        nonce_obj = base64.b64decode(nonce_obj)
-        nonce_obj = pickle.loads(nonce_obj)
+        # decode key/object dictionary then unpickle it
+        key_obj = base64.b64decode(key_obj)
+        key_obj = pickle.loads(key_obj)
 
         # import private key and decrypt nonce
         key = open(opts["private-key"], "r").read()
-        rsakey = RSA.importKey(key, passphrase=opts["pass-phrase"])
-        rsakey = PKCS1_OAEP.new(rsakey)
-        nonce = rsakey.decrypt(nonce_obj["n"])
+        rsa_cipher = RSA.importKey(key, passphrase=opts["pass-phrase"])
+        rsa_cipher = PKCS1_OAEP.new(rsa_cipher)
+        key = rsa_cipher.decrypt(key_obj["k"])
 
         # decrypt object and unpickle
-        cipher = AES.new(nonce)
-        obj = cipher.decrypt(nonce_obj["o"])
+        aes_cipher = AES.new(key, AES.MODE_EAX, nonce=key_obj['n'])
+        obj = aes_cipher.decrypt_and_verify(key_obj['o'], key_obj['t'])
         obj = pickle.loads(obj)
         return obj
     except ValueError as err:
