@@ -6,8 +6,8 @@ import os
 import sys
 import time
 
-# for examples, import relative to starting path
-sys.path.append('.')
+# for examples add pyaarlo install path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 import pyaarlo
 
 USERNAME = os.environ.get('ARLO_USERNAME', 'test.login@gmail.com')
@@ -50,4 +50,4 @@ for light in arlo.lights:
     light.add_attr_callback('*', attribute_changed)
 
 # hang around for 10 minutes
-time.sleep(600)
+time.sleep(1200)
