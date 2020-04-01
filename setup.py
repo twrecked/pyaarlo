@@ -11,14 +11,14 @@ def readme():
 setup(
 
     name='pyaarlo',
-    version='0.6.17.1',
+    version='0.6.17.2',
     packages=['pyaarlo'],
 
     python_requires = '>=3.5',
     install_requires=[
         'requests',
         'click',
-        'pycrypto'
+        'pycryptodome'
     ],
 
     author='Steve Herrell',
