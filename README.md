@@ -57,20 +57,44 @@ ar = pyaarlo.PyArlo( username=USERNAME, password=PASSWORD,
 						imap_host='imap.host.com', imap_username='your-user-name', imap_password='your-imap-password' )
 ```
 
+It's working well with my gmail account, see [here](https://support.google.com/mail/answer/185833?hl=en) for help setting up app passwords.
+
 
 ### Pyaarlo binary
 
-**This needs updating...**
+The pip installation adds a binary `pyaarlo`. You can use this to list devices, perform certain simple actions and anonymize and encrypt logs for debugging purposes. _Device operations are currently limited..._
+
+The git installation has `examples/pyaarlo` which functions in a similar manner.
 
 ```bash
+# To show the currently available actions:
 pyaarlo --help
+
+# To list all the known devices:
+pyaarlo -u 'your-user-name' -p 'your-password' list all
+
+# this version will anonymize the output
+pyaarlo -u 'your-user-name' -p 'your-password' --anonymize list all
+
+# this version will anonymize and encrypt the output
+pyaarlo -u 'your-user-name' -p 'your-password' --anonymize --encrypt list all
+```
+
+The anonymize and encrypt options are so you can upload logs without 3rd parties (hopefully) being able to see. You can use the anonymize and encrypt feature on arbitrary data. Encryption doesn't need your username and password.
+
+```bash
+# encrypt an existing file
+cat output-file | pyaarlo encrypt
+
+# anonymize and then encrypt a file
+cat output-file | pyaarlo -u 'your-user-name' -p 'your-password' anonymize | pyaarlo encrypt
 ```
 
 ### Usage
 
-**This needs updating...**
+Start by looking [here](https://github.com/tchellomello/python-arlo/blob/master/README.rst) at the docs for the original project.
 
-Start by looking at [here](https://github.com/tchellomello/python-arlo/blob/master/README.rst) at the docs for the original project.
+This example code will login and wait 5 minutes and list any events that arrive during that time.
 
 ``` python
 # code to trap when attributes change
@@ -87,6 +111,7 @@ for base in arlo.base_stations:
     base.add_attr_callback('*', attribute_changed)
 
 # get cameras, list their statuses, register state change callbacks
+# * is any callback, you can use motionDetected just to get motion events
 for camera in arlo.camera_stations:
     print("camera: name={},device_id={},state={}".format(camera.name,camera.device_id,camera.state))
     camera.add_attr_callback('*', attribute_changed)
@@ -102,6 +127,25 @@ time.sleep(300)
 
 ```
 
+The following are some usage examples:
+
+```python
+# get information on a camera
+cam = arlo.cameras[0]
+cam.state
+cam.serial_number
+cam.battery_level
+cam.signal_strength
+cam.too_cold
+
+# play around with a light
+light = arlo.lights[0]
+light.serial_number
+light.battery_level
+light.is_on
+light.turn_on()
+
+```
 
 
 ### ToDo
