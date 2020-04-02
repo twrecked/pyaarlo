@@ -244,6 +244,9 @@ class ArloChildDevice(ArloDevice):
 
         Some devices - ArloBaby for example - are their own parents. If we
         can't find a basestation we return the first one.
+
+        :return: Parent device.
+        :rtype: ArloBase
         """
         # look for real parents
         for base in self._arlo.base_stations:
@@ -258,27 +261,49 @@ class ArloChildDevice(ArloDevice):
 
     @property
     def battery_level(self):
-        """ Return the current battery level. """
+        """ Return the current battery level.
+
+        :return: battery level of device
+        :rtype: int
+        """
         return self._load(BATTERY_KEY, 100)
 
     @property
     def battery_tech(self):
-        """ Return the current battery technology. """
+        """ Return the current battery technology.
+
+        Is it rechargable, wired...
+
+        :return: battery tech of device
+        :rtype: str
+        """
         return self._load(BATTERY_TECH_KEY, 'None')
 
     @property
     def charging(self):
-        """ Is the device recharging. """
+        """ Is the device recharging.
+
+        :return: `True` if it is, `False` it isn't.
+        :rtype: bool
+        """
         return self._load(CHARGING_KEY, 'off').lower() == 'on'
 
     @property
     def charger_type(self):
-        """ How the device is recharging. """
+        """ How the device is recharging.
+
+        :return: String describing charger type.
+        :rtype: str
+        """
         return self._load(CHARGER_KEY, 'None')
 
     @property
     def wired(self):
-        """ Is the device plugged in? """
+        """ Is the device plugged in?
+
+        :return: `True` if it is, `False` it isn't.
+        :rtype: bool
+        """
         return self.charger_type.lower() != 'none'
 
     @property
@@ -286,27 +311,48 @@ class ArloChildDevice(ArloDevice):
         """ Is the device plugged only in?
 
         ie. Does it have battery back up?
+
+        :return: `True` if it is wired, `False` isn't.
+        :rtype: bool
         """
         return self.battery_tech.lower() == 'none' and self.wired
 
     @property
     def signal_strength(self):
-        """ Return the WiFi signal strength. """
+        """ Return the WiFi signal strength.
+
+        :return: A value from 1 to 5 indicating WiFi strength.
+        :rtype: int
+        """
         return self._load(SIGNAL_STR_KEY, 3)
 
     @property
     def is_unavailable(self):
-        """ Is the device available. """
+        """ Is the device available.
+
+        **Note:** Sorry about the double negative.
+
+        :return: `True` if it is, `False` it not.
+        :rtype: bool
+        """
         return self.base_station.is_unavailable or self._load(CONNECTION_KEY, 'unknown') == 'unavailable'
 
     @property
     def too_cold(self):
-        """ Is the device too cold to operate? """
+        """ Is the device too cold to operate?
+
+        :return: `True` if it is too cold to operate, `False` if it isn't.
+        :rtype: bool
+        """
         return self._load(CONNECTION_KEY, 'unknown') == 'thermalShutdownCold'
 
     @property
     def state(self):
-        """ Return the camera current state. """
+        """ Return the camera current state.
+
+        :return: A string describing the current state.
+        :rtype: str
+        """
         if self.is_unavailable:
             return 'unavailable'
         if not self.is_on:

@@ -5,8 +5,22 @@ from .device import ArloChildDevice
 
 
 class ArloLight(ArloChildDevice):
+    """ Class to control Arlo lights.
+
+    :param name: name of light
+    :param arlo: controlling arlo instance
+    :param attrs: initial attributes give by Arlo
+
+    Blah blah blah blah.
+    """
 
     def __init__(self, name, arlo, attrs):
+        """ An Arlo Light.
+
+        :param name: name of light
+        :param arlo: controlling arlo instance
+        :param attrs: initial attributes give by Arlo
+        """
         super().__init__(name, arlo, attrs)
 
     @property
@@ -26,7 +40,13 @@ class ArloLight(ArloChildDevice):
         return self._load(LAMP_STATE_KEY, "off") == "on"
 
     def turn_on(self, brightness=None, rgb=None):
-        """ Turn the light on. """
+        """ Turn the light on.
+
+        :param brightness: how bright to make the light
+        :param rgb: what color to make the light
+
+        :return: True, always
+        """
         properties = {LAMP_STATE_KEY: 'on'}
         if brightness is not None:
             properties[BRIGHTNESS_KEY] = brightness

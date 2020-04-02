@@ -27,9 +27,79 @@ __version__ = '0.6.17'
 
 
 class PyArlo(object):
+    """ Entry point for all Arlo operations.
+
+    This is used to login to Arlo, open and maintain an evenstream with Arlo, find and store devices and device
+    state, provide keep-alive services and make sure media sources are kept up to date.
+
+    Every device discovered and created is done in here, every device discovered and created uses this instance
+    to log errors, info and debug, to access the state database and configuration settings.
+
+    **Required parameters:**
+
+    * **username** - Your Arlo username.
+    * **password** - Your Arlo password.
+
+    **Optional parameters:**
+
+    * **wait_for_initial_setup** - Wait for initial devices states to load before returning from constructor.
+      Default `True`. Setting to `False` and using saved state can increase startup time.
+    * **last_format** - Date string format used when showing video file dates. Default ``%m-%d %H:%M``.
+    * **library_days** - Number of days of recordings to load. Default is `30`. If you have a lot of recordings
+      you can lower this value.
+    * **save_state** - Store device state across restarts. Default `True`.
+    * **state_file** - Where to store state. Default is `${storage_dir}/${name.}pickle`
+    * **refresh_devices_every** - Time, in hours, to refresh the device list from Arlo. This can help keep the login
+      from timing out.
+    * **stream_timeout** - Time, in seconds, for the event stream to close after receiving no packets. 0 means no timeout.
+      Default 0 seconds. Setting this to `120` can be useful for catching dead connections - ie, an ISP forced
+      a new IP on you.
+
+    **Debug parameters:**
+
+    * **dump** - Save event stream packets to a file.
+    * **dump_file** - Where to packets. Default is `${storage_dir}/packets.dump`
+    * **name** - Name used for state and dump files.
+    * **verbose_debug** - If `True`, provide extra debug in the logs. This includes packets in and out.
+
+    **2FA authentication parameters:**
+
+    These parameters are needed for 2FA.
+
+    * **tfa_source** - Where to get the token from. Default is `console`. Can be `imap` to use email.
+    * **tfa_type** - How to get the 2FA token delivered. Default is `email` but can be `sms`.
+    * **tfa_timeout** - When using `imap`, how long, in seconds, to wait between checks.
+    * **tfa_total_timeout** - When using `imap`, how long, in seconds, for all checks.
+    * **imap_host** - When using `imap`, host name of imap server.
+    * **imap_username** - When using `imap`, user name on imap server. If `None` will use Arlo username.
+    * **imap_password** - When using `imap`, password on imap server. If `None` will use Arlo password.
+
+    **Infrequently used parameters:**
+
+    These parameters are very rarely changed.
+
+    * **host** - Arlo host to use. Default `https://my.arlo.com`.
+    * **storage_dir** - Where to store saved state.
+    * **db_motion_time** - Time, in seconds, to show active for doorbell motion detected. Default 30 seconds.
+    * **db_ding_time** - Time, in seconds, to show on for doorbell button press. Default 10 seconds.
+    * **request_timeout** - Time, in seconds, for requests sent to Arlo to succeed. Default 60 seconds.
+    * **recent_time** - Time, in seconds, for the camera to indicate it has seen motion. Default 600 seconds.
+    * **no_media_upload** - Force a media upload after camera activity.
+      Normally not needed but some systems fail to push media uploads. Default 'False'.
+    * **user_agent** - Set what 'user-agent' string is passed in request headers. It affects what video stream type is
+      returned. Default is `apple`.
+    * **mode_api** - Which api to use to set the base station modes. Default is `auto` which choose an API based on camera
+      model. Can also be `v1` and `v2`.
+    * **http_connections** - HTTP connection pool size. Default is `20`, set to `None` to default provided by the system.
+    * **http_max_size** - HTTP maximum connection pool size. Default is `10`, set to `None` to default provided by the system.
+    * **reconnect_every** - Time, in minutes, to close and relogin to Arlo.
+    * **snapshot_timeout** - Time, in seconds, to stop the snapshot attempt and return the camera to the idle state.
+
+    """
 
     def __init__(self, **kwargs):
-
+        """ Constructor for the PyArlo object.
+        """
         # core values
         self._last_error = None
 
@@ -199,6 +269,7 @@ class PyArlo(object):
             self._lock.notify_all()
 
     def stop(self):
+        """ Stop connection to Arlo and logout. """
         self._st.save()
         self._be.logout()
 
@@ -224,57 +295,127 @@ class PyArlo(object):
 
     @property
     def is_connected(self):
+        """ Is the object connected to the Arlo servers.
+
+        :return: `True` if it's connected, `False` otherwise.
+        :rtype: bool
+        """
         return self._be.is_connected
 
     @property
     def cameras(self):
+        """ List of registered cameras.
+
+        :return: a list of cameras.
+        :rtype: list(ArloCamera)
+        """
         return self._cameras
 
     @property
     def doorbells(self):
+        """ List of registered doorbells.
+
+        :return: a list of doorbells.
+        :rtype: list(ArloDoorBell)
+        """
         return self._doorbells
 
     @property
     def lights(self):
+        """ List of registered lights.
+
+        :return: a list of lights.
+        :rtype: list(ArloLight)
+        """
         return self._lights
 
     @property
     def base_stations(self):
+        """ List of base stations..
+
+        :return: a list of base stations.
+        :rtype: list(ArloBase)
+        """
         return self._bases
 
     @property
     def blank_image(self):
+        """ Return a binaryy representation of a blank image.
+
+        :return: A bytes representation of a blank image.
+        :rtype: bytearray
+        """
         return self._blank_image
 
     def lookup_camera_by_id(self, device_id):
+        """ Return the camera referenced by `device_id`.
+
+        :param device_id: The camera device to look for
+        :return: A camera object or 'None' on failure.
+        :rtype: ArloCamera
+        """
         camera = list(filter(lambda cam: cam.device_id == device_id, self.cameras))
         if camera:
             return camera[0]
         return None
 
     def lookup_camera_by_name(self, name):
+        """ Return the camera called `name`.
+
+        :param device_id: The camera name to look for
+        :return: A camera object or 'None' on failure.
+        :rtype: ArloCamera
+        """
         camera = list(filter(lambda cam: cam.name == name, self.cameras))
         if camera:
             return camera[0]
         return None
 
     def lookup_doorbell_by_id(self, device_id):
+        """ Return the doorbell referenced by `device_id`.
+
+        :param device_id: The doorbell device to look for
+        :return: A doorbell object or 'None' on failure.
+        :rtype: ArloDoorBell
+        """
         doorbell = list(filter(lambda cam: cam.device_id == device_id, self.doorbells))
         if doorbell:
             return doorbell[0]
         return None
 
     def lookup_doorbell_by_name(self, name):
+        """ Return the doorbell called `name`.
+
+        :param device_id: The doorbell name to look for
+        :return: A doorbell object or 'None' on failure.
+        :rtype: ArloDoorBell
+        """
         doorbell = list(filter(lambda cam: cam.name == name, self.doorbells))
         if doorbell:
             return doorbell[0]
         return None
 
     def inject_response(self, response):
+        """ Inject a test packet into the event stream.
+
+        **Note:** The method makes no effort to check the packet.
+
+        :param response: packet to inject.
+        :type response: JSON data
+        """
         self.debug("injecting\n{}".format(pprint.pformat(response)))
         self._be._ev_dispatcher(response)
 
     def attribute(self, attr):
+        """ Return the value of attribute attr.
+
+        PyArlo stores its state in key/value pairs. This returns the value associated with the key.
+
+        :param attr: Attribute to look up.
+        :type attr: str
+        :return: The value associated with attribute or `None` if not found.
+        :rtype: str
+        """
         return self._st.get(['ARLO', attr], None)
 
     def add_attr_callback(self, attr, cb):
@@ -290,6 +431,11 @@ class PyArlo(object):
 
     @property
     def last_error(self):
+        """ Return the last seen error.
+
+        :return: The last error reported by the object or any device, 'None' if no errors.
+        :rtype: str or None
+        """
         return self._last_error
 
     def warning(self, msg):
