@@ -357,13 +357,13 @@ class ArloCamera(ArloChildDevice):
 
     @property
     def flip_state(self):
-        """Returns the camera flip state setting.
+        """Returns `True` if the camera is flipped, `False` otherwise.
         """
         return self._load(FLIP_KEY, None)
 
     @property
     def mirror_state(self):
-        """Returns the camera mirror state setting.
+        """Returns `True` if the camera is mirrored, `False` otherwise.
         """
         return self._load(MIRROR_KEY, None)
 
@@ -375,7 +375,7 @@ class ArloCamera(ArloChildDevice):
 
     @property
     def powersave_mode(self):
-        """Returns the camera powersave mode.
+        """Returns `True` if the camera is on power save mode, `False` otherwise.
         """
         return self._load(POWER_SAVE_KEY, None)
 
@@ -470,8 +470,9 @@ class ArloCamera(ArloChildDevice):
     def get_snapshot(self, timeout=30):
         """Gets a snapshot from the camera and returns it.
 
-        :returns a binary represention of the image, or the last image if snapshot timed out
-        :rtype bytearray
+        :param timeout: how long to wait, in seconds, before stopping the snapshot attempt
+        :return: a binary represention of the image, or the last image if snapshot timed out
+        :rtype: bytearray
         """
         with self._lock:
             self._request_snapshot()
@@ -858,16 +859,6 @@ class ArloCamera(ArloChildDevice):
         })
 
     def has_capability(self, cap):
-        """Is the camera capable of performing activity specified by `cap`.
-
-        Used to determine if devices can perform certain actions, like motion or audio detection.
-
-        See attribute list against PyArlo.
-
-        :param attr: Attribute - eg `motionStarted` - to check.
-        :type attr: str
-        :return: `True` it is, `False` it isn't.
-        """
         if cap in (MOTION_DETECTED_KEY, BATTERY_KEY, SIGNAL_STR_KEY):
             return True
         if cap in (LAST_CAPTURE_KEY, CAPTURED_TODAY_KEY, RECENT_ACTIVITY_KEY):

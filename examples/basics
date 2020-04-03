@@ -5,6 +5,7 @@ import logging
 import os
 import sys
 import time
+import pprint
 
 # for examples add pyaarlo install path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
@@ -15,7 +16,7 @@ USERNAME = os.environ.get('ARLO_USERNAME', 'test.login@gmail.com')
 PASSWORD = os.environ.get('ARLO_PASSWORD', 'test-password')
 
 # set up logging, change INFO to DEBUG for a *lot* more information
-logging.basicConfig(level=logging.DEBUG,
+logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 _LOGGER = logging.getLogger('pyaarlo')
 
@@ -32,6 +33,8 @@ if not arlo.is_connected:
 print('list bases')
 for base in arlo.base_stations:
     print("base: name={},device_id={},state={}".format(base.name, base.device_id, base.state))
+    pprint.pprint(base.available_modes)
+    pprint.pprint(base.available_modes_with_ids)
 
 print('list cameras')
 for camera in arlo.cameras:

@@ -183,7 +183,8 @@ class ArloDevice(object):
 
         :param attr: Attribute to look up.
         :type attr: str
-        :return: The value associated with attribute or `None` if not found.
+        :param default: value to return if not found.
+        :return: The value associated with attribute or `default` if not found.
         """
         value = self._load(attr, None)
         if value is None:
@@ -210,13 +211,14 @@ class ArloDevice(object):
             self._attr_cbs_.append((attr, cb))
 
     def has_capability(self, cap):
-        """Is the device capable of performing activity `cap`.
+        """Is the device capable of performing activity cap:.
 
         Used to determine if devices can perform certain actions, like motion or audio detection.
 
-        :param attr: Attribute - eg `motionStarted` - to check.
-        :type attr: str
-        :return: `True` it is, `False` isn't.
+        See attribute list against PyArlo.
+
+        :param cap: Attribute - eg `motionStarted` - to check.
+        :return: `True` it is, `False` it isn't.
         """
         return False
 
