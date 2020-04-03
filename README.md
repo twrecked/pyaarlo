@@ -1,4 +1,4 @@
-# pyaarlo
+# Pyaarlo
 
 ## Table of Contents
 - [Introduction](#introduction)
@@ -55,7 +55,7 @@ pip install git+https://github.com/twrecked/pyaarlo
 
 You can read the developer documentation here: [https://pyaarlo.readthedocs.io/](https://pyaarlo.readthedocs.io/)
 
-The following example will login to your Arlo system, use 2FA if needed, register callbacks for all events on all cameras and then wait 10 minutes printing out any events that arrive during that time.
+The following example will login to your Arlo system, use 2FA if needed, register callbacks for all events on all base stations and cameras and then wait 10 minutes printing out any events that arrive during that time.
 
 ```python
 # code to trap when attributes change
