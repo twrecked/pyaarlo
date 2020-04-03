@@ -5,6 +5,8 @@ Python Aarlo is a library that provides asynchronous access to  Netgear Arlo cam
 
 It is based on the [pyarlo library](https://github.com/tchellomello/python-arlo) and aims to provide a similar interface.
 
+You can read the developer documentation here: [https://pyaarlo.readthedocs.io/](https://pyaarlo.readthedocs.io/)
+
 ### Installation
 
 ```bash
@@ -25,14 +27,21 @@ What does this mean. When you call this code:
 ```
 
 This happens:
-* `pyaarlo` maps the `armed` mode to the real value.
-* `pyaarlo` sends the mode change request to Arlo.
-* The function returns and your code continues.
-* Time passes. (Milliseconds...)
-* Arlo signals the mode change on the event stream.
-* `pyaarlo` reads the event from the stream and updates its internal state.
-* `pyaarlo` will call any user registered callbacks.
+* `pyaarlo` maps the `armed` mode to the real value
+* `pyaarlo` sends the mode change request to Arlo
+* the function returns and your code continues
+* time passes. (milliseconds...)
+* Arlo signals the mode change to the event stream
+* `pyaarlo` reads the event from the stream and updates its internal state
+* `pyaarlo` will call any user registered callbacks
 
+The upshot of all this is the following code might not work as you expect:
+
+```python
+base.mode = 'armed'
+if base.mode == 'armed':
+    print('it worked!')
+```
 
 ### 2FA
 
