@@ -5,17 +5,9 @@ from .device import ArloChildDevice
 
 
 class ArloLight(ArloChildDevice):
-    """ Class to control Arlo lights.
-
-    :param name: name of light
-    :param arlo: controlling arlo instance
-    :param attrs: initial attributes give by Arlo
-
-    Blah blah blah blah.
-    """
 
     def __init__(self, name, arlo, attrs):
-        """ An Arlo Light.
+        """An Arlo Light.
 
         :param name: name of light
         :param arlo: controlling arlo instance
@@ -25,7 +17,6 @@ class ArloLight(ArloChildDevice):
 
     @property
     def resource_type(self):
-        """ Return the resource type this object describes. """
         return "lights"
 
     def _event_handler(self, resource, event):
@@ -36,16 +27,13 @@ class ArloLight(ArloChildDevice):
 
     @property
     def is_on(self):
-        """ Is the light on? """
         return self._load(LAMP_STATE_KEY, "off") == "on"
 
     def turn_on(self, brightness=None, rgb=None):
-        """ Turn the light on.
+        """Turn the light on.
 
         :param brightness: how bright to make the light
         :param rgb: what color to make the light
-
-        :return: True, always
         """
         properties = {LAMP_STATE_KEY: 'on'}
         if brightness is not None:
@@ -66,7 +54,7 @@ class ArloLight(ArloChildDevice):
         return True
 
     def turn_off(self):
-        """ Turn the light off. """
+        """Turn the light off. """
         self._arlo.bg.run(self._arlo.be.notify,
                           base=self.base_station,
                           body={
@@ -78,7 +66,10 @@ class ArloLight(ArloChildDevice):
         return True
 
     def set_brightness(self, brightness):
-        """ Set the light brightness. """
+        """Set the light brightness.
+
+        :param brightness: brightness to use (0-255)
+        """
         self._arlo.bg.run(self._arlo.be.notify,
                           base=self.base_station,
                           body={
@@ -90,7 +81,6 @@ class ArloLight(ArloChildDevice):
         return True
 
     def has_capability(self, cap):
-        """ Is the camera capabale of performing an activity. """
         if cap in (MOTION_DETECTED_KEY, BATTERY_KEY):
             return True
         return super().has_capability(cap)

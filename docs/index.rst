@@ -17,29 +17,35 @@ PyArlo
 
 ArloBase
 --------
-.. automodule:: pyaarlo.base
+.. autoclass:: pyaarlo.base.ArloBase
    :members:
    :show-inheritance:
 
 ArloCamera
 ----------
-.. automodule:: pyaarlo.camera
+.. autoclass:: pyaarlo.camera.ArloCamera
    :members:
    :show-inheritance:
    :inherited-members:
 
 ArloDoorBell
 ------------
-.. automodule:: pyaarlo.doorbell
+.. autoclass:: pyaarlo.doorbell.ArloDoorBell
    :members:
    :show-inheritance:
    :inherited-members:
 
 ArloLight
 ---------
-.. automodule:: pyaarlo.light
+.. autoclass:: pyaarlo.light.ArloLight
    :members:
    :show-inheritance:
+   :inherited-members:
+
+ArloVideo
+---------
+.. autoclass:: pyaarlo.media.ArloVideo
+   :members:
    :inherited-members:
 
 
