@@ -139,10 +139,18 @@ class ArloBase(ArloDevice):
 
     @property
     def available_modes(self):
+        """Returns string list of available modes.
+
+        For example:: ``['disarmed', 'armed', 'home']``
+        """
         return list(self.available_modes_with_ids.keys())
 
     @property
     def available_modes_with_ids(self):
+        """Returns dictionary of available modes mapped to Arlo ids.
+
+        For example:: ``{'armed': 'mode1','disarmed': 'mode0','home': 'mode2'}``
+        """
         modes = {}
         for key, mode_id in self._load_matching([MODE_NAME_TO_ID_KEY, '*']):
             modes[key.split('/')[-1]] = mode_id
@@ -152,10 +160,18 @@ class ArloBase(ArloDevice):
 
     @property
     def mode(self):
+        """Returns the current mode.
+        """
         return self._load(MODE_KEY, 'unknown')
 
     @mode.setter
     def mode(self, mode_name):
+        """Set the base station mode.
+
+        **Note:** Setting mode has been known to hang, method includes code to keep retrying.
+
+        :param mode_name: mode to use, as returned by available_modes:
+        """
         mode_id = self._name_to_id(mode_name)
         if mode_id:
 
@@ -200,12 +216,16 @@ class ArloBase(ArloDevice):
             self._arlo.warning('{0}: mode {1} is unrecognised'.format(self.name, mode_name))
 
     def update_mode(self):
+        """Check and update the base's current mode.
+        """
         data = self._arlo.be.get(AUTOMATION_PATH)
         for mode in data:
             if mode.get('uniqueId', '') == self.unique_id:
                 self._set_mode_or_schedule(mode)
 
     def update_modes(self):
+        """Get and update the available modes for the base.
+        """
         if self._v1_modes:
             resp = self._arlo.be.notify_and_get_response(base=self, body={"action": "get", "resource": "modes",
                                                                           "publishResponse": False})
@@ -219,10 +239,14 @@ class ArloBase(ArloDevice):
 
     @property
     def schedule(self):
+        """Returns current schedule name or `None` if no schedule active.
+        """
         return self._load(SCHEDULE_KEY, None)
 
     @property
     def on_schedule(self):
+        """Returns `True` is base station is running a schedule.
+        """
         return self.schedule is not None
 
     @property
@@ -236,9 +260,18 @@ class ArloBase(ArloDevice):
 
     @property
     def siren_state(self):
+        """Returns the current siren state (`on` or `off`).
+        """
         return self._load(SIREN_STATE_KEY, "off")
 
     def siren_on(self, duration=300, volume=8):
+        """Turn base siren on.
+
+        Does nothing if base doesn't support sirens.
+
+        :param duration: how long, in seconds, to sound for
+        :param volume: how long, from 1 to 8, to sound
+        """
         body = {
             'action': 'set',
             'resource': 'siren',
@@ -249,6 +282,10 @@ class ArloBase(ArloDevice):
         self._arlo.bg.run(self._arlo.be.notify, base=self, body=body)
 
     def siren_off(self):
+        """Turn base siren off.
+
+        Does nothing if base doesn't support sirens.
+        """
         body = {
             'action': 'set',
             'resource': 'siren',

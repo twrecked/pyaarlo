@@ -14,7 +14,7 @@ setup(
     version='0.6.17.2',
     packages=['pyaarlo'],
 
-    python_requires = '>=3.5',
+    python_requires='>=3.5',
     install_requires=[
         'requests',
         'click',
