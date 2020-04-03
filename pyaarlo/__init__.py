@@ -27,7 +27,7 @@ __version__ = '0.6.17'
 
 
 class PyArlo(object):
-    """ Entry point for all Arlo operations.
+    """Entry point for all Arlo operations.
 
     This is used to login to Arlo, open and maintain an evenstream with Arlo, find and store devices and device
     state, provide keep-alive services and make sure media sources are kept up to date.
@@ -35,12 +35,12 @@ class PyArlo(object):
     Every device discovered and created is done in here, every device discovered and created uses this instance
     to log errors, info and debug, to access the state database and configuration settings.
 
-    **Required parameters:**
+    **Required `kwargs` parameters:**
 
     * **username** - Your Arlo username.
     * **password** - Your Arlo password.
 
-    **Optional parameters:**
+    **Optional `kwargs` parameters:**
 
     * **wait_for_initial_setup** - Wait for initial devices states to load before returning from constructor.
       Default `True`. Setting to `False` and using saved state can increase startup time.
@@ -55,14 +55,14 @@ class PyArlo(object):
       Default 0 seconds. Setting this to `120` can be useful for catching dead connections - ie, an ISP forced
       a new IP on you.
 
-    **Debug parameters:**
+    **Debug `kwargs` parameters:**
 
     * **dump** - Save event stream packets to a file.
     * **dump_file** - Where to packets. Default is `${storage_dir}/packets.dump`
     * **name** - Name used for state and dump files.
     * **verbose_debug** - If `True`, provide extra debug in the logs. This includes packets in and out.
 
-    **2FA authentication parameters:**
+    **2FA authentication `kwargs` parameters:**
 
     These parameters are needed for 2FA.
 
@@ -74,7 +74,7 @@ class PyArlo(object):
     * **imap_username** - When using `imap`, user name on imap server. If `None` will use Arlo username.
     * **imap_password** - When using `imap`, password on imap server. If `None` will use Arlo password.
 
-    **Infrequently used parameters:**
+    **Infrequently used `kwargs` parameters:**
 
     These parameters are very rarely changed.
 
@@ -95,10 +95,22 @@ class PyArlo(object):
     * **reconnect_every** - Time, in minutes, to close and relogin to Arlo.
     * **snapshot_timeout** - Time, in seconds, to stop the snapshot attempt and return the camera to the idle state.
 
+    **Attributes**
+
+    Pyaarlo provides an asynchronous interface for receiving events from Arlo devices. To use it you register
+    a callback for an attribute against a device. The following are a list of currently supported attributes:
+
+    * **motionDetected** - called when motion start and stops
+    * **audioDetected** - called when noise starts and stops
+    * **activeMode** - called when a base changes mode
+    * **more to come...** - I will flesh this out, but look in const.h for a good idea
+
+    You can use the attribute `*` to register for all events.
+
     """
 
     def __init__(self, **kwargs):
-        """ Constructor for the PyArlo object.
+        """Constructor for the PyArlo object.
         """
         # core values
         self._last_error = None
@@ -201,12 +213,12 @@ class PyArlo(object):
         self.vdebug("devices={}".format(pprint.pformat(self._devices)))
 
     def _refresh_camera_thumbnails(self):
-        """ Request latest camera thumbnails, called at start up. """
+        """Request latest camera thumbnails, called at start up. """
         for camera in self._cameras:
             camera.update_last_image()
 
     def _refresh_camera_media(self):
-        """ Rebuild cameras media library, called at start up or when day changes. """
+        """Rebuild cameras media library, called at start up or when day changes. """
         for camera in self._cameras:
             camera.update_media()
 
@@ -270,7 +282,7 @@ class PyArlo(object):
             self._lock.notify_all()
 
     def stop(self):
-        """ Stop connection to Arlo and logout. """
+        """Stop connection to Arlo and logout. """
         self._st.save()
         self._be.logout()
 
@@ -296,16 +308,13 @@ class PyArlo(object):
 
     @property
     def is_connected(self):
-        """ Is the object connected to the Arlo servers.
-
-        :return: `True` if it's connected, `False` otherwise.
-        :rtype: bool
+        """Returns `True` if the object is connected to the Arlo servers, `False` otherwise.
         """
         return self._be.is_connected
 
     @property
     def cameras(self):
-        """ List of registered cameras.
+        """List of registered cameras.
 
         :return: a list of cameras.
         :rtype: list(ArloCamera)
@@ -314,7 +323,7 @@ class PyArlo(object):
 
     @property
     def doorbells(self):
-        """ List of registered doorbells.
+        """List of registered doorbells.
 
         :return: a list of doorbells.
         :rtype: list(ArloDoorBell)
@@ -323,7 +332,7 @@ class PyArlo(object):
 
     @property
     def lights(self):
-        """ List of registered lights.
+        """List of registered lights.
 
         :return: a list of lights.
         :rtype: list(ArloLight)
@@ -332,7 +341,7 @@ class PyArlo(object):
 
     @property
     def base_stations(self):
-        """ List of base stations..
+        """List of base stations..
 
         :return: a list of base stations.
         :rtype: list(ArloBase)
@@ -341,7 +350,7 @@ class PyArlo(object):
 
     @property
     def blank_image(self):
-        """ Return a binaryy representation of a blank image.
+        """Return a binaryy representation of a blank image.
 
         :return: A bytes representation of a blank image.
         :rtype: bytearray
@@ -349,7 +358,7 @@ class PyArlo(object):
         return self._blank_image
 
     def lookup_camera_by_id(self, device_id):
-        """ Return the camera referenced by `device_id`.
+        """Return the camera referenced by `device_id`.
 
         :param device_id: The camera device to look for
         :return: A camera object or 'None' on failure.
@@ -361,7 +370,7 @@ class PyArlo(object):
         return None
 
     def lookup_camera_by_name(self, name):
-        """ Return the camera called `name`.
+        """Return the camera called `name`.
 
         :param device_id: The camera name to look for
         :return: A camera object or 'None' on failure.
@@ -373,7 +382,7 @@ class PyArlo(object):
         return None
 
     def lookup_doorbell_by_id(self, device_id):
-        """ Return the doorbell referenced by `device_id`.
+        """Return the doorbell referenced by `device_id`.
 
         :param device_id: The doorbell device to look for
         :return: A doorbell object or 'None' on failure.
@@ -385,7 +394,7 @@ class PyArlo(object):
         return None
 
     def lookup_doorbell_by_name(self, name):
-        """ Return the doorbell called `name`.
+        """Return the doorbell called `name`.
 
         :param device_id: The doorbell name to look for
         :return: A doorbell object or 'None' on failure.
@@ -397,7 +406,7 @@ class PyArlo(object):
         return None
 
     def inject_response(self, response):
-        """ Inject a test packet into the event stream.
+        """Inject a test packet into the event stream.
 
         **Note:** The method makes no effort to check the packet.
 
@@ -408,14 +417,13 @@ class PyArlo(object):
         self._be._ev_dispatcher(response)
 
     def attribute(self, attr):
-        """ Return the value of attribute attr.
+        """Return the value of attribute attr.
 
         PyArlo stores its state in key/value pairs. This returns the value associated with the key.
 
         :param attr: Attribute to look up.
         :type attr: str
         :return: The value associated with attribute or `None` if not found.
-        :rtype: str
         """
         return self._st.get(['ARLO', attr], None)
 
@@ -432,10 +440,7 @@ class PyArlo(object):
 
     @property
     def last_error(self):
-        """ Return the last seen error.
-
-        :return: The last error reported by the object or any device, 'None' if no errors.
-        :rtype: str or None
+        """Return the last reported error.
         """
         return self._last_error
 

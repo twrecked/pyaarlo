@@ -14,7 +14,6 @@ PyArlo
 ------
 .. automodule:: pyaarlo
    :members:
-   :show-inheritance:
 
 ArloBase
 --------
