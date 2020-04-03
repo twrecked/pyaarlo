@@ -1,41 +1,24 @@
 # pyaarlo
-Asynchronous Arlo Component for Python
 
-Python Aarlo is a library that provides asynchronous access to  Netgear Arlo cameras.
+## Table of Contents
+- [Introduction](#introduction)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Pyaarlo Executable](#executable)
+- [2 Factor Authentication](#2fa)
+- [Error Reporting](#error)
+- [Limitations](#limitations)
 
-It is based on the [pyarlo library](https://github.com/tchellomello/python-arlo) and aims to provide a similar interface.
+<a name="introduction"></a>
+## Introduction
 
-You can read the developer documentation here: [https://pyaarlo.readthedocs.io/](https://pyaarlo.readthedocs.io/)
+Pyaarlo is a module for for Python that provides asynchronous access to Netgear Arlo cameras.
 
-### Installation
+When you start Pyaarlo, it starts a background thread that opens a single, persistant connection, an *event stream*, to the Arlo servers. As things happen to the Arlo devices - motion detected, battery level changes, mode changes, etc... - the Arlo servers post these events onto the event stream. The background thread reads these events from the stream, updates Pyaarlo's internal state and calls any user registered callbacks.
 
-```bash
-pip install git+https://github.com/twrecked/pyaarlo
-```
+#### Differences from Pyarlo
 
-### Differences from Pyarlo
-
-The biggest difference is `pyaarlo` is asynchronous. This means:
-
-* When you start `pyaarlo` it starts a thread that opens a single, persistant connection to the Arlo servers. As notifications come in - motion detected, battery level changes, mode changes - the state changes are noted internally and, optionally, any user registered callbacks are made.
-* When you make a change PyArlo forwards the request to Arlo and updates its internal state when the Arlo notifies us of the change.
-
-What does this mean. When you call this code:
-
-```python
-	base.mode = 'armed'
-```
-
-This happens:
-* `pyaarlo` maps the `armed` mode to the real value
-* `pyaarlo` sends the mode change request to Arlo
-* the function returns and your code continues
-* time passes. (milliseconds...)
-* Arlo signals the mode change to the event stream
-* `pyaarlo` reads the event from the stream and updates its internal state
-* `pyaarlo` will call any user registered callbacks
-
-The upshot of all this is the following code might not work as you expect:
+The biggest difference is changes don't happen immediately. The following code under Pyaarlo might not work:
 
 ```python
 base.mode = 'armed'
@@ -43,76 +26,45 @@ if base.mode == 'armed':
     print('it worked!')
 ```
 
-### 2FA
+This is because between setting `mode` and reading `mode` the code has to:
+* build and send a mode change packet to Arlo
+* read the mode change packet back from the Arlo event stream
+* update its internal state for `base`
 
-Pyaarlo supports 2 factor authentication.
+I say "might" not work because it might work, it all depends on timing, and context switches and network speed...
 
-#### Manual
-
-Start `PyArlo` specifying `tfa_source` as `console`. Whenever `PyArlo` needs a secondary code it will prompt you for it.
-
-```python
-ar = pyaarlo.PyArlo( username=USERNAME, password=PASSWORD,
-						tfa_source='console', tfa_type='SMS')
-```
-
-#### Automatic
-
-Automatic is trickier. Support is there but needs testing. For automatic 2FA PyArlo needs to access and your email account form where it reads the token Arlo sent.
-
-```python
-ar = pyaarlo.PyArlo( username=USERNAME, password=PASSWORD,
-						tfa_source='imap',tfa_type='email',
-						imap_host='imap.host.com', imap_username='your-user-name', imap_password='your-imap-password' )
-```
-
-It's working well with my gmail account, see [here](https://support.google.com/mail/answer/185833?hl=en) for help setting up app passwords.
+<a name="introduction-thanks"></a>
+#### Thanks 
+Many thanks to:
+* [Pyarlo](https://github.com/tchellomello/python-arlo) and [Arlo](https://github.com/jeffreydwalter/arlo) for doing the original heavy lifting and the free Python lesson!
+* [sseclient](https://github.com/btubbs/sseclient) for reading from the event stream
+* [![JetBrains](/images/jetbrains.svg)](https://www.jetbrains.com/?from=hass-aarlo) for the excellent **PyCharm IDE** and providing me with an open source license to speed up the project development.
 
 
-### Pyaarlo binary
+<a name="installation"></a>
+## Installation
 
-The pip installation adds a binary `pyaarlo`. You can use this to list devices, perform certain simple actions and anonymize and encrypt logs for debugging purposes. _Device operations are currently limited..._
-
-The git installation has `examples/pyaarlo` which functions in a similar manner.
+Proper PIP support is coming but for now, this will install the latest version.
 
 ```bash
-# To show the currently available actions:
-pyaarlo --help
-
-# To list all the known devices:
-pyaarlo -u 'your-user-name' -p 'your-password' list all
-
-# this version will anonymize the output
-pyaarlo -u 'your-user-name' -p 'your-password' --anonymize list all
-
-# this version will anonymize and encrypt the output
-pyaarlo -u 'your-user-name' -p 'your-password' --anonymize --encrypt list all
+pip install git+https://github.com/twrecked/pyaarlo
 ```
 
-The anonymize and encrypt options are so you can upload logs without 3rd parties (hopefully) being able to see. You can use the anonymize and encrypt feature on arbitrary data. Encryption doesn't need your username and password.
+<a name="usage"></a>
+## Usage
 
-```bash
-# encrypt an existing file
-cat output-file | pyaarlo encrypt
+You can read the developer documentation here: [https://pyaarlo.readthedocs.io/](https://pyaarlo.readthedocs.io/)
 
-# anonymize and then encrypt a file
-cat output-file | pyaarlo -u 'your-user-name' -p 'your-password' anonymize | pyaarlo encrypt
-```
+The following example will login to your Arlo system, use 2FA if needed, register callbacks for all events on all cameras and then wait 10 minutes printing out any events that arrive during that time.
 
-### Usage
-
-Start by looking [here](https://github.com/tchellomello/python-arlo/blob/master/README.rst) at the docs for the original project.
-
-This example code will login and wait 5 minutes and list any events that arrive during that time.
-
-``` python
+```python
 # code to trap when attributes change
 def attribute_changed(device, attr, value):
     print('attribute_changed', time.strftime("%H:%M:%S"), device.name + ':' + attr + ':' + str(value)[:80])
 
 # login, use console for 2FA if needed
 arlo = pyaarlo.PyArlo( username=USERNAME,password=PASSWORD,
-                        tfa_type='SMS',tfa_source='console')
+                       tfa_type='SMS',tfa_source='console')
 
 # get base stations, list their statuses, register state change callbacks
 for base in arlo.base_stations:
@@ -131,33 +83,152 @@ base.mode = 'disarmed'
 time.sleep(5)
 base.mode = 'armed'
 
-# wait five minutes, try moving in front of a camera to see motionDetected events
-time.sleep(300)
+# wait 10 minutes, try moving in front of a camera to see motionDetected events
+time.sleep(600)
 
 ```
 
-The following are some usage examples:
+As mentioned, it uses the [Pyarlo](https://github.com/tchellomello/python-arlo) API where possible so the following code from the original [Usage](https://github.com/tchellomello/python-arlo#usage) will still work:
 
 ```python
-# get information on a camera
+
+# login, use console for 2FA if needed
+arlo = pyaarlo.PyArlo( username=USERNAME,password=PASSWORD,
+                       tfa_type='SMS',tfa_source='console')
+# listing devices
+arlo.devices
+
+# listing base stations
+arlo.base_stations
+
+# get base station handle
+# assuming only 1 base station is available
+base = arlo.base_stations[0]
+
+# get the current base station mode
+base.mode  # 'disarmed'
+
+# listing Arlo modes
+base.available_modes # ['armed', 'disarmed', 'schedule', 'custom']
+
+# Updating the base station mode
+base.mode = 'custom'
+
+# listing all cameras
+arlo.cameras
+
+# showing camera preferences
 cam = arlo.cameras[0]
-cam.state
+
+# check if camera is connected to base station
+cam.is_camera_connected  # True
+
+# printing camera attributes
 cam.serial_number
-cam.battery_level
-cam.signal_strength
-cam.too_cold
+cam.model_id
+cam.unseen_videos
 
-# play around with a light
-light = arlo.lights[0]
-light.serial_number
-light.battery_level
-light.is_on
-light.turn_on()
-
+# get brightness value of camera
+cam.brightness
 ```
 
 
-### ToDo
+<a name="2fa"></a>
+## 2FA
 
-* Provide some sync mappings for some settings.
+Pyaarlo supports 2 factor authentication.
 
+#### Manual
+
+Start `PyArlo` specifying `tfa_source` as `console`. Whenever `PyArlo` needs a secondary code it will prompt you for it.
+
+```python
+ar = pyaarlo.PyArlo(username=USERNAME, password=PASSWORD,
+                    tfa_source='console', tfa_type='SMS')
+```
+
+#### Automatic
+
+Automatic is trickier. Support is there but needs testing. For automatic 2FA PyArlo needs to access and your email account form where it reads the token Arlo sent.
+
+```python
+ar = pyaarlo.PyArlo(username=USERNAME, password=PASSWORD,
+                    tfa_source='imap',tfa_type='email',
+                    imap_host='imap.host.com',
+                    imap_username='your-user-name',
+                    imap_password='your-imap-password' )
+```
+
+It's working well with my gmail account, see [here](https://support.google.com/mail/answer/185833?hl=en) for help setting up single app passwords.
+
+
+<a name="executable"></a>
+## Pyaarlo Executable
+
+The pip installation adds an executable `pyaarlo`. You can use this to list devices, perform certain simple actions and anonymize and encrypt logs for debugging purposes. _Device operations are currently limited..._
+
+The git installation has `examples/pyaarlo` which functions in a similar manner.
+
+```bash
+# To show the currently available actions:
+pyaarlo --help
+
+# To list all the known devices:
+pyaarlo -u 'your-user-name' -p 'your-password' list all
+
+# this version will anonymize the output
+pyaarlo -u 'your-user-name' -p 'your-password' --anonymize list all
+
+# this version will anonymize and encrypt the output
+pyaarlo -u 'your-user-name' -p 'your-password' --anonymize --encrypt list all
+```
+
+
+<a name="errors"></a>
+## Error Reporting
+
+When reporting errors please include the version of Pyaarlo you are using and what Arlo devices you have. Please turn on DEBUG level logging, capture the output and include as much information as possible about what you were trying to do.
+
+You can use the `pyaarlo` executable to anonymize and encrypt feature on arbitrary data like log files or source code. If you are only encrypting you don't need your username and password.
+
+```bash
+# encrypt an existing file
+cat output-file | pyaarlo encrypt
+
+# anonymize and then encrypt a file
+cat output-file | pyaarlo -u 'your-user-name' -p 'your-password' anonymize | pyaarlo encrypt
+```
+
+If you installed from git you can use a shell script in `examples/` to encrypt your logs. No anonymizing is possible this way.
+ 
+```bash
+# encrypt an existing file
+cat output-file | ./examples/pyaarlo-encrypt encrypt
+```
+
+`pyaarlo-encrypt` is a fancy wrapper around:
+
+```bash
+curl -s -F 'plain_text_file=@-;filename=clear.txt' https://pyaarlo-tfa.appspot.com/encrypt
+```
+
+
+<a name="limitations"></a>
+## Limitations
+The component uses the Arlo webapi.
+* There is no documentation so the API has been reverse engineered using browser debug tools.
+* There is no support for smart features, you only get motion detection notifications, not what caused the notification. (Although, you can pipe a snapshot into deepstack...)
+* Streaming times out after 30 minutes.
+* The webapi doesn't seem like it was really designed for permanent connections so the system will sometimes appear to lock up. Various work arounds are in the code and can be configured at the `arlo` component level. See next paragraph.
+
+If you do find the component locks up after a while (I've seen reports of hours, days or weeks), you can add the following to the main configuration. Start from the top and work down: 
+* `refresh_devices_every`, tell Pyaarlo to request the device list every so often. This will sometimes prevent the back end from aging you out. The value is in hours and a good starting point is 3.
+* `stream_timeout`, tell Pyaarlo to close and reopen the event stream after a certain period of inactivity. Pyaarlo will send keep alive every minute so a good starting point is 180 seconds.
+* `reconnect_every`, tell Pyaarlo to logout and back in every so often. This establishes a new session at the risk of losing an event notification. The value is minutes and a good starting point is 90.
+* `request_timout`, the amount of time to allow for a http request to work. A good starting point is 120 seconds.
+
+Unify your alarm mode names across all your base stations. There is no way to specify different mode names for each device.
+
+Alro will allow shared accounts to give cameras their own name. If you find cameras appearing with unexpected names (or not appearing at all), log into the Arlo web interface with your Home Assistant account and make sure the camera names are correct.
+
+You can change the brightness on the light but not while it's turned on. You need to turn it off and back on again for the change to take. This is how the web interface does it.
