@@ -172,3 +172,7 @@ class ArloCfg(object):
     @property
     def library_days(self):
         return self._kw.get('library_days', PRELOAD_DAYS)
+
+    @property
+    def synchronous_mode(self):
+        return self._kw.get('synchronous_mode', False)

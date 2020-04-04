@@ -226,11 +226,13 @@ class ArloBackEnd(object):
                     self._lock.notify_all()
                 break
 
+            # dig out response, print out verbose debug
             response = json.loads(event.data)
             if self._dump_file is not None:
                 with open(self._dump_file, 'a') as dump:
                     time_stamp = now_strftime("%Y-%m-%d %H:%M:%S.%f")
                     dump.write("{}: {}\n".format(time_stamp, pprint.pformat(response, indent=2)))
+            self._arlo.vdebug("packet in={}".format(pprint.pformat(body, indent=2)))
 
             # logged out? signal exited
             if response.get('action') == 'logout':
@@ -248,16 +250,15 @@ class ArloBackEnd(object):
                     self._lock.notify_all()
                 continue
 
-            # is this from a notify? then signal to waiting entity, also
-            # pass into dispatcher
+            # Run the dispatcher to set internal state and run callbacks.
+            self._ev_dispatcher(response)
+
+            # is there a notify waiting for this response? If so, signal to waiting entity.
             tid = response.get('transId')
             with self._lock:
                 if tid and tid in self._requests:
                     self._requests[tid] = response
                     self._lock.notify_all()
-                    continue
-
-            self._ev_dispatcher(response)
 
     def _ev_thread(self):
 
@@ -314,38 +315,6 @@ class ArloBackEnd(object):
 
         self._arlo.debug('stream up')
         return True
-
-    def notify(self, base, body, trans_id=None):
-        if trans_id is None:
-            trans_id = self.gen_trans_id()
-
-        body['to'] = base.device_id
-        body['from'] = self._web_id
-        body['transId'] = trans_id
-        if self.post(NOTIFY_PATH + base.device_id, body, headers={"xcloudId": base.xcloud_id}) is None:
-            return None
-        return trans_id
-
-    def notify_and_get_response(self, base, body, timeout=None):
-        if timeout is None:
-            timeout = self._arlo.cfg.request_timeout
-
-        with self._lock:
-            tid = self.gen_trans_id()
-            self._requests[tid] = None
-
-        self.notify(base, body, trans_id=tid)
-        mnow = time.monotonic()
-        mend = mnow + timeout
-
-        with self._lock:
-            while not self._requests[tid]:
-                self._lock.wait(mend - mnow)
-                if self._requests[tid]:
-                    return self._requests.pop(tid)
-                mnow = time.monotonic()
-                if mnow >= mend:
-                    return self._requests.pop(tid)
 
     def _get_tfa(self):
         """ Return the 2FA type we're using. """
@@ -520,6 +489,47 @@ class ArloBackEnd(object):
         if self._ev_stream is not None:
             self._ev_stream.stop()
         self.put(LOGOUT_PATH)
+
+    def notify_and_get_reply(self, base, body, trans_id=None):
+        if trans_id is None:
+            trans_id = self.gen_trans_id()
+
+        body['to'] = base.device_id
+        body['from'] = self._web_id
+        body['transId'] = trans_id
+        if self.post(NOTIFY_PATH + base.device_id, body, headers={"xcloudId": base.xcloud_id}) is None:
+            return None
+        return trans_id
+
+    def notify_in_background(self, base, body, trans_id=None):
+        self._arlo.bg.run(self.notify_and_get_reply, body=body, trans_id=trans_id)
+
+    def notify_and_get_arlo_reply(self, base, body, timeout=None):
+        if timeout is None:
+            timeout = self._arlo.cfg.request_timeout
+
+        with self._lock:
+            tid = self.gen_trans_id()
+            self._requests[tid] = None
+
+        self.notify_and_get_reply(base=base, body=body, trans_id=tid)
+        mnow = time.monotonic()
+        mend = mnow + timeout
+
+        with self._lock:
+            while not self._requests[tid]:
+                self._lock.wait(mend - mnow)
+                if self._requests[tid]:
+                    return self._requests.pop(tid)
+                mnow = time.monotonic()
+                if mnow >= mend:
+                    return self._requests.pop(tid)
+
+    def notify(self, base, body):
+        if self._arlo.cfg.synchronous_mode:
+            self.notify_and_get_arlo_reply(base, body)
+        else:
+            self.notify_in_background(base, body)
 
     def get(self, path, params=None, headers=None, stream=False, raw=False, timeout=None):
         return self._request(path, 'GET', params, headers, stream, raw, timeout)
