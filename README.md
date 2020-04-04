@@ -18,6 +18,8 @@ When you start Pyaarlo, it starts a background thread that opens a single, persi
 
 #### Differences from Pyarlo
 
+_Note: I plan to introduce a synchronous mode to address this difference._
+
 The biggest difference is changes don't happen immediately. The following code under Pyaarlo might not work:
 
 ```python
