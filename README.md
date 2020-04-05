@@ -236,8 +236,6 @@ If you do find the component locks up after a while (I've seen reports of hours,
 * `reconnect_every`, tell Pyaarlo to logout and back in every so often. This establishes a new session at the risk of losing an event notification. The value is minutes and a good starting point is 90.
 * `request_timout`, the amount of time to allow for a http request to work. A good starting point is 120 seconds.
 
-Unify your alarm mode names across all your base stations. There is no way to specify different mode names for each device.
-
 Alro will allow shared accounts to give cameras their own name. If you find cameras appearing with unexpected names (or not appearing at all), log into the Arlo web interface with your Home Assistant account and make sure the camera names are correct.
 
 You can change the brightness on the light but not while it's turned on. You need to turn it off and back on again for the change to take. This is how the web interface does it.
