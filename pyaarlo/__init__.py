@@ -235,9 +235,12 @@ class PyArlo(object):
             base.update_modes()
             if initial:
                 base.update_mode()
-            self._be.notify(base=base, body={"action": "get", "resource": "cameras", "publishResponse": False})
-            self._be.notify(base=base, body={"action": "get", "resource": "doorbells", "publishResponse": False})
-            self._be.notify(base=base, body={"action": "get", "resource": "lights", "publishResponse": False})
+            self._be.notify(base=base, body={"action": "get", "resource": "cameras", "publishResponse": False},
+                            wait_for="response")
+            self._be.notify(base=base, body={"action": "get", "resource": "doorbells", "publishResponse": False},
+                            wait_for="response")
+            self._be.notify(base=base, body={"action": "get", "resource": "lights", "publishResponse": False},
+                            wait_for="response")
 
     def _fast_refresh(self):
         self.debug('fast refresh')

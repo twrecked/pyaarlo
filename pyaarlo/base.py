@@ -1,3 +1,4 @@
+import pprint
 import time
 
 from .constant import (AUTOMATION_PATH, DEFAULT_MODES, DEFINITIONS_PATH, CONNECTION_KEY,
@@ -188,30 +189,36 @@ class ArloBase(ArloDevice):
             # Post change.
             self._arlo.debug(self.name + ':new-mode=' + mode_name + ',id=' + mode_id)
             if self._v1_modes:
-                self._arlo.bg.run(self._arlo.be.notify, base=self,
-                                  body={"action": "set",
-                                        "resource": "modes",
-                                        "publishResponse": True,
-                                        "properties": {"active": mode_id}})
+                self._arlo.be.notify(base=self,
+                                     body={"action": "set",
+                                           "resource": "modes",
+                                           "publishResponse": True,
+                                           "properties": {"active": mode_id}})
             else:
-                def _set_mode_v2_cb():
+                def _set_mode_v2_cb(attempt):
+                    self._arlo.debug('v2 arming')
                     params = {'activeAutomations':
                                   [{'deviceId': self.device_id,
                                     'timestamp': time_to_arlotime(),
                                     active: [mode_id],
                                     inactive: []}]}
-                    for i in range(1, 3):
-                        body = self._arlo.be.post(AUTOMATION_PATH, params=params, raw=True)
-                        if body['success']:
+                    if attempt < 4:
+                        body = self._arlo.be.post(AUTOMATION_PATH, params=params, raw=True, wait_for=None)
+                        if body.get('success', False) is True or body.get('resource', '') == 'activeAutomations':
                             return
-                        self._arlo.warning('attempt {0}: error in response when setting mode={1}'.format(i, str(body)))
+                        self._arlo.warning(
+                            'attempt {0}: error in response when setting mode=\n{1}'.format(attempt,
+                                                                                            pprint.pformat(body)))
                         self._arlo.debug('Fetching device list (hoping this will fix arming/disarming)')
                         self._arlo.be.devices()
+                        self._arlo.bg.run(_set_mode_v2_cb, i=attempt + 1)
                     self._arlo.error('Failed to set mode.')
-                    self._arlo.debug('Giving up on setting mode! Session headers=' + self._arlo.be.session.headers)
-                    self._arlo.debug('Giving up on setting mode! Session cookies=' + self._arlo.be.session.cookies)
+                    self._arlo.debug('Giving up on setting mode! Session headers=\n{}'.format(
+                        pprint.pformat(self._arlo.be.session.headers)))
+                    self._arlo.debug('Giving up on setting mode! Session cookies=\n{}'.format(
+                        pprint.pprint(self._arlo.be.session.cookies)))
 
-                self._arlo.bg.run(_set_mode_v2_cb)
+                _set_mode_v2_cb(1)
         else:
             self._arlo.warning('{0}: mode {1} is unrecognised'.format(self.name, mode_name))
 
@@ -227,8 +234,9 @@ class ArloBase(ArloDevice):
         """Get and update the available modes for the base.
         """
         if self._v1_modes:
-            resp = self._arlo.be.notify_and_get_arlo_reply(base=self, body={"action": "get", "resource": "modes",
-                                                                          "publishResponse": False})
+            resp = self._arlo.be.notify(base=self, body={"action": "get", "resource": "modes",
+                                                         "publishResponse": False},
+                                        wait_for="event")
             props = resp.get('properties', {})
             self._parse_modes(props.get('modes', []))
         else:
@@ -279,7 +287,7 @@ class ArloBase(ArloDevice):
             'properties': {'sirenState': 'on', 'duration': int(duration), 'volume': int(volume), 'pattern': 'alarm'}
         }
         self._arlo.debug(str(body))
-        self._arlo.bg.run(self._arlo.be.notify, base=self, body=body)
+        self._arlo.be.notify(base=self, body=body)
 
     def siren_off(self):
         """Turn base siren off.
@@ -293,7 +301,7 @@ class ArloBase(ArloDevice):
             'properties': {'sirenState': 'off'}
         }
         self._arlo.debug(str(body))
-        self._arlo.bg.run(self._arlo.be.notify, base=self, body=body)
+        self._arlo.be.notify(base=self, body=body)
 
     def _ping_and_check_reply(self):
         body = {
@@ -303,7 +311,7 @@ class ArloBase(ArloDevice):
             'properties': {'devices': [self.device_id]}
         }
         self._arlo.debug(str(body))
-        if self._arlo.be.notify(base=self, body=body) is None:
+        if self._arlo.be.notify(base=self, body=body, wait_for="response") is None:
             self._save_and_do_callbacks(CONNECTION_KEY, 'unavailable')
         else:
             self._save_and_do_callbacks(CONNECTION_KEY, 'available')

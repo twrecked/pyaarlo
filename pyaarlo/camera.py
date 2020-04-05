@@ -416,11 +416,10 @@ class ArloCamera(ArloChildDevice):
         Queues a job that requests the info from Arlo.
         """
         if self.model_id == 'ABC1000':
-            self._arlo.bg.run(self._arlo.be.notify,
-                              base=self.base_station,
-                              body={"action": "get",
-                                    "resource": 'cameras/{}/ambientSensors/history'.format(self.device_id),
-                                    "publishResponse": False})
+            self._arlo.be.notify(base=self.base_station,
+                                 body={"action": "get",
+                                       "resource": 'cameras/{}/ambientSensors/history'.format(self.device_id),
+                                       "publishResponse": False})
 
     def _take_streaming_snapshot(self):
         body = {
@@ -560,14 +559,13 @@ class ArloCamera(ArloChildDevice):
     def stop_activity(self):
         """Request the camera stop whatever it is doing and return to the idle state.
         """
-        self._arlo.bg.run(self._arlo.be.notify,
-                          base=self.base_station,
-                          body={
-                              'action': 'set',
-                              'properties': {'activityState': 'idle'},
-                              'publishResponse': True,
-                              'resource': self.resource_id,
-                          })
+        self._arlo.be.notify(base=self.base_station,
+                             body={
+                                 'action': 'set',
+                                 'properties': {'activityState': 'idle'},
+                                 'publishResponse': True,
+                                 'resource': self.resource_id,
+                             })
         return True
 
     def start_recording(self, duration=None):
@@ -623,7 +621,7 @@ class ArloCamera(ArloChildDevice):
             'publishResponse': True,
             'properties': {'sirenState': 'on', 'duration': int(duration), 'volume': int(volume), 'pattern': 'alarm'}
         }
-        self._arlo.bg.run(self._arlo.be.notify, base=self, body=body)
+        self._arlo.be.notify(base=self, body=body)
 
     def siren_off(self):
         """Turn camera siren off.
@@ -636,7 +634,7 @@ class ArloCamera(ArloChildDevice):
             'publishResponse': True,
             'properties': {'sirenState': 'off'}
         }
-        self._arlo.bg.run(self._arlo.be.notify, base=self, body=body)
+        self._arlo.be.notify(base=self, body=body)
 
     @property
     def is_on(self):
@@ -653,7 +651,7 @@ class ArloCamera(ArloChildDevice):
             'publishResponse': True,
             'properties': {'privacyActive': False}
         }
-        self._arlo.bg.run(self._arlo.be.notify, base=self.base_station, body=body)
+        self._arlo.be.notify(base=self.base_station, body=body)
 
     def turn_off(self):
         """Turn the camera off.
@@ -664,7 +662,7 @@ class ArloCamera(ArloChildDevice):
             'publishResponse': True,
             'properties': {'privacyActive': True}
         }
-        self._arlo.bg.run(self._arlo.be.notify, base=self.base_station, body=body)
+        self._arlo.be.notify(base=self.base_station, body=body)
 
     def get_audio_playback_status(self):
         """Gets the current playback status and available track list
@@ -674,7 +672,7 @@ class ArloCamera(ArloChildDevice):
             'publishResponse': True,
             'resource': 'audioPlayback'
         }
-        self._arlo.bg.run(self._arlo.be.notify, base=self, body=body)
+        self._arlo.be.notify(base=self, body=body)
 
     def play_track(self, track_id=DEFAULT_TRACK_ID, position=0):
         """Play the track.
@@ -691,7 +689,7 @@ class ArloCamera(ArloChildDevice):
                 AUDIO_POSITION_KEY: position
             }
         }
-        self._arlo.bg.run(self._arlo.be.notify, base=self, body=body)
+        self._arlo.be.notify(base=self, body=body)
 
     def pause_track(self):
         """Pause the playing track.
@@ -701,7 +699,7 @@ class ArloCamera(ArloChildDevice):
             'publishResponse': True,
             'resource': MEDIA_PLAYER_RESOURCE_ID,
         }
-        self._arlo.bg.run(self._arlo.be.notify, base=self, body=body)
+        self._arlo.be.notify(base=self, body=body)
 
     def previous_track(self):
         """Skips to the previous track in the playlist.
@@ -711,7 +709,7 @@ class ArloCamera(ArloChildDevice):
             'publishResponse': True,
             'resource': MEDIA_PLAYER_RESOURCE_ID,
         }
-        self._arlo.bg.run(self._arlo.be.notify, base=self, body=body)
+        self._arlo.be.notify(base=self, body=body)
 
     def next_track(self):
         """Skips to the next track in the playlist.
@@ -721,7 +719,7 @@ class ArloCamera(ArloChildDevice):
             'publishResponse': True,
             'resource': MEDIA_PLAYER_RESOURCE_ID,
         }
-        self._arlo.bg.run(self._arlo.be.notify, base=self, body=body)
+        self._arlo.be.notify(base=self, body=body)
 
     def set_music_loop_mode_continuous(self):
         """Sets the music loop mode to repeat the entire playlist.
@@ -736,7 +734,7 @@ class ArloCamera(ArloChildDevice):
                 }
             }
         }
-        self._arlo.bg.run(self._arlo.be.notify, base=self, body=body)
+        self._arlo.be.notify(base=self, body=body)
 
     def set_music_loop_mode_single(self):
         """Sets the music loop mode to repeat the current track.
@@ -751,7 +749,7 @@ class ArloCamera(ArloChildDevice):
                 }
             }
         }
-        self._arlo.bg.run(self._arlo.be.notify, base=self, body=body)
+        self._arlo.be.notify(base=self, body=body)
 
     def set_shuffle(self, shuffle=True):
         """Sets playback to shuffle.
@@ -768,7 +766,7 @@ class ArloCamera(ArloChildDevice):
                 }
             }
         }
-        self._arlo.bg.run(self._arlo.be.notify, base=self, body=body)
+        self._arlo.be.notify(base=self, body=body)
 
     def set_volume(self, mute=False, volume=50):
         """Sets the music volume.
@@ -787,20 +785,19 @@ class ArloCamera(ArloChildDevice):
                 }
             }
         }
-        self._arlo.bg.run(self._arlo.be.notify, base=self, body=body)
+        self._arlo.be.notify(base=self, body=body)
 
     def _set_nightlight_properties(self, properties):
         self._arlo.debug('{}: setting nightlight properties: {}'.format(self._name, properties))
-        self._arlo.bg.run(self._arlo.be.notify,
-                          base=self.base_station,
-                          body={
-                              'action': 'set',
-                              'properties': {
-                                  'nightLight': properties
-                              },
-                              'publishResponse': True,
-                              'resource': self.resource_id,
-                          })
+        self._arlo.be.notify(base=self.base_station,
+                             body={
+                                 'action': 'set',
+                                 'properties': {
+                                     'nightLight': properties
+                                 },
+                                 'publishResponse': True,
+                                 'resource': self.resource_id,
+                             })
         return True
 
     def nightlight_on(self):

@@ -43,26 +43,24 @@ class ArloLight(ArloChildDevice):
             pass
 
         self._arlo.debug("{} sending {}".format(self._name, pprint.pformat(properties)))
-        self._arlo.bg.run(self._arlo.be.notify,
-                          base=self.base_station,
-                          body={
-                              'action': 'set',
-                              'properties': properties,
-                              'publishResponse': True,
-                              'resource': self.resource_id,
-                          })
+        self._arlo.be.notify(base=self.base_station,
+                             body={
+                                 'action': 'set',
+                                 'properties': properties,
+                                 'publishResponse': True,
+                                 'resource': self.resource_id,
+                             })
         return True
 
     def turn_off(self):
         """Turn the light off. """
-        self._arlo.bg.run(self._arlo.be.notify,
-                          base=self.base_station,
-                          body={
-                              'action': 'set',
-                              'properties': {LAMP_STATE_KEY: 'off'},
-                              'publishResponse': True,
-                              'resource': self.resource_id,
-                          })
+        self._arlo.be.notify(base=self.base_station,
+                             body={
+                                 'action': 'set',
+                                 'properties': {LAMP_STATE_KEY: 'off'},
+                                 'publishResponse': True,
+                                 'resource': self.resource_id,
+                             })
         return True
 
     def set_brightness(self, brightness):
@@ -70,14 +68,13 @@ class ArloLight(ArloChildDevice):
 
         :param brightness: brightness to use (0-255)
         """
-        self._arlo.bg.run(self._arlo.be.notify,
-                          base=self.base_station,
-                          body={
-                              'action': 'set',
-                              'properties': {BRIGHTNESS_KEY: brightness},
-                              'publishResponse': True,
-                              'resource': self.resource_id,
-                          })
+        self._arlo.be.notify(base=self.base_station,
+                             body={
+                                 'action': 'set',
+                                 'properties': {BRIGHTNESS_KEY: brightness},
+                                 'publishResponse': True,
+                                 'resource': self.resource_id,
+                             })
         return True
 
     def has_capability(self, cap):

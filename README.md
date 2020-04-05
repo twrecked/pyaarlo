@@ -18,9 +18,7 @@ When you start Pyaarlo, it starts a background thread that opens a single, persi
 
 #### Differences from Pyarlo
 
-_Note: I plan to introduce a synchronous mode to address this difference._
-
-The biggest difference is changes don't happen immediately. The following code under Pyaarlo might not work:
+The biggest difference is Pyaarlo defaults to asynchronous mode by default. The following code brought from Pyarlo might not work:
 
 ```python
 base.mode = 'armed'
@@ -34,6 +32,15 @@ This is because between setting `mode` and reading `mode` the code has to:
 * update its internal state for `base`
 
 I say "might" not work because it might work, it all depends on timing, and context switches and network speed...
+
+To enable synchronous mode you need to specify it when starting PyArlo.
+
+```python
+# login, use console for 2FA if needed
+arlo = pyaarlo.PyArlo( username=USERNAME,password=PASSWORD,
+                       tfa_type='SMS',tfa_source='console',
+                       synchronous_mode=True)
+```
 
 <a name="introduction-thanks"></a>
 #### Thanks 
