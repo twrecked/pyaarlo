@@ -1,3 +1,7 @@
+0.6.19: Added TFA support
+        Added synchronous mode
+        Fixed(?) docs and README
+        Tidied repository
 0.6.17: Add request_snapshot webservice
 0.6.16: Fix last_image so lovelace card works
         Arlo Baby: fix effect switching

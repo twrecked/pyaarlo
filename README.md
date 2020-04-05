@@ -176,7 +176,7 @@ It's working well with my gmail account, see [here](https://support.google.com/m
 
 The pip installation adds an executable `pyaarlo`. You can use this to list devices, perform certain simple actions and anonymize and encrypt logs for debugging purposes. _Device operations are currently limited..._
 
-The git installation has `examples/pyaarlo` which functions in a similar manner.
+The git installation has `bin/pyaarlo` which functions in a similar manner.
 
 ```bash
 # To show the currently available actions:
@@ -208,11 +208,11 @@ cat output-file | pyaarlo encrypt
 cat output-file | pyaarlo -u 'your-user-name' -p 'your-password' anonymize | pyaarlo encrypt
 ```
 
-If you installed from git you can use a shell script in `examples/` to encrypt your logs. No anonymizing is possible this way.
+If you installed from git you can use a shell script in `bin/` to encrypt your logs. No anonymizing is possible this way.
  
 ```bash
 # encrypt an existing file
-cat output-file | ./examples/pyaarlo-encrypt encrypt
+cat output-file | ./bin/pyaarlo-encrypt encrypt
 ```
 
 `pyaarlo-encrypt` is a fancy wrapper around:
