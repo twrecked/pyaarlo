@@ -54,7 +54,7 @@ class PyArlo(object):
     * **stream_timeout** - Time, in seconds, for the event stream to close after receiving no packets. 0 means
       no timeout. Default 0 seconds. Setting this to `120` can be useful for catching dead connections - ie, an
       ISP forced a new IP on you.
-    * **synchronised_mode** - Wait for operations to complete before returing. If you are coming from Pyarlo this
+    * **synchronous_mode** - Wait for operations to complete before returing. If you are coming from Pyarlo this
       will make Pyaarlo behave more like you expect.
 
     **Debug `kwargs` parameters:**

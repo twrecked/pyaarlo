@@ -101,9 +101,10 @@ As mentioned, it uses the [Pyarlo](https://github.com/tchellomello/python-arlo) 
 
 ```python
 
-# login, use console for 2FA if needed
+# login, use console for 2FA if needed, turn on synchronous_mode for maximum compatibility
 arlo = pyaarlo.PyArlo( username=USERNAME,password=PASSWORD,
-                       tfa_type='SMS',tfa_source='console')
+                       tfa_type='SMS',tfa_source='console',synchronous_mode=True)
+
 # listing devices
 arlo.devices
 
