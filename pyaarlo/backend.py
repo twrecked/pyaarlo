@@ -264,7 +264,7 @@ class ArloBackEnd(object):
                     self._requests[resource] = response
                     self._lock.notify_all()
 
-    def _ev_thread(self):
+    def _ev_thread_main(self):
 
         self._arlo.debug('starting event loop')
         while True:
@@ -308,7 +308,7 @@ class ArloBackEnd(object):
     def _ev_start(self):
         self._ev_stream = None
         self._ev_connected_ = False
-        self._ev_thread = threading.Thread(name="ArloEventStream", target=self._ev_thread, args=())
+        self._ev_thread = threading.Thread(name='ArloEventStream', target=self._ev_thread_main, args=())
         self._ev_thread.setDaemon(True)
 
         with self._lock:
@@ -484,16 +484,6 @@ class ArloBackEnd(object):
             return False
         return True
 
-    @property
-    def is_connected(self):
-        return self._logged_in
-
-    def logout(self):
-        self._arlo.debug('trying to logout')
-        if self._ev_stream is not None:
-            self._ev_stream.stop()
-        self.put(LOGOUT_PATH)
-
     def _notify(self, base, body, trans_id=None):
         if trans_id is None:
             trans_id = self.gen_trans_id()
@@ -502,14 +492,11 @@ class ArloBackEnd(object):
         body['from'] = self._web_id
         body['transId'] = trans_id
 
-        def post(self, path, params=None, headers=None, raw=False, timeout=None):
-            return self._request(path, 'POST', params, headers, False, raw, timeout)
-
         if self.post(NOTIFY_PATH + base.device_id, body, headers={"xcloudId": base.xcloud_id}) is None:
             return None
         return trans_id
 
-    def _start_transaction(self,tid=None):
+    def _start_transaction(self, tid=None):
         if tid is None:
             tid = self.gen_trans_id()
         self._arlo.debug("starting transaction-->{}".format(tid))
@@ -517,7 +504,7 @@ class ArloBackEnd(object):
             self._requests[tid] = None
         return tid
 
-    def _wait_for_transaction(self,tid,timeout):
+    def _wait_for_transaction(self, tid, timeout):
         if timeout is None:
             timeout = self._arlo.cfg.request_timeout
         mnow = time.monotonic()
@@ -532,28 +519,17 @@ class ArloBackEnd(object):
         self._arlo.debug("finished transaction-->{}".format(tid))
         return response
 
-    def _notify_and_get_event(self, base, body, timeout=None):
-        if timeout is None:
-            timeout = self._arlo.cfg.request_timeout
+    @property
+    def is_connected(self):
+        return self._logged_in
 
-        with self._lock:
-            tid = self.gen_trans_id()
-            self._requests[tid] = None
+    def logout(self):
+        self._arlo.debug('trying to logout')
+        if self._ev_stream is not None:
+            self._ev_stream.stop()
+        self.put(LOGOUT_PATH)
 
-        self._notify(base=base, body=body, trans_id=tid)
-        mnow = time.monotonic()
-        mend = mnow + timeout
-
-        with self._lock:
-            while not self._requests[tid]:
-                self._lock.wait(mend - mnow)
-                if self._requests[tid]:
-                    return self._requests.pop(tid)
-                mnow = time.monotonic()
-                if mnow >= mend:
-                    return self._requests.pop(tid)
-
-    def notify(self, base, body, timeout=None,wait_for=None):
+    def notify(self, base, body, timeout=None, wait_for=None):
         """Send in a notification.
 
         Notifications are Arlo's way of getting stuff done - turn on a light, change base station mode,

@@ -195,6 +195,10 @@ class ArloBase(ArloDevice):
                                            "publishResponse": True,
                                            "properties": {"active": mode_id}})
             else:
+                # This is complicated... Setting a mode can fail and setting a mode can be sync or async.
+                # This code tried 3 times to set the mode with attempts to reload the devices between
+                # attempts to try and kick Arlo. In async mode the first set works in the current thread,
+                # subsequent ones run in the background. In sync mode it the same. Sorry.
                 def _set_mode_v2_cb(attempt):
                     self._arlo.debug('v2 arming')
                     params = {'activeAutomations':
@@ -310,7 +314,7 @@ class ArloBase(ArloDevice):
             'publishResponse': False,
             'properties': {'devices': [self.device_id]}
         }
-        self._arlo.debug(str(body))
+        self._arlo.debug("pinging {}".format(self.name))
         if self._arlo.be.notify(base=self, body=body, wait_for="response") is None:
             self._save_and_do_callbacks(CONNECTION_KEY, 'unavailable')
         else:
