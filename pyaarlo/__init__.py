@@ -23,7 +23,7 @@ from .util import time_to_arlotime
 
 _LOGGER = logging.getLogger('pyaarlo')
 
-__version__ = '0.6.17'
+__version__ = '0.6.19'
 
 
 class PyArlo(object):
@@ -51,9 +51,11 @@ class PyArlo(object):
     * **state_file** - Where to store state. Default is `${storage_dir}/${name.}pickle`
     * **refresh_devices_every** - Time, in hours, to refresh the device list from Arlo. This can help keep the login
       from timing out.
-    * **stream_timeout** - Time, in seconds, for the event stream to close after receiving no packets. 0 means no timeout.
-      Default 0 seconds. Setting this to `120` can be useful for catching dead connections - ie, an ISP forced
-      a new IP on you.
+    * **stream_timeout** - Time, in seconds, for the event stream to close after receiving no packets. 0 means
+      no timeout. Default 0 seconds. Setting this to `120` can be useful for catching dead connections - ie, an
+      ISP forced a new IP on you.
+    * **synchronous_mode** - Wait for operations to complete before returing. If you are coming from Pyarlo this
+      will make Pyaarlo behave more like you expect.
 
     **Debug `kwargs` parameters:**
 
@@ -88,10 +90,12 @@ class PyArlo(object):
       Normally not needed but some systems fail to push media uploads. Default 'False'.
     * **user_agent** - Set what 'user-agent' string is passed in request headers. It affects what video stream type is
       returned. Default is `apple`.
-    * **mode_api** - Which api to use to set the base station modes. Default is `auto` which choose an API based on camera
-      model. Can also be `v1` and `v2`.
-    * **http_connections** - HTTP connection pool size. Default is `20`, set to `None` to default provided by the system.
-    * **http_max_size** - HTTP maximum connection pool size. Default is `10`, set to `None` to default provided by the system.
+    * **mode_api** - Which api to use to set the base station modes. Default is `auto` which choose an API
+      based on camera model. Can also be `v1` and `v2`.
+    * **http_connections** - HTTP connection pool size. Default is `20`, set to `None` to default provided
+      by the system.
+    * **http_max_size** - HTTP maximum connection pool size. Default is `10`, set to `None` to default provided
+      by the system.
     * **reconnect_every** - Time, in minutes, to close and relogin to Arlo.
     * **snapshot_timeout** - Time, in seconds, to stop the snapshot attempt and return the camera to the idle state.
 
@@ -235,9 +239,12 @@ class PyArlo(object):
             base.update_modes()
             if initial:
                 base.update_mode()
-            self._be.notify(base=base, body={"action": "get", "resource": "cameras", "publishResponse": False})
-            self._be.notify(base=base, body={"action": "get", "resource": "doorbells", "publishResponse": False})
-            self._be.notify(base=base, body={"action": "get", "resource": "lights", "publishResponse": False})
+            self._be.notify(base=base, body={"action": "get", "resource": "cameras", "publishResponse": False},
+                            wait_for="response")
+            self._be.notify(base=base, body={"action": "get", "resource": "doorbells", "publishResponse": False},
+                            wait_for="response")
+            self._be.notify(base=base, body={"action": "get", "resource": "lights", "publishResponse": False},
+                            wait_for="response")
 
     def _fast_refresh(self):
         self.debug('fast refresh')
@@ -372,7 +379,7 @@ class PyArlo(object):
     def lookup_camera_by_name(self, name):
         """Return the camera called `name`.
 
-        :param device_id: The camera name to look for
+        :param name: The camera name to look for
         :return: A camera object or 'None' on failure.
         :rtype: ArloCamera
         """
@@ -396,7 +403,7 @@ class PyArlo(object):
     def lookup_doorbell_by_name(self, name):
         """Return the doorbell called `name`.
 
-        :param device_id: The doorbell name to look for
+        :param name: The doorbell name to look for
         :return: A doorbell object or 'None' on failure.
         :rtype: ArloDoorBell
         """

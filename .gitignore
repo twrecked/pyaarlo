@@ -112,3 +112,4 @@ rsa.*
 diffs
 video_dir
 .idea
+docs/out

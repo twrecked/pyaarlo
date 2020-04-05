@@ -65,9 +65,9 @@ class ArloBackEnd(object):
                 if host is None:
                     host = self._arlo.cfg.host
                 url = host + path
-                self._arlo.vdebug('starting request=' + str(url))
-                self._arlo.vdebug('starting request=' + str(params))
-                self._arlo.vdebug('starting request=' + str(headers))
+                self._arlo.vdebug("request-url={}".format(url))
+                self._arlo.vdebug("request-params=\n{}".format(pprint.pformat(params)))
+                self._arlo.vdebug("request-headers=\n{}".format(pprint.pformat(headers)))
                 if method == 'GET':
                     r = self._session.get(url, params=params, headers=headers, stream=stream, timeout=timeout)
                     if stream is True:
@@ -80,12 +80,12 @@ class ArloBackEnd(object):
             self._arlo.warning('request-error={}'.format(type(e).__name__))
             return None
 
-        self._arlo.vdebug('finish request=' + str(r.status_code))
+        self._arlo.vdebug("request-end={}".format(r.status_code))
         if r.status_code != 200:
             return None
 
         body = r.json()
-        self._arlo.vdebug(pprint.pformat(body, indent=2))
+        self._arlo.vdebug("request-body=\n{}".format(pprint.pformat(body)))
 
         if raw:
             return body
@@ -226,11 +226,13 @@ class ArloBackEnd(object):
                     self._lock.notify_all()
                 break
 
+            # dig out response, print out verbose debug
             response = json.loads(event.data)
             if self._dump_file is not None:
                 with open(self._dump_file, 'a') as dump:
                     time_stamp = now_strftime("%Y-%m-%d %H:%M:%S.%f")
                     dump.write("{}: {}\n".format(time_stamp, pprint.pformat(response, indent=2)))
+            self._arlo.vdebug("packet-in=\n{}".format(pprint.pformat(response, indent=2)))
 
             # logged out? signal exited
             if response.get('action') == 'logout':
@@ -248,18 +250,21 @@ class ArloBackEnd(object):
                     self._lock.notify_all()
                 continue
 
-            # is this from a notify? then signal to waiting entity, also
-            # pass into dispatcher
-            tid = response.get('transId')
+            # Run the dispatcher to set internal state and run callbacks.
+            self._ev_dispatcher(response)
+
+            # is there a notify/post waiting for this response? If so, signal to waiting entity.
+            tid = response.get('transId', None)
+            resource = response.get('resource', None)
             with self._lock:
                 if tid and tid in self._requests:
                     self._requests[tid] = response
                     self._lock.notify_all()
-                    continue
+                if resource and resource in self._requests:
+                    self._requests[resource] = response
+                    self._lock.notify_all()
 
-            self._ev_dispatcher(response)
-
-    def _ev_thread(self):
+    def _ev_thread_main(self):
 
         self._arlo.debug('starting event loop')
         while True:
@@ -303,7 +308,7 @@ class ArloBackEnd(object):
     def _ev_start(self):
         self._ev_stream = None
         self._ev_connected_ = False
-        self._ev_thread = threading.Thread(name="ArloEventStream", target=self._ev_thread, args=())
+        self._ev_thread = threading.Thread(name='ArloEventStream', target=self._ev_thread_main, args=())
         self._ev_thread.setDaemon(True)
 
         with self._lock:
@@ -314,38 +319,6 @@ class ArloBackEnd(object):
 
         self._arlo.debug('stream up')
         return True
-
-    def notify(self, base, body, trans_id=None):
-        if trans_id is None:
-            trans_id = self.gen_trans_id()
-
-        body['to'] = base.device_id
-        body['from'] = self._web_id
-        body['transId'] = trans_id
-        if self.post(NOTIFY_PATH + base.device_id, body, headers={"xcloudId": base.xcloud_id}) is None:
-            return None
-        return trans_id
-
-    def notify_and_get_response(self, base, body, timeout=None):
-        if timeout is None:
-            timeout = self._arlo.cfg.request_timeout
-
-        with self._lock:
-            tid = self.gen_trans_id()
-            self._requests[tid] = None
-
-        self.notify(base, body, trans_id=tid)
-        mnow = time.monotonic()
-        mend = mnow + timeout
-
-        with self._lock:
-            while not self._requests[tid]:
-                self._lock.wait(mend - mnow)
-                if self._requests[tid]:
-                    return self._requests.pop(tid)
-                mnow = time.monotonic()
-                if mnow >= mend:
-                    return self._requests.pop(tid)
 
     def _get_tfa(self):
         """ Return the 2FA type we're using. """
@@ -511,6 +484,41 @@ class ArloBackEnd(object):
             return False
         return True
 
+    def _notify(self, base, body, trans_id=None):
+        if trans_id is None:
+            trans_id = self.gen_trans_id()
+
+        body['to'] = base.device_id
+        body['from'] = self._web_id
+        body['transId'] = trans_id
+
+        if self.post(NOTIFY_PATH + base.device_id, body, headers={"xcloudId": base.xcloud_id}) is None:
+            return None
+        return trans_id
+
+    def _start_transaction(self, tid=None):
+        if tid is None:
+            tid = self.gen_trans_id()
+        self._arlo.debug("starting transaction-->{}".format(tid))
+        with self._lock:
+            self._requests[tid] = None
+        return tid
+
+    def _wait_for_transaction(self, tid, timeout):
+        if timeout is None:
+            timeout = self._arlo.cfg.request_timeout
+        mnow = time.monotonic()
+        mend = mnow + timeout
+
+        self._arlo.debug("finishing transaction-->{}".format(tid))
+        with self._lock:
+            while mnow < mend and self._requests[tid] is None:
+                self._lock.wait(mend - mnow)
+                mnow = time.monotonic()
+            response = self._requests.pop(tid)
+        self._arlo.debug("finished transaction-->{}".format(tid))
+        return response
+
     @property
     def is_connected(self):
         return self._logged_in
@@ -521,14 +529,86 @@ class ArloBackEnd(object):
             self._ev_stream.stop()
         self.put(LOGOUT_PATH)
 
-    def get(self, path, params=None, headers=None, stream=False, raw=False, timeout=None):
-        return self._request(path, 'GET', params, headers, stream, raw, timeout)
+    def notify(self, base, body, timeout=None, wait_for=None):
+        """Send in a notification.
 
-    def put(self, path, params=None, headers=None, raw=False, timeout=None):
-        return self._request(path, 'PUT', params, headers, False, raw, timeout)
+        Notifications are Arlo's way of getting stuff done - turn on a light, change base station mode,
+        start recording. Pyaarlo will post a notification and Arlo will post a reply on the event
+        stream indicating if it worked or not or of a state change.
 
-    def post(self, path, params=None, headers=None, raw=False, timeout=None):
-        return self._request(path, 'POST', params, headers, False, raw, timeout)
+        How Pyaarlo treats notifications depends on the mode it's being run in. For asynchronous mode - the
+        default - it sends the notification and returns immediately. For synchronous mode it sends the
+        notification and waits for the event related to the notification to come back. To use the default
+        settings leave `wait_for` as `None`, to force asynchronous set `wait_for` to `nothing` and to force
+        synchronous set `wait_for` to `event`.
+
+        There is a third way to send a notification where the code waits for the initial response to come back
+        but that must be specified by setting `wait_for` to `response`.
+
+        :param base: base station to use
+        :param body: notification message
+        :param timeout: how long to wait for response before failing, only applied if `wait_for` is `event`.
+        :param wait_for: what to wait for, either `None`, `event`, `response` or `nothing`.
+        :return: either a response packet or an event packet
+        """
+        if wait_for is None:
+            wait_for = "event" if self._arlo.cfg.synchronous_mode else "nothing"
+
+        if wait_for == "event":
+            self._arlo.debug('notify+event running')
+            tid = self._start_transaction()
+            self._notify(base, body=body, trans_id=tid)
+            return self._wait_for_transaction(tid, timeout)
+            # return self._notify_and_get_event(base, body, timeout=timeout)
+        elif wait_for == "response":
+            self._arlo.debug('notify+response running')
+            return self._notify(base, body=body)
+        else:
+            self._arlo.debug('notify+ sent')
+            self._arlo.bg.run(self._notify, base=base, body=body)
+
+    def get(self, path, params=None, headers=None, stream=False, raw=False, timeout=None, wait_for="response"):
+        if wait_for == "response":
+            self._arlo.debug('get+response running')
+            return self._request(path, 'GET', params, headers, stream, raw, timeout)
+        else:
+            self._arlo.debug('get sent')
+            self._arlo.bg.run(self._request, path, 'GET', params, headers, stream, raw, timeout)
+
+    def put(self, path, params=None, headers=None, raw=False, timeout=None, wait_for="response"):
+        if wait_for == "response":
+            self._arlo.debug('put+response running')
+            return self._request(path, 'PUT', params, headers, False, raw, timeout)
+        else:
+            self._arlo.debug('put sent')
+            self._arlo.bg.run(self._request, path, 'PUT', params, headers, False, raw, timeout)
+
+    def post(self, path, params=None, headers=None, raw=False, timeout=None, wait_for="response"):
+        """ Post a request to the Arlo servers.
+
+        Posts are used to retrieve data from the Arlo servers. Mostly. They are also used to change
+        base station modes.
+
+        The default mode of operation is to wait for a response from the http request. The `wait_for`
+        variable can change the operation. Setting it to `response` waits for a http response.
+        Setting it to `resource` waits for the resource in the `params` parameter to appear in the event
+        stream. Setting it to `nothing` causing the post to run in the background. Setting it to `None`
+        uses `resource` in synchronous mode and `response` in asynchronous mode.
+        """
+        if wait_for is None:
+            wait_for = "resource" if self._arlo.cfg.synchronous_mode else "response"
+
+        if wait_for == "resource":
+            self._arlo.debug('notify+resource running')
+            tid = self._start_transaction(list(params.keys())[0])
+            self._request(path, 'POST', params, headers, False, raw, timeout)
+            return self._wait_for_transaction(tid, timeout)
+        if wait_for == "response":
+            self._arlo.debug('post+response running')
+            return self._request(path, 'POST', params, headers, False, raw, timeout)
+        else:
+            self._arlo.debug('post sent')
+            self._arlo.bg.run(self._request, path, 'POST', params, headers, False, raw, timeout)
 
     def auth_post(self, path, params=None, headers=None, raw=False, timeout=None):
         return self._request(path, 'POST', params, headers, False, raw, timeout, AUTH_HOST)

@@ -18,9 +18,7 @@ When you start Pyaarlo, it starts a background thread that opens a single, persi
 
 #### Differences from Pyarlo
 
-_Note: I plan to introduce a synchronous mode to address this difference._
-
-The biggest difference is changes don't happen immediately. The following code under Pyaarlo might not work:
+The biggest difference is Pyaarlo defaults to asynchronous mode by default. The following code brought from Pyarlo might not work:
 
 ```python
 base.mode = 'armed'
@@ -34,6 +32,15 @@ This is because between setting `mode` and reading `mode` the code has to:
 * update its internal state for `base`
 
 I say "might" not work because it might work, it all depends on timing, and context switches and network speed...
+
+To enable synchronous mode you need to specify it when starting PyArlo.
+
+```python
+# login, use console for 2FA if needed
+arlo = pyaarlo.PyArlo( username=USERNAME,password=PASSWORD,
+                       tfa_type='SMS',tfa_source='console',
+                       synchronous_mode=True)
+```
 
 <a name="introduction-thanks"></a>
 #### Thanks 
@@ -94,9 +101,10 @@ As mentioned, it uses the [Pyarlo](https://github.com/tchellomello/python-arlo) 
 
 ```python
 
-# login, use console for 2FA if needed
+# login, use console for 2FA if needed, turn on synchronous_mode for maximum compatibility
 arlo = pyaarlo.PyArlo( username=USERNAME,password=PASSWORD,
-                       tfa_type='SMS',tfa_source='console')
+                       tfa_type='SMS',tfa_source='console',synchronous_mode=True)
+
 # listing devices
 arlo.devices
 
@@ -169,7 +177,7 @@ It's working well with my gmail account, see [here](https://support.google.com/m
 
 The pip installation adds an executable `pyaarlo`. You can use this to list devices, perform certain simple actions and anonymize and encrypt logs for debugging purposes. _Device operations are currently limited..._
 
-The git installation has `examples/pyaarlo` which functions in a similar manner.
+The git installation has `bin/pyaarlo` which functions in a similar manner.
 
 ```bash
 # To show the currently available actions:
@@ -201,11 +209,11 @@ cat output-file | pyaarlo encrypt
 cat output-file | pyaarlo -u 'your-user-name' -p 'your-password' anonymize | pyaarlo encrypt
 ```
 
-If you installed from git you can use a shell script in `examples/` to encrypt your logs. No anonymizing is possible this way.
+If you installed from git you can use a shell script in `bin/` to encrypt your logs. No anonymizing is possible this way.
  
 ```bash
 # encrypt an existing file
-cat output-file | ./examples/pyaarlo-encrypt encrypt
+cat output-file | ./bin/pyaarlo-encrypt encrypt
 ```
 
 `pyaarlo-encrypt` is a fancy wrapper around:
@@ -228,8 +236,6 @@ If you do find the component locks up after a while (I've seen reports of hours,
 * `stream_timeout`, tell Pyaarlo to close and reopen the event stream after a certain period of inactivity. Pyaarlo will send keep alive every minute so a good starting point is 180 seconds.
 * `reconnect_every`, tell Pyaarlo to logout and back in every so often. This establishes a new session at the risk of losing an event notification. The value is minutes and a good starting point is 90.
 * `request_timout`, the amount of time to allow for a http request to work. A good starting point is 120 seconds.
-
-Unify your alarm mode names across all your base stations. There is no way to specify different mode names for each device.
 
 Alro will allow shared accounts to give cameras their own name. If you find cameras appearing with unexpected names (or not appearing at all), log into the Arlo web interface with your Home Assistant account and make sure the camera names are correct.
 
