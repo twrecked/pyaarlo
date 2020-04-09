@@ -171,7 +171,31 @@ ar = pyaarlo.PyArlo(username=USERNAME, password=PASSWORD,
 
 It's working well with my gmail account, see [here](https://support.google.com/mail/answer/185833?hl=en) for help setting up single app passwords.
 
+#### Rest API
 
+_I will be adding to this section..._
+
+This mechanism allows you to hook a custom method for getting your code into a REST API. The short version is:
+When you start authenticating Pyarlo makes a clear request and repeated get requests to a website to retrieve your TFA. The format of the clear and get requests and their reponses are well defined but the host Pyarlo uses is configurable.
+* The clear is a GET request with the following format.
+```http request
+https://custom-host/clear?email=test@test.com&token=1234567890
+``` 
+
+* The get is a GET request with the following format:
+```http request
+https://custom-host/get?email=test@test.com&token=1234567890
+``` 
+
+* When you receive a code from Arlo you call this URL and the code will be picked up by Arlo.
+```http request
+https://custom-host/get?email=test@test.com&token=1234567890&code=123456
+``` 
+
+_How to get the code into the system... I have a working email to URL gateway but other options should be available. I'm thinking IFTTT._
+
+I have a website running at https://pyaarlo-tfa.appspot.com that can provide this service. Email if interested.
+ 
 <a name="executable"></a>
 ## Pyaarlo Executable
 
