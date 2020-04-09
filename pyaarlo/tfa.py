@@ -46,8 +46,8 @@ class Arlo2FAImap:
         if self._imap is not None:
             self.stop()
 
-        self._imap = imaplib.IMAP4_SSL(self._arlo.cfg.imap_host)
-        res, status = self._imap.login(self._arlo.cfg.imap_username, self._arlo.cfg.imap_password)
+        self._imap = imaplib.IMAP4_SSL(self._arlo.cfg.tfa_host)
+        res, status = self._imap.login(self._arlo.cfg.tfa_username, self._arlo.cfg.tfa_password)
         if res.lower() != 'ok':
             self._arlo.debug('imap login failed')
             return False
@@ -133,14 +133,14 @@ class Arlo2FARestAPI:
 
     def start(self):
         self._arlo.debug('2fa-rest-api: starting')
-        if self._arlo.cfg.imap_host is None or self._arlo.cfg.imap_password is None:
+        if self._arlo.cfg.tfa_host is None or self._arlo.cfg.tfa_password is None:
             self._arlo.debug('2fa-rest-api: invalid config')
             return False
 
         self._arlo.debug("2fa-rest-api: clearing")
         response = requests.get(
-            "{}/clear?email={}&token={}".format(self._arlo.cfg.imap_host, self._arlo.cfg.imap_username,
-                                                self._arlo.cfg.imap_password), timeout=10)
+            "{}/clear?email={}&token={}".format(self._arlo.cfg.tfa_host, self._arlo.cfg.tfa_username,
+                                                self._arlo.cfg.tfa_password), timeout=10)
         if response.status_code != 200:
             self._arlo.debug("2fa-rest-api: possible problem clearing")
 
@@ -162,8 +162,8 @@ class Arlo2FARestAPI:
             # Try for the token.
             self._arlo.debug("2fa-rest-api: checking")
             response = requests.get(
-                "{}/get?email={}&token={}".format(self._arlo.cfg.imap_host, self._arlo.cfg.imap_username,
-                                                  self._arlo.cfg.imap_password), timeout=10
+                "{}/get?email={}&token={}".format(self._arlo.cfg.tfa_host, self._arlo.cfg.tfa_username,
+                                                  self._arlo.cfg.tfa_password), timeout=10
             )
             if response.status_code == 200:
                 code = response.json().get('data', {}).get('code', None)

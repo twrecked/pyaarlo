@@ -68,13 +68,16 @@ class PyArlo(object):
 
     These parameters are needed for 2FA.
 
-    * **tfa_source** - Where to get the token from. Default is `console`. Can be `imap` to use email.
+    * **tfa_source** - Where to get the token from. Default is `console`. Can be `imap` to use email or
+      `rest-api` to use rest API website.
     * **tfa_type** - How to get the 2FA token delivered. Default is `email` but can be `sms`.
-    * **tfa_timeout** - When using `imap`, how long, in seconds, to wait between checks.
-    * **tfa_total_timeout** - When using `imap`, how long, in seconds, for all checks.
-    * **imap_host** - When using `imap`, host name of imap server.
-    * **imap_username** - When using `imap`, user name on imap server. If `None` will use Arlo username.
-    * **imap_password** - When using `imap`, password on imap server. If `None` will use Arlo password.
+    * **tfa_timeout** - When using `imap` or `rest-api`, how long to wait, in seconds, between checks.
+    * **tfa_total_timeout** - When using `imap` or `rest-api`, how long to wait, in seconds, for all checks.
+    * **tfa_host** - When using `imap` or `rest-api`, host name of server.
+    * **tfa_username** - When using `imap` or `rest-api`, user name on server. If `None` will use
+      Arlo username.
+    * **tfa_password** - When using `imap` or `rest-api`, password/token on server. If `None`
+      will use Arlo password.
 
     **Infrequently used `kwargs` parameters:**
 

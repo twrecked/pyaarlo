@@ -164,9 +164,9 @@ Automatic is trickier. Support is there but needs testing. For automatic 2FA PyA
 ```python
 ar = pyaarlo.PyArlo(username=USERNAME, password=PASSWORD,
                     tfa_source='imap',tfa_type='email',
-                    imap_host='imap.host.com',
-                    imap_username='your-user-name',
-                    imap_password='your-imap-password' )
+                    tfa_host='imap.host.com',
+                    tfa_username='your-user-name',
+                    tfa_password='your-imap-password' )
 ```
 
 It's working well with my gmail account, see [here](https://support.google.com/mail/answer/185833?hl=en) for help setting up single app passwords.
