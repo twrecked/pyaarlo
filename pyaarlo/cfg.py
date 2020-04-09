@@ -1,7 +1,7 @@
 from .constant import (
     DEFAULT_HOST,
     TFA_CONSOLE_SOURCE,
-    TFA_EMAIL_TYPE, PRELOAD_DAYS)
+    TFA_EMAIL_TYPE, PRELOAD_DAYS, TFA_DEFAULT_HOST)
 
 
 class ArloCfg(object):
@@ -132,8 +132,8 @@ class ArloCfg(object):
         return self._kw.get('tfa_total_timeout', default)
 
     @property
-    def imap_host(self, default='unknown'):
-        return self._kw.get('imap_host', default)
+    def imap_host(self,):
+        return self._kw.get('imap_host', TFA_DEFAULT_HOST)
 
     @property
     def imap_username(self, default=None):
