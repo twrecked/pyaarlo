@@ -120,3 +120,21 @@ class Arlo2FAImap:
         self._imap = None
         self._old_ids = None
         self._new_ids = None
+
+class Arlo2FARestAPI:
+    """ 2FA authentication via rest API.
+    Queries web site until code appears
+    """
+
+    def __init__(self, arlo):
+        self._arlo = arlo
+
+    def start(self):
+        self._arlo.debug('2fa-rest-api: starting')
+        return True
+
+    def get(self):
+        self._arlo.debug('2fa-rest-api: checking')
+
+    def stop(self):
+        self._arlo.debug('2fa-rest-api: stopping')
