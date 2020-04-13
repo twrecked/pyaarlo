@@ -10,9 +10,10 @@ import requests.adapters
 
 from .constant import (AUTH_HOST, AUTH_PATH, AUTH_VALIDATE_PATH, AUTH_GET_FACTORS, AUTH_START_PATH, AUTH_FINISH_PATH,
                        DEFAULT_RESOURCES, LOGOUT_PATH, SESSION_PATH,
-                       NOTIFY_PATH, SUBSCRIBE_PATH, TRANSID_PREFIX, DEVICES_PATH, TFA_CONSOLE_SOURCE, TFA_IMAP_SOURCE)
+                       NOTIFY_PATH, SUBSCRIBE_PATH, TRANSID_PREFIX, DEVICES_PATH, TFA_CONSOLE_SOURCE, TFA_IMAP_SOURCE,
+                       TFA_REST_API_SOURCE)
 from .sseclient import SSEClient
-from .tfa import Arlo2FAConsole, Arlo2FAImap
+from .tfa import Arlo2FAConsole, Arlo2FAImap, Arlo2FARestAPI
 from .util import time_to_arlotime, now_strftime, to_b64
 
 
@@ -327,6 +328,8 @@ class ArloBackEnd(object):
             return Arlo2FAConsole(self._arlo)
         elif tfa_type == TFA_IMAP_SOURCE:
             return Arlo2FAImap(self._arlo)
+        elif tfa_type == TFA_REST_API_SOURCE:
+            return Arlo2FARestAPI(self._arlo)
         else:
             return tfa_type
 
@@ -567,13 +570,14 @@ class ArloBackEnd(object):
             self._arlo.debug('notify+ sent')
             self._arlo.bg.run(self._notify, base=base, body=body)
 
-    def get(self, path, params=None, headers=None, stream=False, raw=False, timeout=None, wait_for="response"):
+    def get(self, path, params=None, headers=None, stream=False, raw=False, timeout=None, host=None,
+            wait_for="response"):
         if wait_for == "response":
             self._arlo.debug('get+response running')
-            return self._request(path, 'GET', params, headers, stream, raw, timeout)
+            return self._request(path, 'GET', params, headers, stream, raw, timeout, host)
         else:
             self._arlo.debug('get sent')
-            self._arlo.bg.run(self._request, path, 'GET', params, headers, stream, raw, timeout)
+            self._arlo.bg.run(self._request, path, 'GET', params, headers, stream, raw, timeout, host)
 
     def put(self, path, params=None, headers=None, raw=False, timeout=None, wait_for="response"):
         if wait_for == "response":

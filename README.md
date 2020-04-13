@@ -6,7 +6,10 @@
 - [Usage](#usage)
 - [Pyaarlo Executable](#executable)
 - [2 Factor Authentication](#2fa)
-- [Error Reporting](#error)
+  * [Manual](#2fa-manual)
+  * [Automatic](#2fa-automatic)
+  * [REST API](#sfa-rest-api)
+- [Error Reporting](#errors)
 - [Limitations](#limitations)
 
 <a name="introduction"></a>
@@ -148,6 +151,7 @@ cam.brightness
 
 Pyaarlo supports 2 factor authentication.
 
+<a name="2fa-manual"></a>
 #### Manual
 
 Start `PyArlo` specifying `tfa_source` as `console`. Whenever `PyArlo` needs a secondary code it will prompt you for it.
@@ -157,6 +161,7 @@ ar = pyaarlo.PyArlo(username=USERNAME, password=PASSWORD,
                     tfa_source='console', tfa_type='SMS')
 ```
 
+<a name="2fa-automatic"></a>
 #### Automatic
 
 Automatic is trickier. Support is there but needs testing. For automatic 2FA PyArlo needs to access and your email account form where it reads the token Arlo sent.
@@ -164,13 +169,100 @@ Automatic is trickier. Support is there but needs testing. For automatic 2FA PyA
 ```python
 ar = pyaarlo.PyArlo(username=USERNAME, password=PASSWORD,
                     tfa_source='imap',tfa_type='email',
-                    imap_host='imap.host.com',
-                    imap_username='your-user-name',
-                    imap_password='your-imap-password' )
+                    tfa_host='imap.host.com',
+                    tfa_username='your-user-name',
+                    tfa_password='your-imap-password' )
 ```
 
 It's working well with my gmail account, see [here](https://support.google.com/mail/answer/185833?hl=en) for help setting up single app passwords.
 
+<a name="2fa-rest-api"></a>
+#### Rest API
+
+This mechanism allows you to an exteral website. When you start authenticating Pyarlo makes a `clear` request and repeated `look-up` requests to a website to retrieve your TFA code. The format of these requests and their reponses are well defined but the host Pyarlo uses is configurable.
+
+```python
+ar = pyaarlo.PyArlo(username=USERNAME, password=PASSWORD,
+                    tfa_source='rest-api',tfa_type='email',
+                    tfa_host='custom-host',
+                    tfa_username='test@test.com',
+                    tfa_password='1234567890' )
+```
+
+* Pyaarlo will clear the current code with this HTTP GET request:
+```http request
+https://custom-host/clear?email=test@test.com&token=1234567890
+``` 
+
+* And the server will respond with this on success:
+```json
+{ 'meta': { 'code': 200 },
+  'data': { 'success': True, 'email': 'test@test.com' } }
+```
+
+* Pyaarlo will look up the current code with this HTTP GET request:
+```http request
+https://custom-host/get?email=test@test.com&token=1234567890
+``` 
+
+* And the server will respond with this on success:
+```json
+{ 'meta': { 'code': 200 },
+  'data': { 'success': True, 'email': 'test@test.com', 'code': '123456', 'timestamp': '123445666' } }
+```
+
+* Failures always have `code` value of anything other than 200.
+```json
+{ 'meta': { 'code': 400 },
+  'data': { 'success': False, 'error': 'permission denied' }}
+```
+
+Pyaarlo doesn't care how you get the codes into the system only that they are there. Feel free to roll your own server or...
+
+##### Using My Server
+
+I have a website running at https://pyaarlo-tfa.appspot.com that can provide this service. It's provided as-is, it's running as a Google app so it should be pretty reliable and the only information I have access to is your email address, access token for my website and whatever your last code was. (_Note:_ if you're not planning on using email forwarding the `email` value isn't strictly enforced, a unique ID is sufficient.)
+
+_If you don't trust me and my server - and I won't be offended - you can get the source from [here](https://github.com/twrecked/pyaarlo-tfa-helper) and set up your own._
+
+To use the REST API with my website do the following:
+
+* Register with my website. You only need to do this once and I'm sorry for the crappy interface. Go to [registration page](https://pyaarlo-tfa.appspot.com/register) and enter your email address (or unique ID). The website will reply with a json document containing your _token_, keep this _token_ and use it in all REST API interactions.
+```json
+{"email":"testing@testing.com",
+ "fwd-to":"pyaarlo@thewardrobe.ca",
+ "success":true,
+ "token":"4f529ea4dd20ca65e102e743e7f18914bcf8e596b909c02d"}
+```
+
+* To add a code send the following HTTP GET request:
+```http request
+https://custom-host/add?email=test@test.com&token=4f529ea4dd20ca65e102e743e7f18914bcf8e596b909c02d&code=123456
+```
+
+You can replace `code` with `msg` and the server will try and parse the code out value of `msg`, use it for picking apart SMS messages.
+
+##### Using IFTTT
+
+You have your server set up or are using mine, one way to send codes is to use [IFTTT](https://ifttt.com/) to forward SMS messages to the server. I have an Android phone so use the `New SMS received from phone number` trigger and match to the Arlo number sending me SMS codes. (I couldn't get the match message to work, maybe somebody else will have better luck.)
+
+I pair this with `Make a web request` action to forward the SMS code into my server, I use the following recipe. Modify the email and token as necessary.
+```
+URL: https://pyaarlo-tfa.appspot.com/add?email=test@test.com&token=4f529ea4dd20ca65e102e743e7f18914bcf8e596b909c02d&msg={{Text}}
+Method: GET
+Content Type: text/plain
+```
+
+Make sure to configure Pyaarlo to request a token over SMS with `tfa_type='SMS`. Now, when you login in, Arlo will send an SMS to your phone, the IFTTT app will forward this to the server and Pyaarlo will read it from the server.
+
+##### Using EMAIL
+
+If you run your own `postfix` server you can use [this script](https://github.com/twrecked/pyaarlo-tfa-helper/blob/master/postfix/pyaarlo-fwd.in) to set up an email forwarding alias. Use an alias like this:
+```text
+pyaarlo:  "|/home/test/bin/pyaarlo-fwd"
+```
+
+Make sure to configure Pyaarlo to request a token over SMS with `tfa_type='EMAIL`. Then set up your email service to forward Arlo code message to your email forwarding alias.
 
 <a name="executable"></a>
 ## Pyaarlo Executable
@@ -222,6 +314,7 @@ cat output-file | ./bin/pyaarlo-encrypt encrypt
 curl -s -F 'plain_text_file=@-;filename=clear.txt' https://pyaarlo-tfa.appspot.com/encrypt
 ```
 
+You can also encrypt your output on this [webpage](https://pyaarlo-tfa.appspot.com/).
 
 <a name="limitations"></a>
 ## Limitations
