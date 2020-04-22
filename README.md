@@ -328,7 +328,7 @@ If you do find the component locks up after a while (I've seen reports of hours,
 * `refresh_devices_every`, tell Pyaarlo to request the device list every so often. This will sometimes prevent the back end from aging you out. The value is in hours and a good starting point is 3.
 * `stream_timeout`, tell Pyaarlo to close and reopen the event stream after a certain period of inactivity. Pyaarlo will send keep alive every minute so a good starting point is 180 seconds.
 * `reconnect_every`, tell Pyaarlo to logout and back in every so often. This establishes a new session at the risk of losing an event notification. The value is minutes and a good starting point is 90.
-* `request_timout`, the amount of time to allow for a http request to work. A good starting point is 120 seconds.
+* `request_timeout`, the amount of time to allow for a http request to work. A good starting point is 120 seconds.
 
 Alro will allow shared accounts to give cameras their own name. If you find cameras appearing with unexpected names (or not appearing at all), log into the Arlo web interface with your Home Assistant account and make sure the camera names are correct.
 
