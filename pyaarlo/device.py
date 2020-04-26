@@ -220,6 +220,8 @@ class ArloDevice(object):
         :param cap: Attribute - eg `motionStarted` - to check.
         :return: `True` it is, `False` it isn't.
         """
+        if cap in (CONNECTION_KEY,):
+            return True
         return False
 
     @property
