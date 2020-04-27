@@ -921,7 +921,7 @@ class ArloCamera(ArloChildDevice):
             if self.model_id.startswith(('VMC4040', 'VMC5040')):
                 return True
         if cap in (SPOTLIGHT_KEY,):
-            if self.model_id.startswith('VMC5040'):
+            if self.model_id.startswith(('VMC4040', 'VMC5040')):
                 return True
         if cap in (TEMPERATURE_KEY, HUMIDITY_KEY, AIR_QUALITY_KEY):
             if self.model_id.startswith('ABC1000'):
