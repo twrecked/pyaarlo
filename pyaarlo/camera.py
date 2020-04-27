@@ -882,7 +882,6 @@ class ArloCamera(ArloChildDevice):
                                  'publishResponse': True,
                                  'resource': self.resource_id,
                              })
-                          })
         return True
 
     def set_spotlight_on(self):
@@ -904,10 +903,11 @@ class ArloCamera(ArloChildDevice):
 
         :param brightness: brightness (0-255)
         """
-        return self._set_spotlight_properties({   "Note: Intensity is 0-100 scale, which we map from 0-255 to"
-            'intensity': (brightness / 255 * 100) "      provide an API consistent with nightlight brightness"
+        # Note: Intensity is 0-100 scale, which we map from 0-255 to
+        #       provide an API consistent with nightlight brightness
+        return self._set_spotlight_properties({
+            'intensity': (brightness / 255 * 100)
         })
-
 
     def has_capability(self, cap):
         if cap in (MOTION_DETECTED_KEY, BATTERY_KEY, SIGNAL_STR_KEY):
