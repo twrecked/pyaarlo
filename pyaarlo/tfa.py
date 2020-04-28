@@ -128,6 +128,7 @@ class Arlo2FARestAPI:
     """ 2FA authentication via rest API.
     Queries web site until code appears
     """
+
     def __init__(self, arlo):
         self._arlo = arlo
 

@@ -124,7 +124,7 @@ def encrypt_to_string(obj):
 
         # create key and encrypt pickled object with it
         key = get_random_bytes(16)
-        aes_cipher = AES.new(key,AES.MODE_EAX)
+        aes_cipher = AES.new(key, AES.MODE_EAX)
         obj, tag = aes_cipher.encrypt_and_digest(obj)
         nonce = aes_cipher.nonce
 
