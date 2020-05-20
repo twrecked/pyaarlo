@@ -23,7 +23,7 @@ from .util import time_to_arlotime
 
 _LOGGER = logging.getLogger('pyaarlo')
 
-__version__ = '0.7.0-alpha.1'
+__version__ = '0.7.0-alpha.2'
 
 
 class PyArlo(object):
@@ -171,7 +171,8 @@ class PyArlo(object):
 
             # This needs it's own code now... Does no parent indicate a base station???
             if dtype == 'basestation' or \
-                    device.get('modelId') == 'ABC1000' or dtype == 'arloq' or dtype == 'arloqs':
+                    device.get('modelId') == 'ABC1000' or dtype == 'arloq' or dtype == 'arloqs' or \
+                    device.get("modelId").startswith("FB1001A"):
                 self._bases.append(ArloBase(dname, self, device))
             # video doorbell can be its own base station, it can also be assigned to a real base station
             if device.get('modelId').startswith('AVD1001'):
@@ -429,7 +430,7 @@ class PyArlo(object):
         :type response: JSON data
         """
         self.debug("injecting\n{}".format(pprint.pformat(response)))
-        self._be._ev_dispatcher(response)
+        self._be.ev_inject(response)
 
     def attribute(self, attr):
         """Return the value of attribute attr.

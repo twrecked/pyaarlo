@@ -1,3 +1,6 @@
+0.7.0.alpha.3: Further State machine improvements.
+        Pyclewn linting.
+0.7.0.alpha.2: State machine improvements.
 0.7.0: New version
 0.6.20: Added REST-API support
 0.6.19: Added TFA support
