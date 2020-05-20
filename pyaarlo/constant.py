@@ -49,6 +49,7 @@ EVENT_STREAM_TIMEOUT = ((FAST_REFRESH_INTERVAL * 2) + 5)
 ACTIVITY_STATE_KEY = 'activityState'
 AIR_QUALITY_KEY = 'airQuality'
 AUDIO_DETECTED_KEY = 'audioDetected'
+AUDIO_ANALYTICS_KEY = 'audioAnalytics'
 BATTERY_KEY = 'batteryLevel'
 BATTERY_TECH_KEY = 'batteryTech'
 BRIGHTNESS_KEY = 'brightness'
@@ -68,6 +69,7 @@ POWER_SAVE_KEY = 'powerSaveMode'
 PRIVACY_KEY = 'privacyActive'
 LIGHT_BRIGHTNESS_KEY = 'lightBrightness'
 LIGHT_MODE_KEY = 'lightMode'
+RECORDING_STOPPED_KEY = 'recordingStopped'
 SPOTLIGHT_KEY = 'spotlight'
 SPOTLIGHT_BRIGHTNESS_KEY = 'spotlightBrightness'
 SIGNAL_STR_KEY = 'signalStrength'
@@ -75,6 +77,9 @@ SIREN_STATE_KEY = 'sirenState'
 TEMPERATURE_KEY = 'temperature'
 NIGHTLIGHT_KEY = 'nightLight'
 MEDIA_PLAYER_KEY = 'mediaPlayer'
+FLOODLIGHT_KEY = 'floodlight'
+FLOODLIGHT_BRIGHTNESS1_KEY = 'brightness1'
+FLOODLIGHT_BRIGHTNESS2_KEY = 'brightness2'
 
 AUDIO_CONFIG_KEY = 'config'
 AUDIO_PLAYLIST_KEY = 'playlist'
@@ -98,7 +103,9 @@ RESOURCE_UPDATE_KEYS = [ACTIVITY_STATE_KEY, AIR_QUALITY_KEY, AUDIO_DETECTED_KEY,
                         HUMIDITY_KEY, MOTION_DETECTED_KEY, PRIVACY_KEY,
                         SIGNAL_STR_KEY, SIREN_STATE_KEY, TEMPERATURE_KEY,
                         AUDIO_CONFIG_KEY, AUDIO_PLAYLIST_KEY, AUDIO_STATUS_KEY, AUDIO_SPEAKER_KEY, AUDIO_TRACK_KEY,
-                        AUDIO_POSITION_KEY]
+                        AUDIO_POSITION_KEY, FLOODLIGHT_KEY]
+
+RECENT_ACTIVITY_KEYS = [AUDIO_DETECTED_KEY, MOTION_DETECTED_KEY]
 
 # device keys
 DEVICE_ID_KEY = 'deviceId'
