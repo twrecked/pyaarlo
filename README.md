@@ -15,13 +15,20 @@
 <a name="introduction"></a>
 ## Introduction
 
-Pyaarlo is a module for for Python that provides asynchronous access to Netgear Arlo cameras.
+Pyaarlo is a module for for Python that provides asynchronous access to Netgear
+Arlo cameras.
 
-When you start Pyaarlo, it starts a background thread that opens a single, persistant connection, an *event stream*, to the Arlo servers. As things happen to the Arlo devices - motion detected, battery level changes, mode changes, etc... - the Arlo servers post these events onto the event stream. The background thread reads these events from the stream, updates Pyaarlo's internal state and calls any user registered callbacks.
+When you start Pyaarlo, it starts a background thread that opens a single,
+persistant connection, an *event stream*, to the Arlo servers. As things happen
+to the Arlo devices - motion detected, battery level changes, mode changes,
+etc... - the Arlo servers post these events onto the event stream. The
+background thread reads these events from the stream, updates Pyaarlo's internal
+state and calls any user registered callbacks.
 
 #### Differences from Pyarlo
 
-The biggest difference is Pyaarlo defaults to asynchronous mode by default. The following code brought from Pyarlo might not work:
+The biggest difference is Pyaarlo defaults to asynchronous mode by default. The
+following code brought from Pyarlo might not work:
 
 ```python
 base.mode = 'armed'
@@ -34,7 +41,8 @@ This is because between setting `mode` and reading `mode` the code has to:
 * read the mode change packet back from the Arlo event stream
 * update its internal state for `base`
 
-I say "might" not work because it might work, it all depends on timing, and context switches and network speed...
+I say "might" not work because it might work, it all depends on timing, and
+context switches and network speed...
 
 To enable synchronous mode you need to specify it when starting PyArlo.
 
@@ -48,9 +56,16 @@ arlo = pyaarlo.PyArlo( username=USERNAME,password=PASSWORD,
 <a name="introduction-thanks"></a>
 #### Thanks 
 Many thanks to:
-* [Pyarlo](https://github.com/tchellomello/python-arlo) and [Arlo](https://github.com/jeffreydwalter/arlo) for doing the original heavy lifting and the free Python lesson!
-* [sseclient](https://github.com/btubbs/sseclient) for reading from the event stream
-* [![JetBrains](/images/jetbrains.svg)](https://www.jetbrains.com/?from=hass-aarlo) for the excellent **PyCharm IDE** and providing me with an open source license to speed up the project development.
+* [Pyarlo](https://github.com/tchellomello/python-arlo) and
+  [Arlo](https://github.com/jeffreydwalter/arlo) for doing the original heavy
+  lifting and the free Python lesson!
+* [sseclient](https://github.com/btubbs/sseclient) for reading from the event
+  stream
+* [JetBrains](https://www.jetbrains.com/?from=hass-aarlo) for the excellent
+  **PyCharm IDE** and providing me with an open source license to speed up the
+  project development.
+
+  [![JetBrains](/images/jetbrains.svg)](https://www.jetbrains.com/?from=hass-aarlo)
 
 
 <a name="installation"></a>
@@ -65,9 +80,12 @@ pip install git+https://github.com/twrecked/pyaarlo
 <a name="usage"></a>
 ## Usage
 
-You can read the developer documentation here: [https://pyaarlo.readthedocs.io/](https://pyaarlo.readthedocs.io/)
+You can read the developer documentation here:
+[https://pyaarlo.readthedocs.io/](https://pyaarlo.readthedocs.io/)
 
-The following example will login to your Arlo system, use 2FA if needed, register callbacks for all events on all base stations and cameras and then wait 10 minutes printing out any events that arrive during that time.
+The following example will login to your Arlo system, use 2FA if needed,
+register callbacks for all events on all base stations and cameras and then wait
+10 minutes printing out any events that arrive during that time.
 
 ```python
 # code to trap when attributes change
@@ -100,7 +118,9 @@ time.sleep(600)
 
 ```
 
-As mentioned, it uses the [Pyarlo](https://github.com/tchellomello/python-arlo) API where possible so the following code from the original [Usage](https://github.com/tchellomello/python-arlo#usage) will still work:
+As mentioned, it uses the [Pyarlo](https://github.com/tchellomello/python-arlo)
+API where possible so the following code from the original
+[Usage](https://github.com/tchellomello/python-arlo#usage) will still work:
 
 ```python
 
@@ -154,7 +174,8 @@ Pyaarlo supports 2 factor authentication.
 <a name="2fa-manual"></a>
 #### Manual
 
-Start `PyArlo` specifying `tfa_source` as `console`. Whenever `PyArlo` needs a secondary code it will prompt you for it.
+Start `PyArlo` specifying `tfa_source` as `console`. Whenever `PyArlo` needs a
+secondary code it will prompt you for it.
 
 ```python
 ar = pyaarlo.PyArlo(username=USERNAME, password=PASSWORD,
@@ -164,7 +185,9 @@ ar = pyaarlo.PyArlo(username=USERNAME, password=PASSWORD,
 <a name="2fa-automatic"></a>
 #### Automatic
 
-Automatic is trickier. Support is there but needs testing. For automatic 2FA PyArlo needs to access and your email account form where it reads the token Arlo sent.
+Automatic is trickier. Support is there but needs testing. For automatic 2FA
+PyArlo needs to access and your email account form where it reads the token Arlo
+sent.
 
 ```python
 ar = pyaarlo.PyArlo(username=USERNAME, password=PASSWORD,
@@ -174,12 +197,17 @@ ar = pyaarlo.PyArlo(username=USERNAME, password=PASSWORD,
                     tfa_password='your-imap-password' )
 ```
 
-It's working well with my gmail account, see [here](https://support.google.com/mail/answer/185833?hl=en) for help setting up single app passwords.
+It's working well with my gmail account, see
+[here](https://support.google.com/mail/answer/185833?hl=en) for help setting up
+single app passwords.
 
 <a name="2fa-rest-api"></a>
 #### Rest API
 
-This mechanism allows you to an exteral website. When you start authenticating Pyarlo makes a `clear` request and repeated `look-up` requests to a website to retrieve your TFA code. The format of these requests and their reponses are well defined but the host Pyarlo uses is configurable.
+This mechanism allows you to an exteral website. When you start authenticating
+Pyarlo makes a `clear` request and repeated `look-up` requests to a website to
+retrieve your TFA code. The format of these requests and their reponses are well
+defined but the host Pyarlo uses is configurable.
 
 ```python
 ar = pyaarlo.PyArlo(username=USERNAME, password=PASSWORD,
@@ -196,8 +224,8 @@ https://custom-host/clear?email=test@test.com&token=1234567890
 
 * And the server will respond with this on success:
 ```json
-{ 'meta': { 'code': 200 },
-  'data': { 'success': True, 'email': 'test@test.com' } }
+{ "meta": { "code": 200 },
+  "data": { "success": True, "email": "test@test.com" } }
 ```
 
 * Pyaarlo will look up the current code with this HTTP GET request:
@@ -207,27 +235,39 @@ https://custom-host/get?email=test@test.com&token=1234567890
 
 * And the server will respond with this on success:
 ```json
-{ 'meta': { 'code': 200 },
-  'data': { 'success': True, 'email': 'test@test.com', 'code': '123456', 'timestamp': '123445666' } }
+{ "meta": { "code": 200 },
+  "data": { "success": True, "email": "test@test.com", "code": "123456", "timestamp": "123445666" } }
 ```
 
 * Failures always have `code` value of anything other than 200.
 ```json
-{ 'meta': { 'code': 400 },
-  'data': { 'success': False, 'error': 'permission denied' }}
+{ "meta": { "code": 400 },
+  "data": { "success": False, "error": "permission denied" }}
 ```
 
-Pyaarlo doesn't care how you get the codes into the system only that they are there. Feel free to roll your own server or...
+Pyaarlo doesn't care how you get the codes into the system only that they are
+there. Feel free to roll your own server or...
 
 ##### Using My Server
 
-I have a website running at https://pyaarlo-tfa.appspot.com that can provide this service. It's provided as-is, it's running as a Google app so it should be pretty reliable and the only information I have access to is your email address, access token for my website and whatever your last code was. (_Note:_ if you're not planning on using email forwarding the `email` value isn't strictly enforced, a unique ID is sufficient.)
+I have a website running at https://pyaarlo-tfa.appspot.com that can provide
+this service. It's provided as-is, it's running as a Google app so it should be
+pretty reliable and the only information I have access to is your email address,
+access token for my website and whatever your last code was. (_Note:_ if you're
+not planning on using email forwarding the `email` value isn't strictly
+enforced, a unique ID is sufficient.)
 
-_If you don't trust me and my server - and I won't be offended - you can get the source from [here](https://github.com/twrecked/pyaarlo-tfa-helper) and set up your own._
+_If you don't trust me and my server - and I won't be offended - you can get the
+source from [here](https://github.com/twrecked/pyaarlo-tfa-helper) and set up
+your own._
 
 To use the REST API with my website do the following:
 
-* Register with my website. You only need to do this once and I'm sorry for the crappy interface. Go to [registration page](https://pyaarlo-tfa.appspot.com/register) and enter your email address (or unique ID). The website will reply with a json document containing your _token_, keep this _token_ and use it in all REST API interactions.
+* Register with my website. You only need to do this once and I'm sorry for the
+  crappy interface. Go to [registration
+  page](https://pyaarlo-tfa.appspot.com/register) and enter your email address
+  (or unique ID). The website will reply with a json document containing your
+  _token_, keep this _token_ and use it in all REST API interactions.
 ```json
 {"email":"testing@testing.com",
  "fwd-to":"pyaarlo@thewardrobe.ca",
@@ -240,34 +280,48 @@ To use the REST API with my website do the following:
 https://custom-host/add?email=test@test.com&token=4f529ea4dd20ca65e102e743e7f18914bcf8e596b909c02d&code=123456
 ```
 
-You can replace `code` with `msg` and the server will try and parse the code out value of `msg`, use it for picking apart SMS messages.
+You can replace `code` with `msg` and the server will try and parse the code out
+value of `msg`, use it for picking apart SMS messages.
 
 ##### Using IFTTT
 
-You have your server set up or are using mine, one way to send codes is to use [IFTTT](https://ifttt.com/) to forward SMS messages to the server. I have an Android phone so use the `New SMS received from phone number` trigger and match to the Arlo number sending me SMS codes. (I couldn't get the match message to work, maybe somebody else will have better luck.)
+You have your server set up or are using mine, one way to send codes is to use
+[IFTTT](https://ifttt.com/) to forward SMS messages to the server. I have an
+Android phone so use the `New SMS received from phone number` trigger and match
+to the Arlo number sending me SMS codes. (I couldn't get the match message to
+work, maybe somebody else will have better luck.)
 
-I pair this with `Make a web request` action to forward the SMS code into my server, I use the following recipe. Modify the email and token as necessary.
+I pair this with `Make a web request` action to forward the SMS code into my
+server, I use the following recipe. Modify the email and token as necessary.
 ```
 URL: https://pyaarlo-tfa.appspot.com/add?email=test@test.com&token=4f529ea4dd20ca65e102e743e7f18914bcf8e596b909c02d&msg={{Text}}
 Method: GET
 Content Type: text/plain
 ```
 
-Make sure to configure Pyaarlo to request a token over SMS with `tfa_type='SMS`. Now, when you login in, Arlo will send an SMS to your phone, the IFTTT app will forward this to the server and Pyaarlo will read it from the server.
+Make sure to configure Pyaarlo to request a token over SMS with `tfa_type='SMS`.
+Now, when you login in, Arlo will send an SMS to your phone, the IFTTT app will
+forward this to the server and Pyaarlo will read it from the server.
 
 ##### Using EMAIL
 
-If you run your own `postfix` server you can use [this script](https://github.com/twrecked/pyaarlo-tfa-helper/blob/master/postfix/pyaarlo-fwd.in) to set up an email forwarding alias. Use an alias like this:
+If you run your own `postfix` server you can use [this
+script](https://github.com/twrecked/pyaarlo-tfa-helper/blob/master/postfix/pyaarlo-fwd.in)
+to set up an email forwarding alias. Use an alias like this:
 ```text
 pyaarlo:  "|/home/test/bin/pyaarlo-fwd"
 ```
 
-Make sure to configure Pyaarlo to request a token over SMS with `tfa_type='EMAIL`. Then set up your email service to forward Arlo code message to your email forwarding alias.
+Make sure to configure Pyaarlo to request a token over SMS with
+`tfa_type='EMAIL`. Then set up your email service to forward Arlo code message
+to your email forwarding alias.
 
 <a name="executable"></a>
 ## Pyaarlo Executable
 
-The pip installation adds an executable `pyaarlo`. You can use this to list devices, perform certain simple actions and anonymize and encrypt logs for debugging purposes. _Device operations are currently limited..._
+The pip installation adds an executable `pyaarlo`. You can use this to list
+devices, perform certain simple actions and anonymize and encrypt logs for
+debugging purposes. _Device operations are currently limited..._
 
 The git installation has `bin/pyaarlo` which functions in a similar manner.
 
@@ -289,9 +343,14 @@ pyaarlo -u 'your-user-name' -p 'your-password' --anonymize --encrypt list all
 <a name="errors"></a>
 ## Error Reporting
 
-When reporting errors please include the version of Pyaarlo you are using and what Arlo devices you have. Please turn on DEBUG level logging, capture the output and include as much information as possible about what you were trying to do.
+When reporting errors please include the version of Pyaarlo you are using and
+what Arlo devices you have. Please turn on DEBUG level logging, capture the
+output and include as much information as possible about what you were trying to
+do.
 
-You can use the `pyaarlo` executable to anonymize and encrypt feature on arbitrary data like log files or source code. If you are only encrypting you don't need your username and password.
+You can use the `pyaarlo` executable to anonymize and encrypt feature on
+arbitrary data like log files or source code. If you are only encrypting you
+don't need your username and password.
 
 ```bash
 # encrypt an existing file
@@ -301,7 +360,8 @@ cat output-file | pyaarlo encrypt
 cat output-file | pyaarlo -u 'your-user-name' -p 'your-password' anonymize | pyaarlo encrypt
 ```
 
-If you installed from git you can use a shell script in `bin/` to encrypt your logs. No anonymizing is possible this way.
+If you installed from git you can use a shell script in `bin/` to encrypt your
+logs. No anonymizing is possible this way.
  
 ```bash
 # encrypt an existing file
@@ -319,17 +379,37 @@ You can also encrypt your output on this [webpage](https://pyaarlo-tfa.appspot.c
 <a name="limitations"></a>
 ## Limitations
 The component uses the Arlo webapi.
-* There is no documentation so the API has been reverse engineered using browser debug tools.
-* There is no support for smart features, you only get motion detection notifications, not what caused the notification. (Although, you can pipe a snapshot into deepstack...)
+* There is no documentation so the API has been reverse engineered using browser
+  debug tools.
+* There is no support for smart features, you only get motion detection
+  notifications, not what caused the notification. (Although, you can pipe a
+  snapshot into deepstack...)
 * Streaming times out after 30 minutes.
-* The webapi doesn't seem like it was really designed for permanent connections so the system will sometimes appear to lock up. Various work arounds are in the code and can be configured at the `arlo` component level. See next paragraph.
+* The webapi doesn't seem like it was really designed for permanent connections
+  so the system will sometimes appear to lock up. Various work arounds are in
+  the code and can be configured at the `arlo` component level. See next
+  paragraph.
 
-If you do find the component locks up after a while (I've seen reports of hours, days or weeks), you can add the following to the main configuration. Start from the top and work down: 
-* `refresh_devices_every`, tell Pyaarlo to request the device list every so often. This will sometimes prevent the back end from aging you out. The value is in hours and a good starting point is 3.
-* `stream_timeout`, tell Pyaarlo to close and reopen the event stream after a certain period of inactivity. Pyaarlo will send keep alive every minute so a good starting point is 180 seconds.
-* `reconnect_every`, tell Pyaarlo to logout and back in every so often. This establishes a new session at the risk of losing an event notification. The value is minutes and a good starting point is 90.
-* `request_timeout`, the amount of time to allow for a http request to work. A good starting point is 120 seconds.
+If you do find the component locks up after a while (I've seen reports of hours,
+days or weeks), you can add the following to the main configuration. Start from
+the top and work down: 
+* `refresh_devices_every`, tell Pyaarlo to request the device list every so
+  often. This will sometimes prevent the back end from aging you out. The value
+  is in hours and a good starting point is 3.
+* `stream_timeout`, tell Pyaarlo to close and reopen the event stream after a
+  certain period of inactivity. Pyaarlo will send keep alive every minute so a
+  good starting point is 180 seconds.
+* `reconnect_every`, tell Pyaarlo to logout and back in every so often. This
+  establishes a new session at the risk of losing an event notification. The
+  value is minutes and a good starting point is 90.
+* `request_timeout`, the amount of time to allow for a http request to work. A
+  good starting point is 120 seconds.
 
-Alro will allow shared accounts to give cameras their own name. If you find cameras appearing with unexpected names (or not appearing at all), log into the Arlo web interface with your Home Assistant account and make sure the camera names are correct.
+Alro will allow shared accounts to give cameras their own name. If you find
+cameras appearing with unexpected names (or not appearing at all), log into the
+Arlo web interface with your Home Assistant account and make sure the camera
+names are correct.
 
-You can change the brightness on the light but not while it's turned on. You need to turn it off and back on again for the change to take. This is how the web interface does it.
+You can change the brightness on the light but not while it's turned on. You
+need to turn it off and back on again for the change to take. This is how the
+web interface does it.
