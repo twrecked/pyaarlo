@@ -24,7 +24,7 @@ _LOGGER = logging.getLogger('pyaarlo')
 # add `verbose_debug=True` to enable even more debugging
 # add `dump=True` to enable event stream packet dumps
 arlo = pyaarlo.PyArlo(username=USERNAME, password=PASSWORD,
-                      tfa_type='SMS', tfa_source='console',
+                      tfa_type='SMS', tfa_source='console', synchronous_mode=True,
                       save_state=False, dump=False, storage_dir='aarlo', verbose_debug=True)
 if not arlo.is_connected:
     print("failed to login({})".format(arlo._last_error))
@@ -39,6 +39,8 @@ for base in arlo.base_stations:
 print('list cameras')
 for camera in arlo.cameras:
     print("camera: name={},device_id={},state={}".format(camera.name, camera.device_id, camera.state))
+    for video in camera.last_n_videos(5):
+        print("url {} ".format(video.video_url))
 
 print('list doorbells')
 for doorbell in arlo.doorbells:
