@@ -305,6 +305,7 @@ class ArloChildDevice(ArloDevice):
         for base in self._arlo.base_stations:
             if base.device_id == self.parent_id:
                 return base
+
         # some cameras don't have base stations... it's its own basestation...
         for base in self._arlo.base_stations:
             if base.device_id == self.device_id:
@@ -313,6 +314,8 @@ class ArloChildDevice(ArloDevice):
         # no idea!
         if len(self._arlo.base_stations) > 0:
             return self._arlo.base_stations[0]
+
+        self._arlo.error("Could not find any base stations for device " + self._name)
         return None
 
         
