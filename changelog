@@ -1,4 +1,7 @@
-0.7.0.alpha.4: Speed up startup.
+0.7.0.alpha.5: Added new image update events.
+        Fixed backend not starting promptly.
+0.7.0.alpha.4: Further State machine improvements.
+        Speed up startup.
 0.7.0.alpha.3: Further State machine improvements.
         Pyclewn linting.
 0.7.0.alpha.2: State machine improvements.
