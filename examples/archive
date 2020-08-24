@@ -1,0 +1,42 @@
+#!/usr/bin/env python
+#
+
+import logging
+import os
+import sys
+import time
+import pprint
+
+# for examples add pyaarlo install path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+import pyaarlo
+
+# set these from the environment to log in
+USERNAME = os.environ.get('ARLO_USERNAME', 'test.login@gmail.com')
+PASSWORD = os.environ.get('ARLO_PASSWORD', 'test-password')
+
+# set up logging, change INFO to DEBUG for a *lot* more information
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+_LOGGER = logging.getLogger('pyaarlo')
+
+# log in
+# add `verbose_debug=True` to enable even more debugging
+# add `dump=True` to enable event stream packet dumps
+arlo = pyaarlo.PyArlo(username=USERNAME, password=PASSWORD,
+                      tfa_type='SMS', tfa_source='console', synchronous_mode=True,
+                      save_state=False, dump=False, storage_dir='aarlo', verbose_debug=True)
+if not arlo.is_connected:
+    print("failed to login({})".format(arlo._last_error))
+    sys.exit(-1)
+
+print('download missing videos')
+for camera in arlo.cameras:
+    print("camera: name={},device_id={},state={}".format(camera.name, camera.device_id, camera.state))
+    for video in camera.last_n_videos(1):
+        video_name = "videos/{}-{}.mp4".format(camera.name.lower().replace(' ', '_'), video.created_at_pretty())
+        if not os.path.exists(video_name):
+            print("downloading {}".format(video_name))
+            video.download_video(video_name)
+
+time.sleep(30)
