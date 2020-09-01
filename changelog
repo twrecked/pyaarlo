@@ -1,3 +1,6 @@
+0.7.0.beta.2 Remove duplicate connection tracker.
+        Better backtrace in backend processes.
+		Fix crash in mode 1 setting.
 0.7.0.beta.1 Add switches to turn off doorbell chimes.
         Fix missing mode update.
         Fix camera on/off.
