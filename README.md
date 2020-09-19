@@ -103,7 +103,7 @@ for base in arlo.base_stations:
 
 # get cameras, list their statuses, register state change callbacks
 # * is any callback, you can use motionDetected just to get motion events
-for camera in arlo.camera_stations:
+for camera in arlo.cameras:
     print("camera: name={},device_id={},state={}".format(camera.name,camera.device_id,camera.state))
     camera.add_attr_callback('*', attribute_changed)
 
