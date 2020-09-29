@@ -1,3 +1,7 @@
+0.7.0.beta.5 Fix mode update.
+        Fix possible log in issue.
+0.7.0.beta.4 Support base reset
+        Better snapshot handling.
 0.7.0.beta.2 Remove duplicate connection tracker.
         Better backtrace in backend processes.
 		Fix crash in mode 1 setting.
