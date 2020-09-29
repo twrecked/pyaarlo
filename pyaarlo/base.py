@@ -216,7 +216,9 @@ class ArloBase(ArloDevice):
                                                                                             pprint.pformat(body)))
                         self._arlo.debug('Fetching device list (hoping this will fix arming/disarming)')
                         self._arlo.be.devices()
-                        self._arlo.bg.run(_set_mode_v2_cb, i=attempt + 1)
+                        self._arlo.bg.run(_set_mode_v2_cb, attempt=attempt + 1)
+                        return
+
                     self._arlo.error('Failed to set mode.')
                     self._arlo.debug('Giving up on setting mode! Session headers=\n{}'.format(
                         pprint.pformat(self._arlo.be.session.headers)))
@@ -248,8 +250,11 @@ class ArloBase(ArloDevice):
             resp = self._arlo.be.notify(base=self, body={"action": "get", "resource": "modes",
                                                          "publishResponse": False},
                                         wait_for="event")
-            props = resp.get('properties', {})
-            self._parse_modes(props.get('modes', []))
+            if resp is not None:
+                props = resp.get('properties', {})
+                self._parse_modes(props.get('modes', []))
+            else:
+                self._arlo.error("unable to read mode, try forcing v2");
         else:
             modes = self._arlo.be.get(DEFINITIONS_PATH + "?uniqueIds={}".format(self.unique_id))
             modes = modes.get(self.unique_id, {})

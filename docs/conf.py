@@ -22,7 +22,7 @@ copyright = '2020, Steve Herrell'
 author = 'Steve Herrell'
 
 # The full version, including alpha/beta/rc tags
-release = '0.6.20'
+release = '0.7.0.beta.2'
 
 master_doc = 'index'
 
