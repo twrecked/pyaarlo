@@ -207,6 +207,7 @@ class PyArlo(object):
         if self._cfg.synchronous_mode:
             # Synchronous; run them one after the other
             self.debug('getting initial settings')
+            time.sleep(5)
             self._refresh_bases(initial=True)
             self._refresh_ambient_sensors()
             self._refresh_doorbells()
