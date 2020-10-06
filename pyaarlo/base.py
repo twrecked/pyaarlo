@@ -125,7 +125,7 @@ class ArloBase(ArloDevice):
             super()._event_handler(resource, event)
 
     @property
-    def _v1_get_modes(self):
+    def _v1_modes(self):
         if self._arlo.cfg.mode_api.lower() == 'v1':
             self._arlo.vdebug('forced v1 api')
             return True
@@ -138,15 +138,6 @@ class ArloBase(ArloDevice):
         else:
             self._arlo.vdebug('deduced v2 api')
             return False
-
-    # Prefer v2 for setting unless told otherwise.
-    @property
-    def _v1_set_modes(self):
-        if self._arlo.cfg.mode_api.lower() == 'v1':
-            self._arlo.vdebug('forced v1 api for set')
-            return True
-        self._arlo.vdebug('deduced v2 api for set')
-        return False
 
     @property
     def available_modes(self):
@@ -208,7 +199,7 @@ class ArloBase(ArloDevice):
 
             # Post change.
             self._arlo.debug(self.name + ':new-mode=' + mode_name + ',id=' + mode_id)
-            if self._v1_set_modes:
+            if self._v1_modes:
                 self._arlo.be.notify(base=self,
                                      body={"action": "set",
                                            "resource": "modes",
@@ -220,7 +211,7 @@ class ArloBase(ArloDevice):
                 # attempts to try and kick Arlo. In async mode the first set works in the current thread,
                 # subsequent ones run in the background. In sync mode it the same. Sorry.
                 def _set_mode_v2_cb(attempt):
-                    self._arlo.debug('v2 mode change')
+                    self._arlo.debug('v2 arming')
                     params = {'activeAutomations':
                               [{'deviceId': self.device_id,
                                 'timestamp': time_to_arlotime(),
@@ -228,10 +219,8 @@ class ArloBase(ArloDevice):
                                 inactive: []}]}
                     if attempt < 4:
                         body = self._arlo.be.post(AUTOMATION_PATH, params=params, raw=True, wait_for=None)
-                        if body is not None:
-                            if body.get('success', False) is True or body.get('resource', '') == 'activeAutomations':
-                                self._arlo.debug('v2 mode changed')
-                                return
+                        if body.get('success', False) is True or body.get('resource', '') == 'activeAutomations':
+                            return
                         self._arlo.warning(
                             'attempt {0}: error in response when setting mode=\n{1}'.format(attempt,
                                                                                             pprint.pformat(body)))
@@ -267,7 +256,7 @@ class ArloBase(ArloDevice):
     def update_modes(self):
         """Get and update the available modes for the base.
         """
-        if self._v1_get_modes:
+        if self._v1_modes:
             resp = self._arlo.be.notify(base=self, body={"action": "get", "resource": "modes",
                                                          "publishResponse": False},
                                         wait_for="event")
