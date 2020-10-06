@@ -253,10 +253,13 @@ class ArloBase(ArloDevice):
             if mode.get('uniqueId', '') == self.unique_id:
                 self._set_mode_or_schedule(mode)
 
-    def update_modes(self):
+    def update_modes(self, initial=False):
         """Get and update the available modes for the base.
         """
         if self._v1_modes:
+            # Work around slow arlo connections.
+            if initial and self._arlo.cfg.synchronous_mode:
+                time.sleep(5)
             resp = self._arlo.be.notify(base=self, body={"action": "get", "resource": "modes",
                                                          "publishResponse": False},
                                         wait_for="event")
