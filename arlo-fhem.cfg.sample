@@ -1,0 +1,48 @@
+[CREDENTIALS]
+
+# Arlo account user name
+USERNAME = _arlo_username_
+
+# Arlo account password
+PASSWORD = _arlo_password_
+
+[2FA]
+
+# Host name of IMAP sever for 2FA authentication token
+IMAPSERVER = _imap_hostname_
+
+# IMAP user name
+IMAPUSER = _imap_user_
+
+# IMAP user password
+IMAPPASSWORD = _imap_password_
+
+[SOCKET]
+
+# IP address of communication socket with FHEM (mostly "127.0.0.1")
+TCP_IP = 127.0.0.1
+
+# Socket port number of communication socket
+TCP_PORT = 5005
+
+# Buffer size for communication socket (normally no need to change)
+BUFFER_SIZE = 1024
+
+[MISC]
+
+# Maximum of login attempts
+MAX_TRIES = 5
+
+# Time in seconds between every login attempt
+LOGIN_WAIT = 60
+
+[FHEM]
+
+# FHEM host name
+FHEM_HOST = _fhem_host_
+
+# FHEM telnet port
+FHEM_PORT = 7072
+
+# FHEM telnet password
+FHEM_PASSWORD = _fhem_password_

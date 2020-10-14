@@ -113,3 +113,7 @@ diffs
 video_dir
 .idea
 docs/out
+
+# specific entries for arlo-fhem 
+arlo-fhem.cfg
+

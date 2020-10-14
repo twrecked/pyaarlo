@@ -1,0 +1,15 @@
+[Unit]
+Description=Arlo-FHEM-Daemon
+After=syslog.target
+
+[Service]
+Type=simple
+User=fhem
+Group=dialout
+WorkingDirectory=/opt/fhem/arlo-fhem
+ExecStart=/usr/bin/unbuffer /opt/fhem/arlo-fhem/arlo-fhem.py -c /opt/fhem/arlo-fhem/arlo-fhem.cfg
+SyslogIdentifier=arlo-fhem
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

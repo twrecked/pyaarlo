@@ -1,415 +1,159 @@
-# Pyaarlo
+# ARLO-FHEM
 
 ## Table of Contents
 - [Introduction](#introduction)
 - [Installation](#installation)
+- [Config](#config)
 - [Usage](#usage)
-- [Pyaarlo Executable](#executable)
-- [2 Factor Authentication](#2fa)
-  * [Manual](#2fa-manual)
-  * [Automatic](#2fa-automatic)
-  * [REST API](#sfa-rest-api)
-- [Error Reporting](#errors)
-- [Limitations](#limitations)
 
-<a name="introduction"></a>
 ## Introduction
 
-Pyaarlo is a module for for Python that provides asynchronous access to Netgear
-Arlo cameras.
+"arlo-fhem" is a module for sending control commands from FHEM to ARLO and also receving status information from ARLO and saving them to FHEM.
 
-When you start Pyaarlo, it starts a background thread that opens a single,
-persistant connection, an *event stream*, to the Arlo servers. As things happen
-to the Arlo devices - motion detected, battery level changes, mode changes,
-etc... - the Arlo servers post these events onto the event stream. The
-background thread reads these events from the stream, updates Pyaarlo's internal
-state and calls any user registered callbacks.
+It is written in Python and based on the Arlo Python library "pyarlo" (https://github.com/twrecked/pyaarlo).
 
-#### Differences from Pyarlo
+"pyarlo" is able to handle the Arlo two factor authentication by default, so you do not need to handle that.
 
-The biggest difference is Pyaarlo defaults to asynchronous mode by default. The
-following code brought from Pyarlo might not work:
+I am using this daemon to automatically activate and deactivate my Arlo cams from FHEM. E.g. if I open the door to the garden, FHEM automatically disables the cameras there so that I do not get alarms and recordings as long as I am outside.
 
-```python
-base.mode = 'armed'
-if base.mode == 'armed':
-    print('it worked!')
-```
+So it is currently only supporting these basic commands but not something like motion detection etc.
 
-This is because between setting `mode` and reading `mode` the code has to:
-* build and send a mode change packet to Arlo
-* read the mode change packet back from the Arlo event stream
-* update its internal state for `base`
+## Prerequisites
 
-I say "might" not work because it might work, it all depends on timing, and
-context switches and network speed...
+- FHEM (https://fhem.de/) with TELNET access enabled
 
-To enable synchronous mode you need to specify it when starting PyArlo.
+ >**Remark:** The script expects a password prompt from TELNET so you should not use "localhost" as your FHEM server (as no password is needed in this case) but use the public IP/DNS name instead. If TELNET is only available via "localhost" then you need to adapt the Python module.
 
-```python
-# login, use console for 2FA if needed
-arlo = pyaarlo.PyArlo( username=USERNAME,password=PASSWORD,
-                       tfa_type='SMS',tfa_source='console',
-                       synchronous_mode=True)
-```
-
-<a name="introduction-thanks"></a>
-#### Thanks 
-Many thanks to:
-* [Pyarlo](https://github.com/tchellomello/python-arlo) and
-  [Arlo](https://github.com/jeffreydwalter/arlo) for doing the original heavy
-  lifting and the free Python lesson!
-* [sseclient](https://github.com/btubbs/sseclient) for reading from the event
-  stream
-* [JetBrains](https://www.jetbrains.com/?from=hass-aarlo) for the excellent
-  **PyCharm IDE** and providing me with an open source license to speed up the
-  project development.
-
-  [![JetBrains](/images/jetbrains.svg)](https://www.jetbrains.com/?from=hass-aarlo)
+- Python 3.8 installed on the FHEM server
+- Debian command "unbuffer" ("apt install expect")
+- Debian command "nc" ("apt install netcat")
+- Several Python modules
+    - requests ("apt install python-requests")
+    - monotonic ("apt install python3-monotonic")
+    - configparser ("apt install python-configparser")
+    - sseclient 
 
 
-<a name="installation"></a>
 ## Installation
 
-Proper PIP support is coming but for now, this will install the latest version.
+On the FHEM server run the following commands as the user who is running FHEM:
 
-```bash
-pip install git+https://github.com/twrecked/pyaarlo
+```
+cd /opt/fhem
+git clone https://github.com/m0urs/pyaarlo.git
+git checkout arlo-fhem
+cd pyarlo
 ```
 
-<a name="usage"></a>
+To create the Debian service for the arlo-fhem daemon, run the following command as "root" on the FHEM server:
+
+```
+ln -s /opt/fhem/pyaarlo/arlo-fhem.service /etc/systemd/system 
+systemctl daemon-reloads
+systemctl enable arlo-fhem
+systemctl start arlo-fhem
+```
+The daemon sends all log messages to the Debian syslog ("/var/log/syslog")
+
+## Config
+
+The script is looking for a config file where you define several parameters. See "arlo-cl.cfg.sample" as a sample of how the file looks like.
+
+The config file is named "arlo-cl.cfg" and needs to be put in the same directory as "arlo-fhem.py". You can also specifiy a different name and path for that file by adding the "--configfile|-c" switch.
+
+```
+[CREDENTIALS]
+
+# Arlo account user name
+USERNAME = _arlo_username_
+
+# Arlo account password
+PASSWORD = _arlo_password_
+
+[2FA]
+
+# Host name of IMAP sever for 2FA authentication token
+IMAPSERVER = _imap_hostname_
+
+# IMAP user name
+IMAPUSER = _imap_user_
+
+# IMAP user password
+IMAPPASSWORD = _imap_password_
+
+[SOCKET]
+
+# IP address of communication socket with FHEM (mostly "127.0.0.1")
+TCP_IP = 127.0.0.1
+
+# Socket port number of communication socket
+TCP_PORT = 5005
+
+# Buffer size for communication socket (normally no need to change)
+BUFFER_SIZE = 1024
+
+[MISC]
+
+# Maximum of login attempts
+MAX_TRIES = 5
+
+# Time in seconds between every login attempt
+LOGIN_WAIT = 60
+
+[FHEM]
+
+# FHEM host name
+FHEM_HOST = _fhem_host_
+
+# FHEM telnet port
+FHEM_PORT = 7072
+
+# FHEM telnet password
+FHEM_PASSWORD = _fhem_password_
+
+```
+
 ## Usage
 
-You can read the developer documentation here:
-[https://pyaarlo.readthedocs.io/](https://pyaarlo.readthedocs.io/)
+The daemon is running as a Debian service in the background. 
 
-The following example will login to your Arlo system, use 2FA if needed,
-register callbacks for all events on all base stations and cameras and then wait
-10 minutes printing out any events that arrive during that time.
+It first tries to logon to the Arlo account. If the account is protected with 2FA, it automatically gets the 2FA token from the IMAP account provided in the config file.
 
-```python
-# code to trap when attributes change
-def attribute_changed(device, attr, value):
-    print('attribute_changed', time.strftime("%H:%M:%S"), device.name + ':' + attr + ':' + str(value)[:80])
+If the login attempt was not successful, it tries to relogin several times. You can provide the number of times and the waiting time between retries in the config file.
 
-# login, use console for 2FA if needed
-arlo = pyaarlo.PyArlo( username=USERNAME,password=PASSWORD,
-                       tfa_type='SMS',tfa_source='console')
+If the login was not successfull it ends the service.
 
-# get base stations, list their statuses, register state change callbacks
-for base in arlo.base_stations:
-    print("base: name={},device_id={},state={}".format(base.name,base.device_id,base.state))
-    base.add_attr_callback('*', attribute_changed)
+After it was successfully able to login to the Arlo account, the daemon is waiting for commands.
 
-# get cameras, list their statuses, register state change callbacks
-# * is any callback, you can use motionDetected just to get motion events
-for camera in arlo.cameras:
-    print("camera: name={},device_id={},state={}".format(camera.name,camera.device_id,camera.state))
-    camera.add_attr_callback('*', attribute_changed)
+The commands are sent as text messages to a TCPIP socket. To send messages you can use the "nc" (netcat) command.
 
-# disarm then arm the first base station
-base = arlo.base_stations[0]
-base.mode = 'disarmed'
-time.sleep(5)
-base.mode = 'armed'
-
-# wait 10 minutes, try moving in front of a camera to see motionDetected events
-time.sleep(600)
+**Example:**
 
 ```
-
-As mentioned, it uses the [Pyarlo](https://github.com/tchellomello/python-arlo)
-API where possible so the following code from the original
-[Usage](https://github.com/tchellomello/python-arlo#usage) will still work:
-
-```python
-
-# login, use console for 2FA if needed, turn on synchronous_mode for maximum compatibility
-arlo = pyaarlo.PyArlo( username=USERNAME,password=PASSWORD,
-                       tfa_type='SMS',tfa_source='console',synchronous_mode=True)
-
-# listing devices
-arlo.devices
-
-# listing base stations
-arlo.base_stations
-
-# get base station handle
-# assuming only 1 base station is available
-base = arlo.base_stations[0]
-
-# get the current base station mode
-base.mode  # 'disarmed'
-
-# listing Arlo modes
-base.available_modes # ['armed', 'disarmed', 'schedule', 'custom']
-
-# Updating the base station mode
-base.mode = 'custom'
-
-# listing all cameras
-arlo.cameras
-
-# showing camera preferences
-cam = arlo.cameras[0]
-
-# check if camera is connected to base station
-cam.is_camera_connected  # True
-
-# printing camera attributes
-cam.serial_number
-cam.model_id
-cam.unseen_videos
-
-# get brightness value of camera
-cam.brightness
+echo 'command' |  nc -N 127.0.0.1 5005
 ```
 
+where "5005" is the port number you had defined as socket port number in the config file.
 
-<a name="2fa"></a>
-## 2FA
+The following commands are currently implemented:
 
-Pyaarlo supports 2 factor authentication.
+|Command            |Example    |Purpose
+|---	            |---	    |---
+|quit               |quit       |quit the daemon (you can also end via service like "systemctl stop arlo-fhem" )
+|set-mode \<mode>	|set-mode aktiviert	|Set a specified mode (see next table for all supported modes)
+|get-mode           |get-mode   |Reads all modes and writes the modes as readings to a device in FHEM
+|set-brightness \<device> \<level>| set-brightness Terrasse 3|Set the brightness level for the specified camera device (where level is one of -3, -2, -1, 0, 1, 2, 3) **not yet implemented**
+|list-base          |list-base  |Writes a list of all Arlo base stations to syslog. The list includes also the device ID and all supported modes
+|list-cameras       |list-cameras   |Writes a list of all cameras and their IDs to syslog
+|list-lights       |list-lights   |Writes a list of all lights and their IDs to syslog
 
-<a name="2fa-manual"></a>
-#### Manual
+<br>
 
-Start `PyArlo` specifying `tfa_source` as `console`. Whenever `PyArlo` needs a
-secondary code it will prompt you for it.
-
-```python
-ar = pyaarlo.PyArlo(username=USERNAME, password=PASSWORD,
-                    tfa_source='console', tfa_type='SMS')
-```
-
-<a name="2fa-automatic"></a>
-#### Automatic
-
-Automatic is trickier. Support is there but needs testing. For automatic 2FA
-PyArlo needs to access and your email account form where it reads the token Arlo
-sent.
-
-```python
-ar = pyaarlo.PyArlo(username=USERNAME, password=PASSWORD,
-                    tfa_source='imap',tfa_type='email',
-                    tfa_host='imap.host.com',
-                    tfa_username='your-user-name',
-                    tfa_password='your-imap-password' )
-```
-
-It's working well with my gmail account, see
-[here](https://support.google.com/mail/answer/185833?hl=en) for help setting up
-single app passwords.
-
-<a name="2fa-rest-api"></a>
-#### Rest API
-
-This mechanism allows you to an exteral website. When you start authenticating
-Pyarlo makes a `clear` request and repeated `look-up` requests to a website to
-retrieve your TFA code. The format of these requests and their reponses are well
-defined but the host Pyarlo uses is configurable.
-
-```python
-ar = pyaarlo.PyArlo(username=USERNAME, password=PASSWORD,
-                    tfa_source='rest-api',tfa_type='email',
-                    tfa_host='custom-host',
-                    tfa_username='test@test.com',
-                    tfa_password='1234567890' )
-```
-
-* Pyaarlo will clear the current code with this HTTP GET request:
-```http request
-https://custom-host/clear?email=test@test.com&token=1234567890
-``` 
-
-* And the server will respond with this on success:
-```json
-{ "meta": { "code": 200 },
-  "data": { "success": True, "email": "test@test.com" } }
-```
-
-* Pyaarlo will look up the current code with this HTTP GET request:
-```http request
-https://custom-host/get?email=test@test.com&token=1234567890
-``` 
-
-* And the server will respond with this on success:
-```json
-{ "meta": { "code": 200 },
-  "data": { "success": True, "email": "test@test.com", "code": "123456", "timestamp": "123445666" } }
-```
-
-* Failures always have `code` value of anything other than 200.
-```json
-{ "meta": { "code": 400 },
-  "data": { "success": False, "error": "permission denied" }}
-```
-
-Pyaarlo doesn't care how you get the codes into the system only that they are
-there. Feel free to roll your own server or...
-
-##### Using My Server
-
-I have a website running at https://pyaarlo-tfa.appspot.com that can provide
-this service. It's provided as-is, it's running as a Google app so it should be
-pretty reliable and the only information I have access to is your email address,
-access token for my website and whatever your last code was. (_Note:_ if you're
-not planning on using email forwarding the `email` value isn't strictly
-enforced, a unique ID is sufficient.)
-
-_If you don't trust me and my server - and I won't be offended - you can get the
-source from [here](https://github.com/twrecked/pyaarlo-tfa-helper) and set up
-your own._
-
-To use the REST API with my website do the following:
-
-* Register with my website. You only need to do this once and I'm sorry for the
-  crappy interface. Go to [registration
-  page](https://pyaarlo-tfa.appspot.com/register) and enter your email address
-  (or unique ID). The website will reply with a json document containing your
-  _token_, keep this _token_ and use it in all REST API interactions.
-```json
-{"email":"testing@testing.com",
- "fwd-to":"pyaarlo@thewardrobe.ca",
- "success":true,
- "token":"4f529ea4dd20ca65e102e743e7f18914bcf8e596b909c02d"}
-```
-
-* To add a code send the following HTTP GET request:
-```http request
-https://custom-host/add?email=test@test.com&token=4f529ea4dd20ca65e102e743e7f18914bcf8e596b909c02d&code=123456
-```
-
-You can replace `code` with `msg` and the server will try and parse the code out
-value of `msg`, use it for picking apart SMS messages.
-
-##### Using IFTTT
-
-You have your server set up or are using mine, one way to send codes is to use
-[IFTTT](https://ifttt.com/) to forward SMS messages to the server. I have an
-Android phone so use the `New SMS received from phone number` trigger and match
-to the Arlo number sending me SMS codes. (I couldn't get the match message to
-work, maybe somebody else will have better luck.)
-
-I pair this with `Make a web request` action to forward the SMS code into my
-server, I use the following recipe. Modify the email and token as necessary.
-```
-URL: https://pyaarlo-tfa.appspot.com/add?email=test@test.com&token=4f529ea4dd20ca65e102e743e7f18914bcf8e596b909c02d&msg={{Text}}
-Method: GET
-Content Type: text/plain
-```
-
-Make sure to configure Pyaarlo to request a token over SMS with `tfa_type='SMS`.
-Now, when you login in, Arlo will send an SMS to your phone, the IFTTT app will
-forward this to the server and Pyaarlo will read it from the server.
-
-##### Using EMAIL
-
-If you run your own `postfix` server you can use [this
-script](https://github.com/twrecked/pyaarlo-tfa-helper/blob/master/postfix/pyaarlo-fwd.in)
-to set up an email forwarding alias. Use an alias like this:
-```text
-pyaarlo:  "|/home/test/bin/pyaarlo-fwd"
-```
-
-Make sure to configure Pyaarlo to request a token over SMS with
-`tfa_type='EMAIL`. Then set up your email service to forward Arlo code message
-to your email forwarding alias.
-
-<a name="executable"></a>
-## Pyaarlo Executable
-
-The pip installation adds an executable `pyaarlo`. You can use this to list
-devices, perform certain simple actions and anonymize and encrypt logs for
-debugging purposes. _Device operations are currently limited..._
-
-The git installation has `bin/pyaarlo` which functions in a similar manner.
-
-```bash
-# To show the currently available actions:
-pyaarlo --help
-
-# To list all the known devices:
-pyaarlo -u 'your-user-name' -p 'your-password' list all
-
-# this version will anonymize the output
-pyaarlo -u 'your-user-name' -p 'your-password' --anonymize list all
-
-# this version will anonymize and encrypt the output
-pyaarlo -u 'your-user-name' -p 'your-password' --anonymize --encrypt list all
-```
-
-
-<a name="errors"></a>
-## Error Reporting
-
-When reporting errors please include the version of Pyaarlo you are using and
-what Arlo devices you have. Please turn on DEBUG level logging, capture the
-output and include as much information as possible about what you were trying to
-do.
-
-You can use the `pyaarlo` executable to anonymize and encrypt feature on
-arbitrary data like log files or source code. If you are only encrypting you
-don't need your username and password.
-
-```bash
-# encrypt an existing file
-cat output-file | pyaarlo encrypt
-
-# anonymize and then encrypt a file
-cat output-file | pyaarlo -u 'your-user-name' -p 'your-password' anonymize | pyaarlo encrypt
-```
-
-If you installed from git you can use a shell script in `bin/` to encrypt your
-logs. No anonymizing is possible this way.
- 
-```bash
-# encrypt an existing file
-cat output-file | ./bin/pyaarlo-encrypt encrypt
-```
-
-`pyaarlo-encrypt` is a fancy wrapper around:
-
-```bash
-curl -s -F 'plain_text_file=@-;filename=clear.txt' https://pyaarlo-tfa.appspot.com/encrypt
-```
-
-You can also encrypt your output on this [webpage](https://pyaarlo-tfa.appspot.com/).
-
-<a name="limitations"></a>
-## Limitations
-The component uses the Arlo webapi.
-* There is no documentation so the API has been reverse engineered using browser
-  debug tools.
-* There is no support for smart features, you only get motion detection
-  notifications, not what caused the notification. (Although, you can pipe a
-  snapshot into deepstack...)
-* Streaming times out after 30 minutes.
-* The webapi doesn't seem like it was really designed for permanent connections
-  so the system will sometimes appear to lock up. Various work arounds are in
-  the code and can be configured at the `arlo` component level. See next
-  paragraph.
-
-If you do find the component locks up after a while (I've seen reports of hours,
-days or weeks), you can add the following to the main configuration. Start from
-the top and work down: 
-* `refresh_devices_every`, tell Pyaarlo to request the device list every so
-  often. This will sometimes prevent the back end from aging you out. The value
-  is in hours and a good starting point is 3.
-* `stream_timeout`, tell Pyaarlo to close and reopen the event stream after a
-  certain period of inactivity. Pyaarlo will send keep alive every minute so a
-  good starting point is 180 seconds.
-* `reconnect_every`, tell Pyaarlo to logout and back in every so often. This
-  establishes a new session at the risk of losing an event notification. The
-  value is minutes and a good starting point is 90.
-* `request_timeout`, the amount of time to allow for a http request to work. A
-  good starting point is 120 seconds.
-
-Alro will allow shared accounts to give cameras their own name. If you find
-cameras appearing with unexpected names (or not appearing at all), log into the
-Arlo web interface with your Home Assistant account and make sure the camera
-names are correct.
-
-You can change the brightness on the light but not while it's turned on. You
-need to turn it off and back on again for the change to take. This is how the
-web interface does it.
+Mode | Purpose
+--- | ---
+aktiviert | Activate (Arm) all cams
+deaktiviert | Deactivate (Disarm) all cams
+aktiviert_tag | Set several custom modes for my different cams with different sensitivity during the day
+aktiviert_ohne_terrasse | Only activate some of my cams
+garten | Only activate some of my cams
+garten_hinten | Only activate some of my cams
