@@ -57,9 +57,9 @@ The daemon sends all log messages to the Debian syslog ("/var/log/syslog")
 
 ## Config
 
-The script is looking for a config file where you define several parameters. See "arlo-cl.cfg.sample" as a sample of how the file looks like.
+The script is looking for a config file where you define several parameters. See "arlo-fhem.cfg.sample" as a sample of how the file looks like.
 
-The config file is named "arlo-cl.cfg" and needs to be put in the same directory as "arlo-fhem.py". You can also specifiy a different name and path for that file by adding the "--configfile|-c" switch.
+The config file is named "arlo-fhem.cfg" and needs to be put in the same directory as "arlo-fhem.py". You can also specifiy a different name and path for that file by adding the "--configfile|-c" switch.
 
 ```
 [CREDENTIALS]
