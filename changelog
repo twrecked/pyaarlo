@@ -1,3 +1,9 @@
+1.0.1:  Fix:     Added parameter "refresh_devices_every=3" to Arlo login in order to prevent the Arlo connection to close.
+                 This is a test, if this is not working we might need "reconnect_every" to be added 
+                 test fix for: https://github.com/m0urs/arlo-fhem/issues/1
+
+1.0.0:   First published version
+
 0.0.6:  Changed: Sorted list of imported python modules
         Added: Support to set brightness value for cam (Currently not yet suported by upstream so not yet activated!)
 
