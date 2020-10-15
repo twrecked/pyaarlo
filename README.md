@@ -40,15 +40,14 @@ On the FHEM server run the following commands as the user who is running FHEM:
 
 ```
 cd /opt/fhem
-git clone https://github.com/m0urs/pyaarlo.git
-git checkout arlo-fhem
-cd pyarlo
+git clone https://github.com/m0urs/arlo-fhem.git
+cd arlo-fhem
 ```
 
 To create the Debian service for the arlo-fhem daemon, run the following command as "root" on the FHEM server:
 
 ```
-ln -s /opt/fhem/pyaarlo/arlo-fhem.service /etc/systemd/system 
+ln -s /opt/fhem/arlo-fhem/arlo-fhem.service /etc/systemd/system 
 systemctl daemon-reloads
 systemctl enable arlo-fhem
 systemctl start arlo-fhem
