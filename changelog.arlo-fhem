@@ -1,26 +1,28 @@
-1.0.2: Changed:    Update upstream code to 0.7.0.beta.6 
+1.0.3:  Added:      "get-mode": Set FHEM variable "currentMode" directly from Python script instead in FHEM (Issue #6)
 
-1.0.1a: Fix:    Removed unnecessary debug parameter
-        Fix:    Added a new "changelog.arlo-fhem" for my own changes, restored the original "changelog"
+1.0.2:  Changed:    Update upstream code to 0.7.0.beta.6 
 
-1.0.1:  Fix:    Added parameter "refresh_devices_every=3" to Arlo login in order to prevent the Arlo connection to close.
-                This is a test, if this is not working we might need "reconnect_every" to be added 
-                test fix for: https://github.com/m0urs/arlo-fhem/issues/1
+1.0.1a: Fix:        Removed unnecessary debug parameter
+        Fix:        Added a new "changelog.arlo-fhem" for my own changes, restored the original "changelog"
 
-1.0.0:   First published version
+1.0.1:  Fix:        Added parameter "refresh_devices_every=3" to Arlo login in order to prevent the Arlo connection to close.
+                    This is a test, if this is not working we might need "reconnect_every" to be added 
+                    test fix for: https://github.com/m0urs/arlo-fhem/issues/1
 
-0.0.6:  Changed: Sorted list of imported python modules
-        Added: Support to set brightness value for cam (Currently not yet suported by upstream so not yet activated!)
+1.0.0:  First published version
 
-0.0.5:  Fixed: Deleted obsolete print command during "get-mode"
+0.0.6:  Changed:    Sorted list of imported python modules
+        Added:      Support to set brightness value for cam (Currently not yet suported by upstream so not yet activated!)
 
-0.0.4:  Added: Possibility to check status and write them to FHEM
+0.0.5:  Fixed:      Deleted obsolete print command during "get-mode"
 
-0.0.3:  Fixed: Typo in Sample CFG file
-        Changed: Added Comments in sample config file
-        Added: Login retries
-        Added: Possibility to send commands to FHEM via TELNET
+0.0.4:  Added:      Possibility to check status and write them to FHEM
 
-0.0.2:  Fixed "TypeError: an integer is required (got type str)"
+0.0.3:  Fixed:      Typo in Sample CFG file
+        Changed:    Added Comments in sample config file
+        Added:      Login retries
+        Added:      Possibility to send commands to FHEM via TELNET
+
+0.0.2:  Fixed:      "TypeError: an integer is required (got type str)"
         
 0.0.1:  Initial
