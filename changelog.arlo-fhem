@@ -1,3 +1,5 @@
+1.0.2: Changed:    Update upstream code to 0.7.0.beta.6 
+
 1.0.1a: Fix:    Removed unnecessary debug parameter
         Fix:    Added a new "changelog.arlo-fhem" for my own changes, restored the original "changelog"
 
