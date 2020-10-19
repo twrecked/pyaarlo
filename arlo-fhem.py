@@ -5,7 +5,7 @@
 # Based on https://github.com/twrecked/pyaarlo
 # Michael Urspringer
 
-VERSION = "1.0.1"
+VERSION = "1.0.1a"
 
 import pyaarlo
 import argparse
@@ -135,8 +135,6 @@ while True:
         except IndexError:
             parameter2 = ""
         
-        print("DEBUG: ",command,parameter1,parameter2)
-
         if command == 'list-cameras':
             # List all cameras
             for camera in arlo.cameras:
