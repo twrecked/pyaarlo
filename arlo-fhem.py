@@ -5,7 +5,7 @@
 # Based on https://github.com/twrecked/pyaarlo
 # Michael Urspringer
 
-VERSION = "1.0.2"
+VERSION = "1.0.3"
 
 import pyaarlo
 import argparse
@@ -194,11 +194,27 @@ while True:
 
         elif command == 'get-mode':
             base = getDeviceFromName("Home",arlo.base_stations)
+            statusHome = base.mode
             sendCommandtoFHEM(FHEM_HOST, FHEM_PORT, FHEM_PASSWORD, "setreading Arlo_Cam.dum status-Home "+base.mode)
             base = getDeviceFromName("Bridge_AZMichael",arlo.base_stations)
+            statusBridgeAZMichael = base.mode
             sendCommandtoFHEM(FHEM_HOST, FHEM_PORT, FHEM_PASSWORD, "setreading Arlo_Cam.dum status-Bridge_AZMichael "+base.mode)
             base = getDeviceFromName("Bridge_AZSabine",arlo.base_stations)
+            statusBridgeAZSabine = base.mode
             sendCommandtoFHEM(FHEM_HOST, FHEM_PORT, FHEM_PASSWORD, "setreading Arlo_Cam.dum status-Bridge_AZSabine "+base.mode)
+            if statusHome == "disarmed" and statusBridgeAZMichael == "disarmed" and statusBridgeAZSabine == "disarmed":
+                currentMode = "Deaktiviert"
+            elif statusHome == "armed" and statusBridgeAZMichael == "armed" and statusBridgeAZSabine == "armed":
+                currentMode = "Aktiviert"
+            elif statusHome == "Aktiviert_Tag" and statusBridgeAZMichael == "Aktiviert_Tag" and statusBridgeAZSabine == "Aktiviert_Tag":
+                currentMode = "Aktiviert"
+            elif statusHome == "Garten_Alle" and statusBridgeAZMichael == "Garten" and statusBridgeAZSabine == "armed":                
+                currentMode = "Garten"
+            elif statusHome == "Garten_2" and statusBridgeAZMichael == "disarmed" and statusBridgeAZSabine == "armed":                
+                currentMode = "Garten_hinten"
+            else:
+                currentMode = "Undefiniert"
+            sendCommandtoFHEM(FHEM_HOST, FHEM_PORT, FHEM_PASSWORD, "setreading Arlo_Cam.dum currentMode "+currentMode)
 
         elif command == 'set-brightness':
             print(command,parameter1,parameter2,"is currently not supported")
