@@ -150,24 +150,23 @@ while True:
             # List all base stations
             for base in arlo.base_stations:
                 print("base: name={},device_id={},state={},mode={}".format(base.name, base.device_id, base.state, base.mode))
-                # pprint.pprint(base.available_modes)
                 pprint.pprint(base.available_modes_with_ids)
 
         elif command == 'set-mode':
             if parameter1 == 'deaktiviert':
-                #base = getDeviceFromName("Home",arlo.base_stations)
-                #base.mode = 'disarmed'
+                base = getDeviceFromName("Home",arlo.base_stations)
+                base.mode = 'disarmed'
                 base = getDeviceFromName("Bridge_AZMichael",arlo.base_stations)
                 base.mode = 'disarmed'
-                #base = getDeviceFromName("Bridge_AZSabine",arlo.base_stations)
-                #base.mode = 'disarmed'
+                base = getDeviceFromName("Bridge_AZSabine",arlo.base_stations)
+                base.mode = 'disarmed'
             elif parameter1 == 'aktiviert':
-                #base = getDeviceFromName("Home",arlo.base_stations)
-                #base.mode = 'armed'
+                base = getDeviceFromName("Home",arlo.base_stations)
+                base.mode = 'armed'
                 base = getDeviceFromName("Bridge_AZMichael",arlo.base_stations)
                 base.mode = 'armed'
-                #base = getDeviceFromName("Bridge_AZSabine",arlo.base_stations)
-                #base.mode = 'armed'
+                base = getDeviceFromName("Bridge_AZSabine",arlo.base_stations)
+                base.mode = 'armed'
             elif parameter1 == 'aktiviert_tag':
                 base = getDeviceFromName("Home",arlo.base_stations)
                 base.mode = 'aktiviert_tag'
