@@ -52,7 +52,7 @@ _LOGGER.info(f'requesting snapshots from cameras with {1. / float(refresh_interv
 end_time = time.time() + 5 * 60
 
 while time.time() < end_time:
-    _LOGGER.info(f'scheduling snapshots without blocking')
+    _LOGGER.info('scheduling snapshots without blocking')
     for camera in arlo.cameras:
         camera.request_snapshot()
 

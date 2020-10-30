@@ -638,7 +638,7 @@ class ArloCamera(ArloChildDevice):
         """Requests a snapshot from the camera without blocking.  
 
         The snapshot can be handled with callbacks registered to
-        LAST_IMAGE_SRC_KEY - lastImageSource starting with snapshot/, and/or
+        LAST_IMAGE_SRC_KEY - lastImageSource starting with snapshot/, or capture/
         LAST_IMAGE_DATA_KEY - presignedLastImageData containing the image data.
         """
         with self._lock:
