@@ -1,0 +1,61 @@
+#!/usr/bin/env python
+#
+
+import logging
+import io
+import os
+import sys
+import time
+from PIL import Image
+
+# for examples add pyaarlo install path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+import pyaarlo
+
+USERNAME = os.environ.get('ARLO_USERNAME', 'test.login@gmail.com')
+PASSWORD = os.environ.get('ARLO_PASSWORD', 'test-password')
+
+# setup logging
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+_LOGGER = logging.getLogger('pyaarlo')
+
+# define a simple snapshot callback
+def snapshot_callback(camera, attr, value):
+    """
+    Snapshot callback converts snapshot image bytes 
+    to a PIL Image and shows it
+    """
+    # convert snapshot to PIL Image
+    img = Image.open(io.BytesIO(value))
+    _LOGGER.info(f'got snapshot from {camera.name} {img.size}')
+
+    # show the image
+    img.show()
+
+# login
+_LOGGER.info('logging in')
+arlo = pyaarlo.PyArlo(username=USERNAME, password=PASSWORD,
+                      tfa_type='SMS', tfa_source='console',
+                      save_state=False, dump=False, storage_dir='aarlo')
+
+
+# register snapshot callback with each camera
+for camera in arlo.cameras:
+    camera.add_attr_callback(pyaarlo.constant.LAST_IMAGE_DATA_KEY, snapshot_callback)
+
+# set the wait time
+refresh_interval_s = 60
+_LOGGER.info(f'requesting snapshots from cameras with {1. / float(refresh_interval_s):.2f}Hz interval')
+
+# request snapshots for 5 minutes
+end_time = time.time() + 5 * 60
+
+while time.time() < end_time:
+    _LOGGER.info('scheduling snapshots without blocking')
+    for camera in arlo.cameras:
+        camera.request_snapshot()
+
+    _LOGGER.info(f'waiting for {refresh_interval_s}s ({end_time - time.time():.2f}s remaining in example)')
+    time.sleep(refresh_interval_s)
+
