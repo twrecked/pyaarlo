@@ -1,6 +1,7 @@
 1.1.0:  Changed:    Update upstream code to most current master
         Added:      Implemented "set-brightness" (as now supported by upstream code)
         Fix:        https://github.com/m0urs/arlo-fhem/issues/1 (fixed in upstream)
+        Fix:        https://github.com/m0urs/arlo-fhem/issues/11 (partially fixed in upstream, still some issues if several commands are sent directly one after another)
         Changed:    Do some more error handling for parameters
 
 1.0.3:  Added:      "get-mode": Set FHEM variable "currentMode" directly from Python script instead in FHEM (Issue #6)
