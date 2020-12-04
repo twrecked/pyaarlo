@@ -12,6 +12,7 @@ import sys
 import click
 
 from . import PyArlo
+from .util import to_b64
 
 logging.basicConfig(level=logging.ERROR,
                     format='%(asctime)s:%(name)s:%(levelname)s: %(message)s')
@@ -185,6 +186,10 @@ def anonymize_from_string(obj):
         owner_id = device.get('owner', {}).get('ownerId', None)
         if owner_id:
             valuables[owner_id] = "X" * len(owner_id)
+    if opts["username"] is not None:
+        valuables[opts["username"]] = "USERNAME"
+    if opts["password"] is not None:
+        valuables[to_b64(opts["password"])] = "PASSWORD"
 
     anon = obj
     for valuable in valuables:

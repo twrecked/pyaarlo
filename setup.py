@@ -11,10 +11,10 @@ def readme():
 setup(
 
     name='pyaarlo',
-    version='0.7.0.beta.5',
+    version='0.7.0.beta.7',
     packages=['pyaarlo'],
 
-    python_requires='>=3.5',
+    python_requires='>=3.6',
     install_requires=[
         'requests',
         'click',
@@ -45,9 +45,10 @@ setup(
         'License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)',
         'Operating System :: OS Independent',
         'Programming Language :: Python',
-        'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
         'Topic :: Software Development :: Libraries :: Python Modules'
     ],
 

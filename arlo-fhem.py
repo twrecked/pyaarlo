@@ -5,7 +5,7 @@
 # Based on https://github.com/twrecked/pyaarlo
 # Michael Urspringer
 
-VERSION = "1.0.3"
+VERSION = "1.1.0"
 
 import pyaarlo
 import argparse
@@ -28,6 +28,7 @@ def loginToArlo(username, password, tfa_host, tfa_username, tfa_password, max_tr
     while count < max_tries:
         count = count + 1 
         print(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "- arlo-fhem - Trying to connect ",count," of ",max_tries)
+        # arlo = pyaarlo.PyArlo(username=username, password=password,tfa_source='imap', tfa_type='email', tfa_host=tfa_host, tfa_username=tfa_username, tfa_password=tfa_password, synchronous_mode=True, refresh_devices_every=3, verbose_debug=True)
         arlo = pyaarlo.PyArlo(username=username, password=password,tfa_source='imap', tfa_type='email', tfa_host=tfa_host, tfa_username=tfa_username, tfa_password=tfa_password, synchronous_mode=True, refresh_devices_every=3)
         if arlo.is_connected:
             break
@@ -59,7 +60,8 @@ print(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "- arlo-fhem - vers
 
 # set up logging, change ERROR or INFO to DEBUG for a *lot* more information
 logging.basicConfig(level=logging.ERROR,
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                    filename='debug.log')
 _LOGGER = logging.getLogger('arlo-fhem')
 
 # Check command line parameters
@@ -111,7 +113,6 @@ while True:
     s.bind((TCP_IP, TCP_PORT))
     s.listen(1)
     conn, addr = s.accept()
-    # print(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "- arlo-fhem - Connection address: ",addr)
 
     while True:
 
@@ -134,7 +135,7 @@ while True:
             parameter2 = received_command[2]
         except IndexError:
             parameter2 = ""
-        
+
         if command == 'list-cameras':
             # List all cameras
             for camera in arlo.cameras:
@@ -149,48 +150,47 @@ while True:
             # List all base stations
             for base in arlo.base_stations:
                 print("base: name={},device_id={},state={},mode={}".format(base.name, base.device_id, base.state, base.mode))
-                # pprint.pprint(base.available_modes)
                 pprint.pprint(base.available_modes_with_ids)
 
-        elif command == 'set-mode' and parameter1 == 'deaktiviert':
-            base = getDeviceFromName("Home",arlo.base_stations)
-            base.mode = 'disarmed'
-            base = getDeviceFromName("Bridge_AZMichael",arlo.base_stations)
-            base.mode = 'disarmed'
-            base = getDeviceFromName("Bridge_AZSabine",arlo.base_stations)
-            base.mode = 'disarmed'
-
-        elif command == 'set-mode' and parameter1 == 'aktiviert':
-            base = getDeviceFromName("Home",arlo.base_stations)
-            base.mode = 'armed'
-            base = getDeviceFromName("Bridge_AZMichael",arlo.base_stations)
-            base.mode = 'armed'
-            base = getDeviceFromName("Bridge_AZSabine",arlo.base_stations)
-            base.mode = 'armed'
-
-        elif command == 'set-mode' and parameter1 == 'aktiviert_tag':
-            base = getDeviceFromName("Home",arlo.base_stations)
-            base.mode = 'aktiviert_tag'
-            base = getDeviceFromName("Bridge_AZMichael",arlo.base_stations)
-            base.mode = 'aktiviert_tag'
-            base = getDeviceFromName("Bridge_AZSabine",arlo.base_stations)
-            base.mode = 'aktiviert_tag'
-
-        elif command == 'set-mode' and parameter1 == 'garten':
-            base = getDeviceFromName("Home",arlo.base_stations)
-            base.mode = 'garten_alle'
-            base = getDeviceFromName("Bridge_AZMichael",arlo.base_stations)
-            base.mode = 'garten'
-            base = getDeviceFromName("Bridge_AZSabine",arlo.base_stations)
-            base.mode = 'armed'
-
-        elif command == 'set-mode' and parameter1 == 'garten_hinten':
-            base = getDeviceFromName("Home",arlo.base_stations)
-            base.mode = 'garten_2'
-            base = getDeviceFromName("Bridge_AZMichael",arlo.base_stations)
-            base.mode = 'disarmed'
-            base = getDeviceFromName("Bridge_AZSabine",arlo.base_stations)
-            base.mode = 'armed'
+        elif command == 'set-mode':
+            if parameter1 == 'deaktiviert':
+                base = getDeviceFromName("Home",arlo.base_stations)
+                base.mode = 'disarmed'
+                base = getDeviceFromName("Bridge_AZMichael",arlo.base_stations)
+                base.mode = 'disarmed'
+                base = getDeviceFromName("Bridge_AZSabine",arlo.base_stations)
+                base.mode = 'disarmed'
+            elif parameter1 == 'aktiviert':
+                base = getDeviceFromName("Home",arlo.base_stations)
+                base.mode = 'armed'
+                base = getDeviceFromName("Bridge_AZMichael",arlo.base_stations)
+                base.mode = 'armed'
+                base = getDeviceFromName("Bridge_AZSabine",arlo.base_stations)
+                base.mode = 'armed'
+            elif parameter1 == 'aktiviert_tag':
+                base = getDeviceFromName("Home",arlo.base_stations)
+                base.mode = 'aktiviert_tag'
+                base = getDeviceFromName("Bridge_AZMichael",arlo.base_stations)
+                base.mode = 'aktiviert_tag'
+                base = getDeviceFromName("Bridge_AZSabine",arlo.base_stations)
+                base.mode = 'aktiviert_tag'
+            elif parameter1 == 'garten':
+                base = getDeviceFromName("Home",arlo.base_stations)
+                base.mode = 'garten_alle'
+                base = getDeviceFromName("Bridge_AZMichael",arlo.base_stations)
+                base.mode = 'garten'
+                base = getDeviceFromName("Bridge_AZSabine",arlo.base_stations)
+                base.mode = 'armed'
+            elif parameter1 == 'garten_hinten':
+                base = getDeviceFromName("Home",arlo.base_stations)
+                base.mode = 'garten_2'
+                base = getDeviceFromName("Bridge_AZMichael",arlo.base_stations)
+                base.mode = 'disarmed'
+                base = getDeviceFromName("Bridge_AZSabine",arlo.base_stations)
+                base.mode = 'armed'
+            else:
+                print(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "- arlo-fhem - set-mode - unknown mode parameter - ignoring")
+                break
 
         elif command == 'get-mode':
             base = getDeviceFromName("Home",arlo.base_stations)
@@ -217,9 +217,15 @@ while True:
             sendCommandtoFHEM(FHEM_HOST, FHEM_PORT, FHEM_PASSWORD, "setreading Arlo_Cam.dum currentMode "+currentMode)
 
         elif command == 'set-brightness':
-            print(command,parameter1,parameter2,"is currently not supported")
-            #camera = getDeviceFromName(parameter1,arlo.cameras)
-            #camera.brightness = int(parameter2)
+            if not parameter1 in ["Terrasse", "Garten_1", "Garten_2"]:
+                print(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "- arlo-fhem - set-brightness - unknown camera - ignoring")
+                break
+            if parameter2 in ["-2", "-1", "0", "1", "2"]:
+                camera = getDeviceFromName(parameter1,arlo.cameras)
+                camera.brightness = int(parameter2)
+            else:
+                print(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "- arlo-fhem - set-brightness - unknown brightness value - ignoring")
+                break
 
         elif command == 'quit':
             print(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "- arlo-fhem - quit command received ... exiting!")
@@ -228,8 +234,6 @@ while True:
             sys.exit(0)
 
         else:
-            # Should not happen ...
-            print(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "- arlo-fhem - Unknown command - ignoring")
+            print(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "- arlo-fhem - Unknown command "+command+" - ignoring")
 
-    # print(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "- arlo-fhem - Connection closed ")
     conn.close()

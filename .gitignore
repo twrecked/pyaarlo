@@ -116,4 +116,5 @@ docs/out
 
 # specific entries for arlo-fhem 
 arlo-fhem.cfg
-
+debug.log
+debug-encrypted.log
