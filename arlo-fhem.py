@@ -5,7 +5,7 @@
 # Based on https://github.com/twrecked/pyaarlo
 # Michael Urspringer
 
-VERSION = "1.1.0"
+VERSION = "1.1.1 beta"
 
 import pyaarlo
 import argparse
@@ -28,8 +28,8 @@ def loginToArlo(username, password, tfa_host, tfa_username, tfa_password, max_tr
     while count < max_tries:
         count = count + 1 
         print(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "- arlo-fhem - Trying to connect ",count," of ",max_tries)
-        # arlo = pyaarlo.PyArlo(username=username, password=password,tfa_source='imap', tfa_type='email', tfa_host=tfa_host, tfa_username=tfa_username, tfa_password=tfa_password, synchronous_mode=True, refresh_devices_every=3, verbose_debug=True)
-        arlo = pyaarlo.PyArlo(username=username, password=password,tfa_source='imap', tfa_type='email', tfa_host=tfa_host, tfa_username=tfa_username, tfa_password=tfa_password, synchronous_mode=True, refresh_devices_every=3)
+        # arlo = pyaarlo.PyArlo(username=username, password=password,tfa_source='imap', tfa_type='email', tfa_host=tfa_host, tfa_username=tfa_username, tfa_password=tfa_password, synchronous_mode=False, refresh_devices_every=3, verbose_debug=True)
+        arlo = pyaarlo.PyArlo(username=username, password=password,tfa_source='imap', tfa_type='email', tfa_host=tfa_host, tfa_username=tfa_username, tfa_password=tfa_password, synchronous_mode=False, refresh_devices_every=3)
         if arlo.is_connected:
             break
         if count == max_tries:
