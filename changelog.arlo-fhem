@@ -1,4 +1,4 @@
-1.1.1:  Fixed:      Switched to async mode (should hopefully fix https://github.com/m0urs/arlo-fhem/issues/11)
+1.1.1:  Fixed:      Switched to async mode and added "reconnect_every=90" to login parameters  (should hopefully fix https://github.com/m0urs/arlo-fhem/issues/11)
 
 1.1.0:  Changed:    Update upstream code to most current master
         Added:      Implemented "set-brightness" (as now supported by upstream code)
