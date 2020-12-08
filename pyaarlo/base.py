@@ -34,7 +34,7 @@ class ArloBase(ArloDevice):
         return self._load([MODE_ID_TO_NAME_KEY, mode_id], None)
 
     def _id_is_schedule(self, mode_id):
-        return self._load([MODE_IS_SCHEDULE_KEY, mode_id], False)
+        return self._load([MODE_IS_SCHEDULE_KEY, mode_id.lower()], False)
 
     def _name_to_id(self, mode_name):
         return self._load([MODE_NAME_TO_ID_KEY, mode_name.lower()], None)
@@ -51,6 +51,7 @@ class ArloBase(ArloDevice):
                 self._arlo.debug(mode_id + "<=M=>" + mode_name)
                 self._save([MODE_ID_TO_NAME_KEY, mode_id], mode_name)
                 self._save([MODE_NAME_TO_ID_KEY, mode_name.lower()], mode_id)
+                self._save([MODE_IS_SCHEDULE_KEY, mode_id.lower()], False)
                 self._save([MODE_IS_SCHEDULE_KEY, mode_name.lower()], False)
 
     def schedule_to_modes(self):
@@ -84,6 +85,7 @@ class ArloBase(ArloDevice):
                 self._arlo.debug(schedule_id + "<=S=>" + schedule_name)
                 self._save([MODE_ID_TO_NAME_KEY, schedule_id], schedule_name)
                 self._save([MODE_NAME_TO_ID_KEY, schedule_name.lower()], schedule_id)
+                self._save([MODE_IS_SCHEDULE_KEY, schedule_id.lower()], True)
                 self._save([MODE_IS_SCHEDULE_KEY, schedule_name.lower()], True)
 
     def _set_mode_or_schedule(self, event):

@@ -4,8 +4,8 @@ from .constant import (
     PRELOAD_DAYS,
     TFA_CONSOLE_SOURCE,
     TFA_DEFAULT_HOST,
-    TFA_EMAIL_TYPE,
     TFA_DELAY,
+    TFA_EMAIL_TYPE,
     TFA_RETRIES,
 )
 
@@ -116,6 +116,10 @@ class ArloCfg(object):
         return self._kw.get("refresh_devices_every", 0) * 60 * 60
 
     @property
+    def refresh_modes_every(self):
+        return self._kw.get("refresh_modes_every", 0) * 60
+
+    @property
     def http_connections(self):
         return self._kw.get("http_connections", 20)
 
@@ -150,7 +154,7 @@ class ArloCfg(object):
     @property
     def tfa_delay(self):
         return self._kw.get("tfa_delay", TFA_DELAY)
-        
+
     @property
     def tfa_retries(self):
         return self._kw.get("tfa_retries", TFA_RETRIES)
