@@ -1,3 +1,6 @@
+0.7.0.2: Make mode refresh optional.
+0.7.0: Added PUSH support for authentication.
+        Fixed missing stream state.
 0.7.0.beta.7 Fix imap error handling.
         Allow ids to be used in mode update.
 0.7.0.beta.6 Fix mode update.

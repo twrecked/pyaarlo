@@ -5,7 +5,7 @@
 # Based on https://github.com/twrecked/pyaarlo
 # Michael Urspringer
 
-VERSION = "1.1.1"
+VERSION = "1.1.2 beta"
 
 import pyaarlo
 import argparse
