@@ -1,3 +1,8 @@
+1.1.2a: Changed:    Changed connection behaviour in order to, hopefully, solve the issue that sometimes the requests seem no longer to work
+                        Changed refresh_devices_every=1 (from: 3)
+                        Added stream_timeout=180
+                        Added request_timeout=120
+
 1.1.2:  Changed:    Update upstream code to most current master
 
 1.1.1:  Fixed:      Switched to async mode and added "reconnect_every=90" to login parameters  (should hopefully fix https://github.com/m0urs/arlo-fhem/issues/11)
