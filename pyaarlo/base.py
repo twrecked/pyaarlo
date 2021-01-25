@@ -12,6 +12,8 @@ from .constant import (
     MODE_IS_SCHEDULE_KEY,
     MODE_KEY,
     MODE_NAME_TO_ID_KEY,
+    MODEL_BABY,
+    PING_CAPABILITY,
     RESTART_PATH,
     SCHEDULE_KEY,
     SIREN_STATE_KEY,
@@ -148,7 +150,7 @@ class ArloBase(ArloDevice):
             self._arlo.vdebug("forced v2 api")
             return False
         if (
-            self.model_id == "ABC1000"
+            self.model_id == MODEL_BABY
             or self.device_type == "arloq"
             or self.device_type == "arloqs"
         ):
@@ -335,9 +337,12 @@ class ArloBase(ArloDevice):
             modes = self._arlo.be.get(
                 DEFINITIONS_PATH + "?uniqueIds={}".format(self.unique_id)
             )
-            modes = modes.get(self.unique_id, {})
-            self._parse_modes(modes.get("modes", []))
-            self._parse_schedules(modes.get("schedules", []))
+            if modes is not None:
+                modes = modes.get(self.unique_id, {})
+                self._parse_modes(modes.get("modes", []))
+                self._parse_schedules(modes.get("schedules", []))
+            else:
+                self._arlo.error("failed to read modes (v2)")
 
     @property
     def schedule(self):
@@ -432,9 +437,15 @@ class ArloBase(ArloDevice):
 
     def has_capability(self, cap):
         if cap in (TEMPERATURE_KEY, HUMIDITY_KEY, AIR_QUALITY_KEY):
-            if self.model_id.startswith("ABC1000"):
+            if self.model_id.startswith(MODEL_BABY):
                 return True
         if cap in (SIREN_STATE_KEY,):
             if self.model_id.startswith(("VMB400", "VMB450")):
+                return True
+        if cap in (PING_CAPABILITY,):
+            # Battery powered wifi devices that act as their own base station don't get pinged.
+            if self.is_own_parent and self.using_wifi and not self.is_corded:
+                return False
+            else:
                 return True
         return super().has_capability(cap)
