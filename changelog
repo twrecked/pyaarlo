@@ -1,3 +1,4 @@
+0.7.0.18: Update user agent and request headers.
 0.7.0.6: Stop battery drain on any battery based base station.
 0.7.0.4: Handle broken modes fetch.
 0.7.0.2: Make mode refresh optional.
