@@ -11,14 +11,15 @@ def readme():
 setup(
 
     name='pyaarlo',
-    version='0.7.0.beta.7',
+    version='0.7.1b7',
     packages=['pyaarlo'],
 
     python_requires='>=3.6',
     install_requires=[
         'requests',
         'click',
-        'pycryptodome'
+        'pycryptodome',
+        'unidecode'
     ],
 
     author='Steve Herrell',
