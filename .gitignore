@@ -118,3 +118,4 @@ docs/out
 arlo-fhem.cfg
 debug.log
 debug-encrypted.log
+.vscode/settings.json
