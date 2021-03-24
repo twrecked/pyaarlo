@@ -19,6 +19,7 @@ import socket
 import sys
 import telnetlib
 import time
+import unidecode
 
 
 # Login to Arlo Account, retry if not successfull
