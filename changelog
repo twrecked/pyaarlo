@@ -1,3 +1,11 @@
+0.7.1b7: Allow removal of unicode characters from entity ids
+        Siren on wired doorbell.
+        Better doorbell icon.
+0.7.1b6: Add new event handling
+        Allow custimisable disarmed mode
+0.7.1b5: Don't rely on camera reporting back idle status
+0.7.1b4: Smart user agents.
+0.7.1b1: Add media download.
 0.7.0.18: Update user agent and request headers.
 0.7.0.6: Stop battery drain on any battery based base station.
 0.7.0.4: Handle broken modes fetch.
