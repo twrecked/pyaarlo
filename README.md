@@ -5,12 +5,15 @@
 - [Installation](#installation)
 - [Usage](#usage)
 - [Pyaarlo Executable](#executable)
+- [User Agent](#user-agent)
+- [Saving Media](#saving-media)
 - [2 Factor Authentication](#2fa)
   * [Manual](#2fa-manual)
-  * [Automatic](#2fa-automatic)
-  * [REST API](#sfa-rest-api)
+  * [IMAP](#2fa-imap)
 - [Error Reporting](#errors)
 - [Limitations](#limitations)
+- [Other 2 Factor Authentication](#2fa-other)
+
 
 <a name="introduction"></a>
 ## Introduction
@@ -166,10 +169,62 @@ cam.brightness
 ```
 
 
+<a name="user-agent"></a>
+## User Agent
+
+The `user_agent` option will control what kind of stream Arlo sends to you.
+The options are:
+- `arlo`; the original user agent, returns an `rtsps` stream.
+- `ipad`; returns a `HLS` stream
+- `mac`; returns a `HLS` stream
+- `linux`; returns a `MPEG-DASH` stream
+
+
+<a name="saving-media"></a>
+## Saving Media
+
+If you use the `save_media_to` parameter to specify a file naming scheme
+`praarlo` will use that to save all media - videos and snapshots - locally. You
+can use the following substitutions:
+
+- `SN`; the device serial number
+- `N`; the device name
+- `Y`; the year of the recording, include century
+- `m`; the month of the year as a number (range 01 to 12)
+- `d`; the day of the month as a number (range 01 to 31)
+- `H`; the hour of the day (range 00 to 23)
+- `M`; the minute of the hour (range 00 to 59)
+- `S`; the seconds of the minute (range 00 to 59)
+- `F`; a short cut for `Y-m-d`
+- `T`; a short cut for `H:M:S`
+- `t`; a short cut for `H-M-S`
+- `s`; the number of seconds since the epoch
+
+You specify the substitution by prefixing it with a `$` in the format string.
+You can optionally use curly brackets to remove any ambiguity. For example,
+the following configuration will save all media under `/config/media`
+organised by serial number then date. The code will add the correct file
+extension.
+
+```yaml
+  save_media_to: "/config/media/${SN}/${Y}/${m}/${d}/${T}"
+```
+
+The first time you configure `save_media_to` the system can take several
+minutes to download all the currently available media. The download is
+throttled to not overload Home Assistant or Arlo. Once the initial download is
+completed updates should happen a lot faster.
+
+The code doesn't provide any management of the downloads, it will keep
+downloading them until your device is full. It also doesn't provide a NAS
+interface, you need to mount the NAS device and point `save_media_to` at it.
+
+
 <a name="2fa"></a>
 ## 2FA
 
 Pyaarlo supports 2 factor authentication.
+
 
 <a name="2fa-manual"></a>
 #### Manual
@@ -182,8 +237,11 @@ ar = pyaarlo.PyArlo(username=USERNAME, password=PASSWORD,
                     tfa_source='console', tfa_type='SMS')
 ```
 
-<a name="2fa-automatic"></a>
-#### Automatic
+<a name="2fa-imap"></a>
+#### IMAP
+
+__I recommend using `IMAP`, it's well tested now and it works. The other
+methods haven't been tested or looked at in a while.__
 
 Automatic is trickier. Support is there but needs testing. For automatic 2FA
 PyArlo needs to access and your email account form where it reads the token Arlo
@@ -201,12 +259,120 @@ It's working well with my gmail account, see
 [here](https://support.google.com/mail/answer/185833?hl=en) for help setting up
 single app passwords.
 
+
+<a name="executable"></a>
+## Pyaarlo Executable
+
+The pip installation adds an executable `pyaarlo`. You can use this to list
+devices, perform certain simple actions and anonymize and encrypt logs for
+debugging purposes. _Device operations are currently limited..._
+
+The git installation has `bin/pyaarlo` which functions in a similar manner.
+
+```bash
+# To show the currently available actions:
+pyaarlo --help
+
+# To list all the known devices:
+pyaarlo -u 'your-user-name' -p 'your-password' list all
+
+# this version will anonymize the output
+pyaarlo -u 'your-user-name' -p 'your-password' --anonymize list all
+
+# this version will anonymize and encrypt the output
+pyaarlo -u 'your-user-name' -p 'your-password' --anonymize --encrypt list all
+```
+
+
+<a name="errors"></a>
+## Error Reporting
+
+When reporting errors please include the version of Pyaarlo you are using and
+what Arlo devices you have. Please turn on DEBUG level logging, capture the
+output and include as much information as possible about what you were trying to
+do.
+
+You can use the `pyaarlo` executable to anonymize and encrypt feature on
+arbitrary data like log files or source code. If you are only encrypting you
+don't need your username and password.
+
+```bash
+# encrypt an existing file
+cat output-file | pyaarlo encrypt
+
+# anonymize and then encrypt a file
+cat output-file | pyaarlo -u 'your-user-name' -p 'your-password' anonymize | pyaarlo encrypt
+```
+
+If you installed from git you can use a shell script in `bin/` to encrypt your
+logs. No anonymizing is possible this way.
+ 
+```bash
+# encrypt an existing file
+cat output-file | ./bin/pyaarlo-encrypt encrypt
+```
+
+`pyaarlo-encrypt` is a fancy wrapper around:
+
+```bash
+curl -s -F 'plain_text_file=@-;filename=clear.txt' https://pyaarlo-tfa.appspot.com/encrypt
+```
+
+You can also encrypt your output on this [webpage](https://pyaarlo-tfa.appspot.com/).
+
+
+<a name="limitations"></a>
+## Limitations
+The component uses the Arlo webapi.
+* There is no documentation so the API has been reverse engineered using browser
+  debug tools.
+* There is no support for smart features, you only get motion detection
+  notifications, not what caused the notification. (Although, you can pipe a
+  snapshot into deepstack...) This isn't strictly true, you can get "what
+  caused" the notifications but only after Arlo has analysed the footage.
+* Streaming times out after 30 minutes.
+* The webapi doesn't seem like it was really designed for permanent connections
+  so the system will sometimes appear to lock up. Various work arounds are in
+  the code and can be configured at the `arlo` component level. See next
+  paragraph.
+
+If you do find the component locks up after a while (I've seen reports of hours,
+days or weeks), you can add the following to the main configuration. Start from
+the top and work down: 
+* `refresh_devices_every`, tell Pyaarlo to request the device list every so
+  often. This will sometimes prevent the back end from aging you out. The value
+  is in hours and a good starting point is 3.
+* `stream_timeout`, tell Pyaarlo to close and reopen the event stream after a
+  certain period of inactivity. Pyaarlo will send keep alive every minute so a
+  good starting point is 180 seconds.
+* `reconnect_every`, tell Pyaarlo to logout and back in every so often. This
+  establishes a new session at the risk of losing an event notification. The
+  value is minutes and a good starting point is 90.
+* `request_timeout`, the amount of time to allow for a http request to work. A
+  good starting point is 120 seconds.
+
+Alro will allow shared accounts to give cameras their own name. If you find
+cameras appearing with unexpected names (or not appearing at all), log into the
+Arlo web interface with your Home Assistant account and make sure the camera
+names are correct.
+
+You can change the brightness on the light but not while it's turned on. You
+need to turn it off and back on again for the change to take. This is how the
+web interface does it.
+
+
+<a name="2fa-other"></a>
+## Other 2 Factor Authentication
+
+__I recommend using `IMAP`, it's well tested now and it works. These following
+methods haven't been tested or looked at in a while.__
+
 <a name="2fa-rest-api"></a>
 #### Rest API
 
-This mechanism allows you to an exteral website. When you start authenticating
+This mechanism allows you to an external website. When you start authenticating
 Pyarlo makes a `clear` request and repeated `look-up` requests to a website to
-retrieve your TFA code. The format of these requests and their reponses are well
+retrieve your TFA code. The format of these requests and their responses are well
 defined but the host Pyarlo uses is configurable.
 
 ```python
@@ -316,100 +482,3 @@ Make sure to configure Pyaarlo to request a token over SMS with
 `tfa_type='EMAIL`. Then set up your email service to forward Arlo code message
 to your email forwarding alias.
 
-<a name="executable"></a>
-## Pyaarlo Executable
-
-The pip installation adds an executable `pyaarlo`. You can use this to list
-devices, perform certain simple actions and anonymize and encrypt logs for
-debugging purposes. _Device operations are currently limited..._
-
-The git installation has `bin/pyaarlo` which functions in a similar manner.
-
-```bash
-# To show the currently available actions:
-pyaarlo --help
-
-# To list all the known devices:
-pyaarlo -u 'your-user-name' -p 'your-password' list all
-
-# this version will anonymize the output
-pyaarlo -u 'your-user-name' -p 'your-password' --anonymize list all
-
-# this version will anonymize and encrypt the output
-pyaarlo -u 'your-user-name' -p 'your-password' --anonymize --encrypt list all
-```
-
-
-<a name="errors"></a>
-## Error Reporting
-
-When reporting errors please include the version of Pyaarlo you are using and
-what Arlo devices you have. Please turn on DEBUG level logging, capture the
-output and include as much information as possible about what you were trying to
-do.
-
-You can use the `pyaarlo` executable to anonymize and encrypt feature on
-arbitrary data like log files or source code. If you are only encrypting you
-don't need your username and password.
-
-```bash
-# encrypt an existing file
-cat output-file | pyaarlo encrypt
-
-# anonymize and then encrypt a file
-cat output-file | pyaarlo -u 'your-user-name' -p 'your-password' anonymize | pyaarlo encrypt
-```
-
-If you installed from git you can use a shell script in `bin/` to encrypt your
-logs. No anonymizing is possible this way.
- 
-```bash
-# encrypt an existing file
-cat output-file | ./bin/pyaarlo-encrypt encrypt
-```
-
-`pyaarlo-encrypt` is a fancy wrapper around:
-
-```bash
-curl -s -F 'plain_text_file=@-;filename=clear.txt' https://pyaarlo-tfa.appspot.com/encrypt
-```
-
-You can also encrypt your output on this [webpage](https://pyaarlo-tfa.appspot.com/).
-
-<a name="limitations"></a>
-## Limitations
-The component uses the Arlo webapi.
-* There is no documentation so the API has been reverse engineered using browser
-  debug tools.
-* There is no support for smart features, you only get motion detection
-  notifications, not what caused the notification. (Although, you can pipe a
-  snapshot into deepstack...)
-* Streaming times out after 30 minutes.
-* The webapi doesn't seem like it was really designed for permanent connections
-  so the system will sometimes appear to lock up. Various work arounds are in
-  the code and can be configured at the `arlo` component level. See next
-  paragraph.
-
-If you do find the component locks up after a while (I've seen reports of hours,
-days or weeks), you can add the following to the main configuration. Start from
-the top and work down: 
-* `refresh_devices_every`, tell Pyaarlo to request the device list every so
-  often. This will sometimes prevent the back end from aging you out. The value
-  is in hours and a good starting point is 3.
-* `stream_timeout`, tell Pyaarlo to close and reopen the event stream after a
-  certain period of inactivity. Pyaarlo will send keep alive every minute so a
-  good starting point is 180 seconds.
-* `reconnect_every`, tell Pyaarlo to logout and back in every so often. This
-  establishes a new session at the risk of losing an event notification. The
-  value is minutes and a good starting point is 90.
-* `request_timeout`, the amount of time to allow for a http request to work. A
-  good starting point is 120 seconds.
-
-Alro will allow shared accounts to give cameras their own name. If you find
-cameras appearing with unexpected names (or not appearing at all), log into the
-Arlo web interface with your Home Assistant account and make sure the camera
-names are correct.
-
-You can change the brightness on the light but not while it's turned on. You
-need to turn it off and back on again for the change to take. This is how the
-web interface does it.
