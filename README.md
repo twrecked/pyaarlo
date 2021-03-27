@@ -32,6 +32,7 @@ So it is currently only supporting these basic commands but not something like m
     - monotonic ("apt install python3-monotonic")
     - configparser ("apt install python-configparser")
     - sseclient 
+    - unidecode ("apt install python3-unidecode")
 
 
 ## Installation

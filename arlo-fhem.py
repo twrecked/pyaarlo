@@ -5,7 +5,7 @@
 # Based on https://github.com/twrecked/pyaarlo
 # Michael Urspringer
 
-VERSION = "1.1.4"
+VERSION = "1.1.5"
 
 import pyaarlo
 import argparse
@@ -19,6 +19,7 @@ import socket
 import sys
 import telnetlib
 import time
+import unidecode
 
 
 # Login to Arlo Account, retry if not successfull
