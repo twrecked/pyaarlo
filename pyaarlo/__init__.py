@@ -116,10 +116,6 @@ class PyArlo(object):
       returned. Default is `arlo`.
     * **mode_api** - Which api to use to set the base station modes. Default is `auto` which choose an API
       based on camera model. Can also be `v1` and `v2`.
-    * **http_connections** - HTTP connection pool size. Default is `20`, set to `None` to default provided
-      by the system.
-    * **http_max_size** - HTTP maximum connection pool size. Default is `10`, set to `None` to default provided
-      by the system.
     * **reconnect_every** - Time, in minutes, to close and relogin to Arlo.
     * **snapshot_timeout** - Time, in seconds, to stop the snapshot attempt and return the camera to the idle state.
 
