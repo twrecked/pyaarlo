@@ -11,7 +11,7 @@ def readme():
 setup(
 
     name='pyaarlo',
-    version='0.7.1b13',
+    version='0.8.0a1',
     packages=['pyaarlo'],
 
     python_requires='>=3.6',
@@ -20,7 +20,7 @@ setup(
         'click',
         'pycryptodome',
         'unidecode',
-        'cloudscraper'
+        'cloudscraper>=1.2.58'
     ],
 
     author='Steve Herrell',
