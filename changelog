@@ -1,3 +1,5 @@
+0.7.1b15: Merge to hass-aarlo b15
+        Support quoted printable in Arlo 2fa emails.
 0.7.1b13: Merge to hass-aarlo b13
 0.7.1b11: Merge to hass-aarlo b11
 0.7.1b9: Add cloudscraper support.
