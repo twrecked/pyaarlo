@@ -27,6 +27,7 @@ setup(
     author_email='steve.herrell@gmail.com',
     description='PyAarlo is a library that provides asynchronous access to Arlo security cameras.',
     long_description=readme(),
+    long_description_content_type='text/markdown',
     license='LGPLv3+',
     keywords=[
         'arlo',
