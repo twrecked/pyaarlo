@@ -1,3 +1,4 @@
+0.7.1: Fix connected capability for video doorbell.
 0.7.1b15: Merge to hass-aarlo b15
         Support quoted printable in Arlo 2fa emails.
 0.7.1b13: Merge to hass-aarlo b13
