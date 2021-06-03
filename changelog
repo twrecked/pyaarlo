@@ -1,4 +1,5 @@
 0.8.0a2: Support quoted printable in Arlo 2fa emails
+         Fix connected capability for video door bell.
 0.8.0a1: New version after split from hass-aarlo.
 
 0.7.1b13: Merge to hass-aarlo b13
