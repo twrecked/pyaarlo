@@ -142,11 +142,12 @@ class PyArlo(object):
         self._cfg = ArloCfg(self, **kwargs)
 
         # Create storage/scratch directory.
-        if self._cfg.state_file is not None or self._cfg.dump_file is not None:
+        if self._cfg.save_state or self._cfg.dump or self._cfg.save_session:
             try:
-                os.mkdir(self._cfg.storage_dir)
+                if not os.path.exists(self._cfg.storage_dir):
+                    os.mkdir(self._cfg.storage_dir)
             except Exception:
-                pass
+                self.warning(f"Problem creating {self._cfg.storage_dir}")
 
         # Create remaining components.
         self._bg = ArloBackground(self)
