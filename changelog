@@ -1,3 +1,4 @@
+0.8.0a3: Save authentication token.
 0.8.0a2: Support quoted printable in Arlo 2fa emails
          Fix connected capability for video door bell.
 0.8.0a1: New version after split from hass-aarlo.
