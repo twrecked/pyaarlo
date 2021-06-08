@@ -1,6 +1,8 @@
-0.7.1: Fix connected capability for video doorbell.
-0.7.1b15: Merge to hass-aarlo b15
-        Support quoted printable in Arlo 2fa emails.
+0.8.0a3: Save authentication token.
+0.8.0a2: Support quoted printable in Arlo 2fa emails
+         Fix connected capability for video door bell.
+0.8.0a1: New version after split from hass-aarlo.
+
 0.7.1b13: Merge to hass-aarlo b13
 0.7.1b11: Merge to hass-aarlo b11
 0.7.1b9: Add cloudscraper support.

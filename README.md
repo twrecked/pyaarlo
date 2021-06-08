@@ -1,5 +1,21 @@
 # Pyaarlo
 
+## Alpha Build
+
+Welcome to the Pyaarlo alpha build. I'm using the 0.8.x stream to split
+`pyaarlo` out from `hass-aarlo`. This is partly motivated by thinking about
+getting `hass-aarlo` back into Home Assistant and partly motivated by my
+desire to stop having to commit bug fixes in 2 places.
+
+### Breaking Changes
+
+#### Cached Session
+The code will now save the session details and reuse the authentication token
+when possible. This can drastically reduce the number of authentication
+requests the code will make (and 2FA requests if needed). If this doesn't work
+for you pass `save_session=False` as a parameter to `PyArlo()`.
+
+
 ## Table of Contents
 - [Introduction](#introduction)
 - [Installation](#installation)
@@ -18,7 +34,7 @@
 <a name="introduction"></a>
 ## Introduction
 
-Pyaarlo is a module for for Python that provides asynchronous access to Netgear
+Pyaarlo is a module for Python that provides asynchronous access to Netgear
 Arlo cameras.
 
 When you start Pyaarlo, it starts a background thread that opens a single,

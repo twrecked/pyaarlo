@@ -31,7 +31,7 @@ class ArloCfg(object):
 
     @property
     def storage_dir(self):
-        return self._kw.get("storage_dir", "/config/.aarlo")
+        return self._kw.get("storage_dir", "/tmp/.aarlo")
 
     @property
     def name(self):
@@ -120,14 +120,6 @@ class ArloCfg(object):
         return self._kw.get("refresh_modes_every", 0) * 60
 
     @property
-    def http_connections(self):
-        return self._kw.get("http_connections", 20)
-
-    @property
-    def http_max_size(self):
-        return self._kw.get("http_maz_size", 10)
-
-    @property
     def reconnect_every(self):
         return self._kw.get("reconnect_every", 0) * 60
 
@@ -138,10 +130,6 @@ class ArloCfg(object):
     @property
     def verbose(self):
         return self._kw.get("verbose_debug", False)
-
-    @property
-    def hide_deprecated_services(self):
-        return self._kw.get("hide_deprecated_services", False)
 
     @property
     def tfa_source(self):
@@ -200,6 +188,15 @@ class ArloCfg(object):
         return None
 
     @property
+    def session_file(self):
+        return self.storage_dir + "/session.pickle"
+        return None
+
+    @property
+    def save_session(self):
+        return self._kw.get("save_session", True)
+
+    @property
     def dump_file(self):
         if self.dump:
             return self.storage_dir + "/" + "packets.dump"
@@ -228,10 +225,6 @@ class ArloCfg(object):
     @property
     def stream_snapshot_stop(self):
         return self._kw.get("stream_snapshot_stop", 10)
-
-    @property
-    def save_updates_to(self):
-        return self._kw.get("save_updates_to", "")
 
     @property
     def save_media_to(self):
