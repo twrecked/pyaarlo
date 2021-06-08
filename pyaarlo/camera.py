@@ -43,6 +43,7 @@ from .constant import (
     MODEL_PRO_3_FLOODLIGHT,
     MODEL_PRO_4,
     MODEL_ULTRA,
+    MODEL_WIRED_VIDEO_DOORBELL,
     MODEL_WIREFREE_VIDEO_DOORBELL,
     MOTION_DETECTED_KEY,
     MOTION_SENS_KEY,
@@ -641,12 +642,12 @@ class ArloCamera(ArloChildDevice):
 
     @property
     def unseen_videos(self):
-        """Returns the camera unseen video count. """
+        """Returns the camera unseen video count."""
         return self._load(MEDIA_COUNT_KEY, 0)
 
     @property
     def captured_today(self):
-        """Returns the number of videos captured today. """
+        """Returns the number of videos captured today."""
         return self._load(CAPTURED_TODAY_KEY, 0)
 
     @property
@@ -1375,6 +1376,7 @@ class ArloCamera(ArloChildDevice):
                     MODEL_PRO_3_FLOODLIGHT,
                     MODEL_PRO_4,
                     MODEL_ESSENTIAL,
+                    MODEL_WIRED_VIDEO_DOORBELL,
                     MODEL_WIREFREE_VIDEO_DOORBELL,
                     MODEL_ESSENTIAL_INDOOR,
                 )
