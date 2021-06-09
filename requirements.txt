@@ -2,4 +2,4 @@ requests
 click
 pycryptodome
 unidecode
-cloudscraper
+cloudscraper>=1.2.58

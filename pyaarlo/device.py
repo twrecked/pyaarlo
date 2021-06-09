@@ -90,12 +90,16 @@ class ArloDevice(object):
             cb(self, attr, value)
 
     def _save(self, attr, value):
-        # TODO only care if it changes?
         self._arlo.st.set(self._to_storage_key(attr), value)
 
     def _save_and_do_callbacks(self, attr, value):
-        self._save(attr, value)
-        self._do_callbacks(attr, value)
+        # TODO only care if it changes?
+        if self._load(attr) != value:
+            self._arlo.debug(f"{attr} now= {value}")
+            self._save(attr, value)
+            self._do_callbacks(attr, value)
+        else:
+            self._arlo.debug(f"{attr} still= {value}")
 
     def _load(self, attr, default=None):
         return self._arlo.st.get(self._to_storage_key(attr), default)
