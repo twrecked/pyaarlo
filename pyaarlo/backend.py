@@ -38,6 +38,10 @@ from .util import days_until, now_strftime, time_to_arlotime, to_b64
 
 # include token and session details
 class ArloBackEnd(object):
+
+    _session_lock = threading.Lock()
+    _session_info = {}
+
     def __init__(self, arlo):
 
         self._arlo = arlo
@@ -78,14 +82,27 @@ class ArloBackEnd(object):
         if not self._arlo.cfg.save_session:
             return
         try:
-            with open(self._arlo.cfg.session_file, "rb") as dump:
-                session_info = pickle.load(dump)
-                self._user_id = session_info["user_id"]
-                self._web_id = session_info["web_id"]
-                self._sub_id = session_info["sub_id"]
-                self._token = session_info["token"]
-                self._expires_in = session_info["expires_in"]
-                self._arlo.debug(f"load:session_info={session_info}")
+            with ArloBackEnd._session_lock:
+                with open(self._arlo.cfg.session_file, "rb") as dump:
+                    ArloBackEnd._session_info = pickle.load(dump)
+                    version = ArloBackEnd._session_info.get("version", 1)
+                    if version == "2":
+                        session_info = ArloBackEnd._session_info.get(self._arlo.cfg.username, None)
+                    else:
+                        session_info = ArloBackEnd._session_info
+                        ArloBackEnd._session_info = {
+                            "version": "2",
+                            self._arlo.cfg.username: session_info,
+                        }
+                    if session_info is not None:
+                        self._user_id = session_info["user_id"]
+                        self._web_id = session_info["web_id"]
+                        self._sub_id = session_info["sub_id"]
+                        self._token = session_info["token"]
+                        self._expires_in = session_info["expires_in"]
+                        self._arlo.debug(f"loadv{version}:session_info={ArloBackEnd._session_info}")
+                    else:
+                        self._arlo.debug(f"loadv{version}:failed")
         except Exception:
             self._arlo.debug("session file not read")
 
@@ -93,16 +110,17 @@ class ArloBackEnd(object):
         if not self._arlo.cfg.save_session:
             return
         try:
-            with open(self._arlo.cfg.session_file, "wb") as dump:
-                session_info = {
-                    "user_id": self._user_id,
-                    "web_id": self._web_id,
-                    "sub_id": self._sub_id,
-                    "token": self._token,
-                    "expires_in": self._expires_in,
-                }
-                pickle.dump(session_info, dump)
-                self._arlo.debug(f"save:session_info={session_info}")
+            with ArloBackEnd._session_lock:
+                with open(self._arlo.cfg.session_file, "wb") as dump:
+                    ArloBackEnd._session_info[self._arlo.cfg.username] = {
+                        "user_id": self._user_id,
+                        "web_id": self._web_id,
+                        "sub_id": self._sub_id,
+                        "token": self._token,
+                        "expires_in": self._expires_in,
+                    }
+                    pickle.dump(ArloBackEnd._session_info, dump)
+                    self._arlo.debug(f"savev2:session_info={ArloBackEnd._session_info}")
         except Exception as e:
             self._arlo.warning("session file not written" + str(e))
 
@@ -654,11 +672,13 @@ class ArloBackEnd(object):
                 return False
             if not self._validate():
                 return False
-            self._save_session()
 
         else:
             self._session = requests.session()
             self._arlo.debug("newish sessions, re-using")
+
+        # save session in case we updated it
+        self._save_session()
 
         # update sessions headers
         headers = {

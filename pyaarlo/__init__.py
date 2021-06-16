@@ -39,7 +39,7 @@ from .util import time_to_arlotime
 
 _LOGGER = logging.getLogger("pyaarlo")
 
-__version__ = "0.8.0a4"
+__version__ = "0.8.0a5"
 
 
 class PyArlo(object):
@@ -136,6 +136,9 @@ class PyArlo(object):
 
     def __init__(self, **kwargs):
         """Constructor for the PyArlo object."""
+        # get this out quick
+        self.info(f"pyarlo {__version__} starting...")
+
         # core values
         self._last_error = None
 

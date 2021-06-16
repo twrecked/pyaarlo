@@ -93,9 +93,12 @@ class ArloDevice(object):
         self._arlo.st.set(self._to_storage_key(attr), value)
 
     def _save_and_do_callbacks(self, attr, value):
-        # TODO only care if it changes?
-        self._save(attr, value)
-        self._do_callbacks(attr, value)
+        if value != self._load(attr):
+            self._save(attr, value)
+            self._do_callbacks(attr, value)
+            self._arlo.debug(f"{attr}: NEW {str(value)[:80]}")
+        else:
+            self._arlo.debug(f"{attr}: OLD {str(value)[:80]}")
 
     def _load(self, attr, default=None):
         return self._arlo.st.get(self._to_storage_key(attr), default)

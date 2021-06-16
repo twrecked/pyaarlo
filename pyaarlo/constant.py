@@ -177,6 +177,12 @@ SNAPSHOT_KEY = "presignedFullFrameSnapshotUrl"
 STREAM_SNAPSHOT_KEY = "presignedContentUrl"
 XCLOUD_ID_KEY = "xCloudId"
 
+LAST_VIDEO_CREATED_KEY = "lastCaptureVideoCreated"
+LAST_VIDEO_URL_KEY = "lastCaptureVideoUrl"
+LAST_VIDEO_THUMBNAIL_URL_KEY = "lastCaptureThumbnailUrl"
+LAST_VIDEO_OBJECT_TYPE = "lastCaptureObjectType"
+LAST_VIDEO_OBJECT_REGION = "lastCaptureObjectRegion"
+
 DEVICE_KEYS = [
     ACTIVITY_STATE_KEY,
     DEVICE_ID_KEY,
