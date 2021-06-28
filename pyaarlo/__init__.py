@@ -39,7 +39,7 @@ from .util import time_to_arlotime
 
 _LOGGER = logging.getLogger("pyaarlo")
 
-__version__ = "0.7.1.1"
+__version__ = "0.7.1.2"
 
 
 class PyArlo(object):
@@ -340,6 +340,7 @@ class PyArlo(object):
     def _refresh_modes(self):
         self.vdebug("refresh modes")
         for base in self._bases:
+            base.update_modes()
             base.update_mode()
 
     def _fast_refresh(self):
