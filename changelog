@@ -1,3 +1,5 @@
+0.8.0a6: Fixed schedule handling.
+         Handle events in the background thread.
 0.8.0a5: Update token to map to email address
          Save last video details
          Don't signal unless information has really changed
