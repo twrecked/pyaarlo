@@ -10,6 +10,7 @@ class ArloBackgroundWorker(threading.Thread):
         self._id = 0
         self._lock = threading.Condition()
         self._queue = {}
+        self._stopThread = False
 
     def _next_id(self):
         self._id += 1
@@ -25,6 +26,8 @@ class ArloBackgroundWorker(threading.Thread):
 
             # jobs in particular priority
             for run_at, job_id in sorted(self._queue[prio].keys()):
+#                if self._stopThread == True:
+#                    break
                 if run_at <= int(time.monotonic()):
                     job = self._queue[prio].pop((run_at, job_id))
                     self._lock.release()
@@ -58,11 +61,14 @@ class ArloBackgroundWorker(threading.Thread):
     def run(self):
 
         with self._lock:
-            while True:
+            while not self._stopThread:
 
                 # loop till done
                 timeout = None
                 while timeout is None:
+#                    if self._stopThread == True:
+#                        timeout = 0
+#                        break
                     timeout = self._run_next()
 
                 # wait or get going?
@@ -89,6 +95,9 @@ class ArloBackgroundWorker(threading.Thread):
                         del self._queue[prio][(run_at, job_id)]
                         return True
         return False
+    
+    def stop(self):
+        self._stopThread = True
 
 
 class ArloBackground:

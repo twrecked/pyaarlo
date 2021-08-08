@@ -47,6 +47,7 @@ class ArloBackEnd(object):
         self._arlo = arlo
         self._lock = threading.Condition()
         self._req_lock = threading.Lock()
+        self._stopThread = False
 
         self._dump_file = self._arlo.cfg.dump_file
 
@@ -408,7 +409,7 @@ class ArloBackEnd(object):
     def _ev_thread_main(self):
 
         self._arlo.debug("starting event loop")
-        while True:
+        while not self._stopThread:
 
             # login again if not first iteration, this will also create a new session
             while not self._logged_in:
@@ -483,6 +484,9 @@ class ArloBackEnd(object):
 
         self._arlo.debug("stream up")
         return True
+    
+    def _ev_stop(self):
+        self._stopThread = True
 
     def _get_tfa(self):
         """Return the 2FA type we're using."""
@@ -763,6 +767,7 @@ class ArloBackEnd(object):
         self._arlo.debug("trying to logout")
         if self._ev_stream is not None:
             self._ev_stream.stop()
+        self._ev_stop()
         self.put(LOGOUT_PATH)
 
     def notify(self, base, body, timeout=None, wait_for=None):
