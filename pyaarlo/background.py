@@ -26,8 +26,6 @@ class ArloBackgroundWorker(threading.Thread):
 
             # jobs in particular priority
             for run_at, job_id in sorted(self._queue[prio].keys()):
-#                if self._stopThread == True:
-#                    break
                 if run_at <= int(time.monotonic()):
                     job = self._queue[prio].pop((run_at, job_id))
                     self._lock.release()
@@ -66,9 +64,6 @@ class ArloBackgroundWorker(threading.Thread):
                 # loop till done
                 timeout = None
                 while timeout is None:
-#                    if self._stopThread == True:
-#                        timeout = 0
-#                        break
                     timeout = self._run_next()
 
                 # wait or get going?
