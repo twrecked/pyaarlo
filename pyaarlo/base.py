@@ -14,8 +14,10 @@ from .constant import (
     MODE_NAME_TO_ID_KEY,
     MODE_UPDATE_INTERVAL,
     MODEL_BABY,
-    MODEL_WIREFREE_VIDEO_DOORBELL,
+    MODEL_ESSENTIAL,
     MODEL_GO,
+    MODEL_PRO_4,
+    MODEL_WIREFREE_VIDEO_DOORBELL,
     PING_CAPABILITY,
     RESTART_PATH,
     SCHEDULE_KEY,
@@ -471,15 +473,18 @@ class ArloBase(ArloDevice):
             ):
                 return True
         if cap in (PING_CAPABILITY,):
-            # Battery powered wifi devices that act as their own base station don't get pinged.
             if self.model_id.startswith(MODEL_BABY):
                 return True
+            # Battery powered wifi devices that act as their own base station don't get pinged.
+            # Generic check.
             if self.is_own_parent and self.using_wifi and not self.is_corded:
                 return False
-            # Wire free video doorbell acting as base station
+            # Several models report incorrect wifi so we check for those as well.
             if (
                 self.is_own_parent
-                and self.model_id.startswith(MODEL_WIREFREE_VIDEO_DOORBELL)
+                and self.model_id.startswith(
+                    (MODEL_WIREFREE_VIDEO_DOORBELL, MODEL_ESSENTIAL, MODEL_PRO_4)
+                )
                 and not self.is_corded
             ):
                 return False
