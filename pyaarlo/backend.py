@@ -106,6 +106,9 @@ class ArloBackEnd(object):
                         self._arlo.debug(f"loadv{version}:failed")
         except Exception:
             self._arlo.debug("session file not read")
+            ArloBackEnd._session_info = {
+                "version": "2",
+            }
 
     def _save_session(self):
         if not self._arlo.cfg.save_session:
