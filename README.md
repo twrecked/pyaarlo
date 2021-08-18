@@ -273,7 +273,16 @@ ar = pyaarlo.PyArlo(username=USERNAME, password=PASSWORD,
 
 It's working well with my gmail account, see
 [here](https://support.google.com/mail/answer/185833?hl=en) for help setting up
-single app passwords.
+single app passwords. If needed, you can specify a port by appending it to the
+host.
+
+```python
+ar = pyaarlo.PyArlo(username=USERNAME, password=PASSWORD,
+                    tfa_source='imap',tfa_type='email',
+                    tfa_host='imap.host.com:1234',
+                    tfa_username='your-user-name',
+                    tfa_password='your-imap-password' )
+```
 
 
 <a name="executable"></a>
