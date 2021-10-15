@@ -249,3 +249,25 @@ MODEL_WIRED_VIDEO_DOORBELL = "AVD1001"
 MODEL_WIREFREE_VIDEO_DOORBELL = "AVD2001"
 
 MODEL_GO = "VML4030"
+
+USER_AGENTS = {
+    "arlo":
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 11_1_2 like Mac OS X) "
+        "AppleWebKit/604.3.5 (KHTML, like Gecko) Mobile/15B202 NETGEAR/v1 "
+        "(iOS Vuezone)",
+    "iphone":
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 13_1_3 like Mac OS X) "
+        "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.1 Mobile/15E148 Safari/604.1",
+    "ipad":
+        "Mozilla/5.0 (iPad; CPU OS 12_2 like Mac OS X) "
+        "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/12.1 Mobile/15E148 Safari/604.1",
+    "mac":
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) "
+        "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/11.1.2 Safari/605.1.15",
+    "firefox":
+        "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:85.0) "
+        "Gecko/20100101 Firefox/85.0",
+    "linux":
+        "Mozilla/5.0 (X11; Linux x86_64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.96 Safari/537.36"
+}
