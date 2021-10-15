@@ -946,7 +946,7 @@ class ArloBackEnd(object):
         self._arlo.debug(f"looking for user_agent {agent}")
         if agent == "random":
             return self.user_agent(random.choice(list(USER_AGENTS.keys())))
-        return USER_AGENTS.get(agent,USER_AGENTS["linux"])
+        return USER_AGENTS.get(agent, USER_AGENTS["linux"])
 
     def ev_inject(self, response):
         self._ev_dispatcher(response)
