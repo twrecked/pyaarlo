@@ -195,13 +195,13 @@ while True:
         elif command == 'get-mode':
             base = getDeviceFromName("Base",arlo.base_stations)
             statusHome = base.mode
-            sendCommandtoFHEM(FHEM_HOST, FHEM_PORT, FHEM_PASSWORD, "setreading Arlo_Cam.dum status-Home "+base.mode)
+            sendCommandtoFHEM(FHEM_HOST, FHEM_PORT, FHEM_PASSWORD, "setreading Arlo_Cam.dum status-Home "+statusHome)
             base = getDeviceFromName("Bridge_AZMichael",arlo.base_stations)
             statusBridgeAZMichael = base.mode
-            sendCommandtoFHEM(FHEM_HOST, FHEM_PORT, FHEM_PASSWORD, "setreading Arlo_Cam.dum status-Bridge_AZMichael "+base.mode)
+            sendCommandtoFHEM(FHEM_HOST, FHEM_PORT, FHEM_PASSWORD, "setreading Arlo_Cam.dum status-Bridge_AZMichael "+statusBridgeAZMichael)
             base = getDeviceFromName("Bridge_AZSabine",arlo.base_stations)
             statusBridgeAZSabine = base.mode
-            sendCommandtoFHEM(FHEM_HOST, FHEM_PORT, FHEM_PASSWORD, "setreading Arlo_Cam.dum status-Bridge_AZSabine "+base.mode)
+            sendCommandtoFHEM(FHEM_HOST, FHEM_PORT, FHEM_PASSWORD, "setreading Arlo_Cam.dum status-Bridge_AZSabine "+statusBridgeAZSabine)
             if statusHome == "disarmed" and statusBridgeAZMichael == "disarmed" and statusBridgeAZSabine == "disarmed":
                 currentMode = "Deaktiviert"
             elif statusHome == "armed" and statusBridgeAZMichael == "armed" and statusBridgeAZSabine == "armed":
