@@ -1,4 +1,7 @@
-DEFAULT_HOST = "https://my.arlo.com"
+DEFAULT_HOST = "https://myapi.arlo.com"
+
+ORIGIN_HOST = "https://my.arlo.com"
+REFERER_HOST = "https://my.arlo.com/"
 
 DEVICES_PATH = "/hmsweb/users/devices"
 DEFINITIONS_PATH = "/hmsweb/users/automation/definitions"
@@ -49,7 +52,7 @@ CAMERA_MEDIA_DELAY = MEDIA_LIBRARY_DELAY + 10
 FAST_REFRESH_INTERVAL = 60
 SLOW_REFRESH_INTERVAL = 10 * 60
 EVENT_STREAM_TIMEOUT = (FAST_REFRESH_INTERVAL * 2) + 5
-MODE_UPDATE_INTERVAL = 5
+MODE_UPDATE_INTERVAL = 2
 
 # update keys
 ACTIVITY_STATE_KEY = "activityState"
@@ -78,6 +81,7 @@ PRIVACY_KEY = "privacyActive"
 LIGHT_BRIGHTNESS_KEY = "lightBrightness"
 LIGHT_MODE_KEY = "lightMode"
 RECORDING_STOPPED_KEY = "recordingStopped"
+RESOURCE_CAPABILITY = "resourceCapability"
 SILENT_MODE_KEY = "silentMode"
 SPOTLIGHT_KEY = "spotlight"
 SPOTLIGHT_BRIGHTNESS_KEY = "spotlightBrightness"
@@ -174,6 +178,12 @@ SNAPSHOT_KEY = "presignedFullFrameSnapshotUrl"
 STREAM_SNAPSHOT_KEY = "presignedContentUrl"
 XCLOUD_ID_KEY = "xCloudId"
 
+LAST_VIDEO_CREATED_KEY = "lastCaptureVideoCreated"
+LAST_VIDEO_URL_KEY = "lastCaptureVideoUrl"
+LAST_VIDEO_THUMBNAIL_URL_KEY = "lastCaptureThumbnailUrl"
+LAST_VIDEO_OBJECT_TYPE = "lastCaptureObjectType"
+LAST_VIDEO_OBJECT_REGION = "lastCaptureObjectRegion"
+
 DEVICE_KEYS = [
     ACTIVITY_STATE_KEY,
     DEVICE_ID_KEY,
@@ -237,3 +247,27 @@ MODEL_ESSENTIAL_INDOOR = "VMC2040"
 
 MODEL_WIRED_VIDEO_DOORBELL = "AVD1001"
 MODEL_WIREFREE_VIDEO_DOORBELL = "AVD2001"
+
+MODEL_GO = "VML4030"
+
+USER_AGENTS = {
+    "arlo":
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 11_1_2 like Mac OS X) "
+        "AppleWebKit/604.3.5 (KHTML, like Gecko) Mobile/15B202 NETGEAR/v1 "
+        "(iOS Vuezone)",
+    "iphone":
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 13_1_3 like Mac OS X) "
+        "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.1 Mobile/15E148 Safari/604.1",
+    "ipad":
+        "Mozilla/5.0 (iPad; CPU OS 12_2 like Mac OS X) "
+        "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/12.1 Mobile/15E148 Safari/604.1",
+    "mac":
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) "
+        "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/11.1.2 Safari/605.1.15",
+    "firefox":
+        "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:85.0) "
+        "Gecko/20100101 Firefox/85.0",
+    "linux":
+        "Mozilla/5.0 (X11; Linux x86_64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.96 Safari/537.36"
+}

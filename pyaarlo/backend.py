@@ -1,10 +1,12 @@
 import json
+import pickle
 import pprint
 import re
 import threading
 import time
 import traceback
 import uuid
+import random
 
 import cloudscraper
 import requests
@@ -20,6 +22,8 @@ from .constant import (
     DEVICES_PATH,
     LOGOUT_PATH,
     NOTIFY_PATH,
+    ORIGIN_HOST,
+    REFERER_HOST,
     SESSION_PATH,
     SUBSCRIBE_PATH,
     TFA_CONSOLE_SOURCE,
@@ -27,19 +31,25 @@ from .constant import (
     TFA_PUSH_SOURCE,
     TFA_REST_API_SOURCE,
     TRANSID_PREFIX,
+    USER_AGENTS,
 )
 from .sseclient import SSEClient
 from .tfa import Arlo2FAConsole, Arlo2FAImap, Arlo2FARestAPI
-from .util import now_strftime, time_to_arlotime, to_b64
+from .util import days_until, now_strftime, time_to_arlotime, to_b64
 
 
 # include token and session details
 class ArloBackEnd(object):
+
+    _session_lock = threading.Lock()
+    _session_info = {}
+
     def __init__(self, arlo):
 
         self._arlo = arlo
         self._lock = threading.Condition()
         self._req_lock = threading.Lock()
+        self._stopThread = False
 
         self._dump_file = self._arlo.cfg.dump_file
 
@@ -47,10 +57,7 @@ class ArloBackEnd(object):
         self._callbacks = {}
         self._resource_types = DEFAULT_RESOURCES
 
-        self._token = None
-        self._user_id = None
-        self._web_id = None
-        self._sub_id = None
+        self._load_session()
 
         self._ev_stream = None
 
@@ -68,6 +75,60 @@ class ArloBackEnd(object):
         if self._arlo.cfg.reconnect_every != 0:
             self._arlo.debug("automatically reconnecting")
             self._arlo.bg.run_every(self.logout, self._arlo.cfg.reconnect_every)
+
+    def _load_session(self):
+        self._user_id = None
+        self._web_id = None
+        self._sub_id = None
+        self._token = None
+        self._expires_in = 0
+        if not self._arlo.cfg.save_session:
+            return
+        try:
+            with ArloBackEnd._session_lock:
+                with open(self._arlo.cfg.session_file, "rb") as dump:
+                    ArloBackEnd._session_info = pickle.load(dump)
+                    version = ArloBackEnd._session_info.get("version", 1)
+                    if version == "2":
+                        session_info = ArloBackEnd._session_info.get(self._arlo.cfg.username, None)
+                    else:
+                        session_info = ArloBackEnd._session_info
+                        ArloBackEnd._session_info = {
+                            "version": "2",
+                            self._arlo.cfg.username: session_info,
+                        }
+                    if session_info is not None:
+                        self._user_id = session_info["user_id"]
+                        self._web_id = session_info["web_id"]
+                        self._sub_id = session_info["sub_id"]
+                        self._token = session_info["token"]
+                        self._expires_in = session_info["expires_in"]
+                        self._arlo.debug(f"loadv{version}:session_info={ArloBackEnd._session_info}")
+                    else:
+                        self._arlo.debug(f"loadv{version}:failed")
+        except Exception:
+            self._arlo.debug("session file not read")
+            ArloBackEnd._session_info = {
+                "version": "2",
+            }
+
+    def _save_session(self):
+        if not self._arlo.cfg.save_session:
+            return
+        try:
+            with ArloBackEnd._session_lock:
+                with open(self._arlo.cfg.session_file, "wb") as dump:
+                    ArloBackEnd._session_info[self._arlo.cfg.username] = {
+                        "user_id": self._user_id,
+                        "web_id": self._web_id,
+                        "sub_id": self._sub_id,
+                        "token": self._token,
+                        "expires_in": self._expires_in,
+                    }
+                    pickle.dump(ArloBackEnd._session_info, dump)
+                    self._arlo.debug(f"savev2:session_info={ArloBackEnd._session_info}")
+        except Exception as e:
+            self._arlo.warning("session file not written" + str(e))
 
     def _request(
         self,
@@ -194,6 +255,12 @@ class ArloBackEnd(object):
                 if device_id != "resource":
                     responses.append((device_id, resource, response[device_id]))
 
+        # Mode update response
+        elif "states" in response:
+            device_id = response.get("from", None)
+            if device_id is not None:
+                responses.append((device_id, "states", response["states"]))
+
         # These are individual device responses. Find device ID and forward
         # response.
         # Packet number #?.
@@ -257,7 +324,7 @@ class ArloBackEnd(object):
                 if "all" in self._callbacks:
                     cbs.extend(self._callbacks["all"])
             for cb in cbs:
-                cb(resource, response)
+                self._arlo.bg.run(cb, resource=resource, event=response)
 
     def _ev_loop(self, stream):
 
@@ -272,13 +339,16 @@ class ArloBackEnd(object):
 
             # stopped?
             if event is None:
-                with self._lock:
-                    self._ev_connected_ = False
-                    self._lock.notify_all()
+                self._arlo.debug("reopening: no event")
                 break
 
             # dig out response, print out verbose debug
-            response = json.loads(event.data)
+            try:
+                response = json.loads(event.data)
+            except json.decoder.JSONDecodeError as e:
+                self._arlo.debug("reopening: json error " + str(e))
+                break
+
             if self._dump_file is not None:
                 with open(self._dump_file, "a") as dump:
                     time_stamp = now_strftime("%Y-%m-%d %H:%M:%S.%f")
@@ -293,10 +363,6 @@ class ArloBackEnd(object):
 
             # logged out? signal exited
             if response.get("action") == "logout":
-                with self._lock:
-                    self._ev_connected_ = False
-                    self._requests = {}
-                    self._lock.notify_all()
                 self._arlo.warning("logged out? did you log in from elsewhere?")
                 break
 
@@ -348,7 +414,7 @@ class ArloBackEnd(object):
     def _ev_thread_main(self):
 
         self._arlo.debug("starting event loop")
-        while True:
+        while not self._stopThread:
 
             # login again if not first iteration, this will also create a new session
             while not self._logged_in:
@@ -397,6 +463,12 @@ class ArloBackEnd(object):
                     )
                 )
 
+            # clear down and signal out
+            with self._lock:
+                self._ev_connected_ = False
+                self._requests = {}
+                self._lock.notify_all()
+
             # restart login...
             self._ev_stream = None
             self._logged_in = False
@@ -417,9 +489,12 @@ class ArloBackEnd(object):
 
         self._arlo.debug("stream up")
         return True
+    
+    def _ev_stop(self):
+        self._stopThread = True
 
     def _get_tfa(self):
-        """ Return the 2FA type we're using. """
+        """Return the 2FA type we're using."""
         tfa_type = self._arlo.cfg.tfa_source
         if tfa_type == TFA_CONSOLE_SOURCE:
             return Arlo2FAConsole(self._arlo)
@@ -436,14 +511,16 @@ class ArloBackEnd(object):
         self._user_id = body["userId"]
         self._web_id = self._user_id + "_web"
         self._sub_id = "subscriptions/" + self._web_id
+        self._expires_in = body["expiresIn"]
 
     def _auth(self):
         headers = {
-            "Auth-Version": "2",
             "Accept": "application/json, text/plain, */*",
-            "Referer": self._arlo.cfg.host,
-            "User-Agent": self._user_agent,
+            "Accept-Language": "en-US,en;q=0.9",
+            "Origin": ORIGIN_HOST,
+            "Referer": REFERER_HOST,
             "Source": "arloCamWeb",
+            "User-Agent": self._user_agent,
         }
 
         # Handle 1015 error
@@ -571,10 +648,11 @@ class ArloBackEnd(object):
 
     def _validate(self):
         headers = {
-            "Auth-Version": "2",
             "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "en-US,en;q=0.9",
             "Authorization": self._token64,
-            "Referer": self._arlo.cfg.host,
+            "Origin": ORIGIN_HOST,
+            "Referer": REFERER_HOST,
             "User-Agent": self._user_agent,
             "Source": "arloCamWeb",
         }
@@ -600,46 +678,45 @@ class ArloBackEnd(object):
         # pickup user configured user agent
         self._user_agent = self.user_agent(self._arlo.cfg.user_agent)
 
-        # set up session
-        self._session = cloudscraper.create_scraper()
-        #  if self._arlo.cfg.http_connections != 0 and self._arlo.cfg.http_max_size != 0:
-        #  self._arlo.debug(
-        #  "custom connections {}:{}".format(
-        #  self._arlo.cfg.http_connections, self._arlo.cfg.http_max_size
-        #  )
-        #  )
-        #  self._session.mount(
-        #  "https://",
-        #  requests.adapters.HTTPAdapter(
-        #  pool_connections=self._arlo.cfg.http_connections,
-        #  pool_maxsize=self._arlo.cfg.http_max_size,
-        #  ),
-        #  )
+        # If token looks invalid we'll try the whole process.
+        get_new_session = days_until(self._expires_in) < 2
+        if get_new_session:
+            self._session = cloudscraper.create_scraper()
+            self._arlo.debug("oldish session, getting a new one")
+            if not self._auth():
+                return False
+            if not self._validate():
+                return False
 
-        if not self._auth():
-            return False
+        else:
+            self._session = requests.session()
+            self._arlo.debug("newish sessions, re-using")
 
-        if not self._validate():
-            return False
+        # save session in case we updated it
+        self._save_session()
 
         # update sessions headers
         headers = {
-            "Accept": "application/json, text/plain, */*",
-            "Accept-Language": "en-GB,en;q=0.9,en-US;q=0.8",
+            "Accept": "application/json",
+            "Accept-Language": "en-US,en;q=0.9",
             "Auth-Version": "2",
-            "Cache-Control": "no-cache",
-            "SchemaVersion": "1",
-            "Host": re.sub("https?://", "", self._arlo.cfg.host),
-            "Content-Type": "application/json; charset=utf-8;",
-            "Origin": self._arlo.cfg.host,
-            "Pragma": "no-cache",
-            "Referer": self._arlo.cfg.host,
-            "User-Agent": self._user_agent,
             "Authorization": self._token,
+            "Content-Type": "application/json; charset=utf-8;",
+            "Origin": ORIGIN_HOST,
+            "Pragma": "no-cache",
+            "Referer": REFERER_HOST,
+            "SchemaVersion": "1",
+            "User-Agent": self._user_agent,
         }
         self._session.headers.update(headers)
 
+        # Grab a session. Needed for new session and used to check existing
+        # session. (May not really be needed for existing but will fail faster.)
         if not self._v2_session():
+            if not get_new_session:
+                self._expires_in = 0
+                self._token = None
+                return self._login()
             return False
         return True
 
@@ -695,6 +772,7 @@ class ArloBackEnd(object):
         self._arlo.debug("trying to logout")
         if self._ev_stream is not None:
             self._ev_stream.stop()
+        self._ev_stop()
         self.put(LOGOUT_PATH)
 
     def notify(self, base, body, timeout=None, wait_for=None):
@@ -861,39 +939,14 @@ class ArloBackEnd(object):
 
         User provides a default user agent they want for most interactions but it can be overridden
         for stream operations.
+
+        `random` will provide a different user agent for each log in attempt.
         """
+        agent = agent.lower()
         self._arlo.debug(f"looking for user_agent {agent}")
-        if agent.lower() == "arlo":
-            return (
-                "Mozilla/5.0 (iPhone; CPU iPhone OS 11_1_2 like Mac OS X) "
-                "AppleWebKit/604.3.5 (KHTML, like Gecko) Mobile/15B202 NETGEAR/v1 "
-                "(iOS Vuezone)"
-            )
-        elif agent.lower() == "iphone":
-            return (
-                "Mozilla/5.0 (iPhone; CPU iPhone OS 13_1_3 like Mac OS X) "
-                "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.1 Mobile/15E148 Safari/604.1"
-            )
-        elif agent.lower() == "ipad":
-            return (
-                "Mozilla/5.0 (iPad; CPU OS 12_2 like Mac OS X) "
-                "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/12.1 Mobile/15E148 Safari/604.1"
-            )
-        elif agent.lower() == "mac":
-            return (
-                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) "
-                "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/11.1.2 Safari/605.1.15"
-            )
-        elif agent.lower() == "firefox":
-            return (
-                "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:85.0) "
-                "Gecko/20100101 Firefox/85.0"
-            )
-        else:
-            return (
-                "Mozilla/5.0 (X11; Linux x86_64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.96 Safari/537.36"
-            )
+        if agent == "random":
+            return self.user_agent(random.choice(list(USER_AGENTS.keys())))
+        return USER_AGENTS.get(agent, USER_AGENTS["linux"])
 
     def ev_inject(self, response):
         self._ev_dispatcher(response)

@@ -11,7 +11,7 @@ def readme():
 setup(
 
     name='pyaarlo',
-    version='0.7.1b9',
+    version='0.8.0a11',
     packages=['pyaarlo'],
 
     python_requires='>=3.6',
@@ -20,13 +20,14 @@ setup(
         'click',
         'pycryptodome',
         'unidecode',
-        'cloudscraper'
+        'cloudscraper>=1.2.58'
     ],
 
     author='Steve Herrell',
     author_email='steve.herrell@gmail.com',
     description='PyAarlo is a library that provides asynchronous access to Arlo security cameras.',
     long_description=readme(),
+    long_description_content_type='text/markdown',
     license='LGPLv3+',
     keywords=[
         'arlo',

@@ -27,6 +27,11 @@ from .constant import (
     LAST_IMAGE_DATA_KEY,
     LAST_IMAGE_KEY,
     LAST_IMAGE_SRC_KEY,
+    LAST_VIDEO_CREATED_KEY,
+    LAST_VIDEO_URL_KEY,
+    LAST_VIDEO_THUMBNAIL_URL_KEY,
+    LAST_VIDEO_OBJECT_TYPE,
+    LAST_VIDEO_OBJECT_REGION,
     LIGHT_BRIGHTNESS_KEY,
     LIGHT_MODE_KEY,
     MEDIA_COUNT_KEY,
@@ -43,7 +48,9 @@ from .constant import (
     MODEL_PRO_3_FLOODLIGHT,
     MODEL_PRO_4,
     MODEL_ULTRA,
+    MODEL_WIRED_VIDEO_DOORBELL,
     MODEL_WIREFREE_VIDEO_DOORBELL,
+    MODEL_GO,
     MOTION_DETECTED_KEY,
     MOTION_SENS_KEY,
     NIGHTLIGHT_KEY,
@@ -155,6 +162,15 @@ class ArloCamera(ArloChildDevice):
         with self._lock:
             self._cache_count = count
             self._cached_videos = videos
+
+        # update latest video details
+        if videos:
+            if videos[0].created_at != self._load(LAST_VIDEO_CREATED_KEY):
+                self._save_and_do_callbacks(LAST_VIDEO_CREATED_KEY, videos[0].created_at)
+                self._save_and_do_callbacks(LAST_VIDEO_URL_KEY, videos[0].video_url)
+                self._save_and_do_callbacks(LAST_VIDEO_THUMBNAIL_URL_KEY, videos[0].thumbnail_url)
+                self._save_and_do_callbacks(LAST_VIDEO_OBJECT_TYPE, videos[0].object_type)
+                self._save_and_do_callbacks(LAST_VIDEO_OBJECT_REGION, videos[0].object_region)
 
         # signal video up!
         self._save_and_do_callbacks(CAPTURED_TODAY_KEY, captured_today)
@@ -573,6 +589,22 @@ class ArloCamera(ArloChildDevice):
                 return self._cached_videos[0]
         return None
 
+    @property
+    def last_video_url(self):
+        return self._load(LAST_VIDEO_URL_KEY, None)
+
+    @property
+    def last_video_thumbnail_url(self):
+        return self._load(LAST_VIDEO_THUMBNAIL_URL_KEY, None)
+
+    @property
+    def last_video_object_type(self):
+        return self._load(LAST_VIDEO_OBJECT_TYPE, None)
+
+    @property
+    def last_video_object_region(self):
+        return self._load(LAST_VIDEO_OBJECT_REGION, None)
+
     def last_n_videos(self, count):
         """Returns the last count video objects describing the last captured videos.
 
@@ -641,12 +673,12 @@ class ArloCamera(ArloChildDevice):
 
     @property
     def unseen_videos(self):
-        """Returns the camera unseen video count. """
+        """Returns the camera unseen video count."""
         return self._load(MEDIA_COUNT_KEY, 0)
 
     @property
     def captured_today(self):
-        """Returns the number of videos captured today. """
+        """Returns the number of videos captured today."""
         return self._load(CAPTURED_TODAY_KEY, 0)
 
     @property
@@ -1334,6 +1366,7 @@ class ArloCamera(ArloChildDevice):
                     MODEL_PRO_3_FLOODLIGHT,
                     MODEL_PRO_4,
                     MODEL_ULTRA,
+                    MODEL_GO,
                     MODEL_BABY,
                 )
             ):
@@ -1375,8 +1408,10 @@ class ArloCamera(ArloChildDevice):
                     MODEL_PRO_3_FLOODLIGHT,
                     MODEL_PRO_4,
                     MODEL_ESSENTIAL,
+                    MODEL_WIRED_VIDEO_DOORBELL,
                     MODEL_WIREFREE_VIDEO_DOORBELL,
                     MODEL_ESSENTIAL_INDOOR,
+                    MODEL_GO,
                 )
             ):
                 return False

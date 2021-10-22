@@ -90,12 +90,15 @@ class ArloDevice(object):
             cb(self, attr, value)
 
     def _save(self, attr, value):
-        # TODO only care if it changes?
         self._arlo.st.set(self._to_storage_key(attr), value)
 
     def _save_and_do_callbacks(self, attr, value):
-        self._save(attr, value)
-        self._do_callbacks(attr, value)
+        if value != self._load(attr):
+            self._save(attr, value)
+            self._do_callbacks(attr, value)
+            self._arlo.debug(f"{attr}: NEW {str(value)[:80]}")
+        else:
+            self._arlo.debug(f"{attr}: OLD {str(value)[:80]}")
 
     def _load(self, attr, default=None):
         return self._arlo.st.get(self._to_storage_key(attr), default)
@@ -311,7 +314,7 @@ class ArloDevice(object):
     @property
     def is_charger_only(self):
         """Returns `True` if the cahrger is plugged in with no batteries, `False` otherwise."""
-        return self.battery_tech == "None" and self.is_charging
+        return self.battery_tech == "None" and self.has_charger
 
     @property
     def is_corded(self):

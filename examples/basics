@@ -24,7 +24,8 @@ _LOGGER = logging.getLogger('pyaarlo')
 # add `verbose_debug=True` to enable even more debugging
 # add `dump=True` to enable event stream packet dumps
 arlo = pyaarlo.PyArlo(username=USERNAME, password=PASSWORD,
-                      tfa_type='SMS', tfa_source='console', synchronous_mode=True,
+                      tfa_type='EMAIL', tfa_source='console', synchronous_mode=True,
+                      save_session=True,
                       save_state=False, dump=True, storage_dir='aarlo', verbose_debug=True)
 if not arlo.is_connected:
     print("failed to login({})".format(arlo._last_error))

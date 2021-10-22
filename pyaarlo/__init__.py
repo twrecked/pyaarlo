@@ -23,8 +23,10 @@ from .constant import (
     MODEL_PRO_4,
     MODEL_WIRED_VIDEO_DOORBELL,
     MODEL_WIREFREE_VIDEO_DOORBELL,
+    MODEL_GO,
     PING_CAPABILITY,
     REFRESH_CAMERA_DELAY,
+    RESOURCE_CAPABILITY,
     SLOW_REFRESH_INTERVAL,
     TOTAL_BELLS_KEY,
     TOTAL_CAMERAS_KEY,
@@ -38,7 +40,7 @@ from .util import time_to_arlotime
 
 _LOGGER = logging.getLogger("pyaarlo")
 
-__version__ = "0.7.1b9"
+__version__ = "0.8.0a11"
 
 
 class PyArlo(object):
@@ -116,10 +118,6 @@ class PyArlo(object):
       returned. Default is `arlo`.
     * **mode_api** - Which api to use to set the base station modes. Default is `auto` which choose an API
       based on camera model. Can also be `v1` and `v2`.
-    * **http_connections** - HTTP connection pool size. Default is `20`, set to `None` to default provided
-      by the system.
-    * **http_max_size** - HTTP maximum connection pool size. Default is `10`, set to `None` to default provided
-      by the system.
     * **reconnect_every** - Time, in minutes, to close and relogin to Arlo.
     * **snapshot_timeout** - Time, in seconds, to stop the snapshot attempt and return the camera to the idle state.
 
@@ -139,6 +137,9 @@ class PyArlo(object):
 
     def __init__(self, **kwargs):
         """Constructor for the PyArlo object."""
+        # get this out quick
+        self.info(f"pyarlo {__version__} starting...")
+
         # core values
         self._last_error = None
 
@@ -146,11 +147,12 @@ class PyArlo(object):
         self._cfg = ArloCfg(self, **kwargs)
 
         # Create storage/scratch directory.
-        if self._cfg.state_file is not None or self._cfg.dump_file is not None:
+        if self._cfg.save_state or self._cfg.dump or self._cfg.save_session:
             try:
-                os.mkdir(self._cfg.storage_dir)
+                if not os.path.exists(self._cfg.storage_dir):
+                    os.mkdir(self._cfg.storage_dir)
             except Exception:
-                pass
+                self.warning(f"Problem creating {self._cfg.storage_dir}")
 
         # Create remaining components.
         self._bg = ArloBackground(self)
@@ -197,6 +199,7 @@ class PyArlo(object):
             if (
                 dtype == "basestation"
                 or device.get("modelId") == "ABC1000"
+                or device.get("modelId").startswith(MODEL_GO)
                 or dtype == "arloq"
                 or dtype == "arloqs"
             ):
@@ -220,6 +223,7 @@ class PyArlo(object):
                 dtype == "camera"
                 or dtype == "arloq"
                 or dtype == "arloqs"
+                or device.get("modelId").startswith(MODEL_GO)
                 or device.get("modelId").startswith(MODEL_WIRED_VIDEO_DOORBELL)
                 or device.get("modelId").startswith(MODEL_WIREFREE_VIDEO_DOORBELL)
             ):
@@ -287,12 +291,12 @@ class PyArlo(object):
         self.vdebug("devices={}".format(pprint.pformat(self._devices)))
 
     def _refresh_camera_thumbnails(self, wait=False):
-        """Request latest camera thumbnails, called at start up. """
+        """Request latest camera thumbnails, called at start up."""
         for camera in self._cameras:
             camera.update_last_image(wait)
 
     def _refresh_camera_media(self, wait=False):
-        """Rebuild cameras media library, called at start up or when day changes. """
+        """Rebuild cameras media library, called at start up or when day changes."""
         for camera in self._cameras:
             camera.update_media(wait)
 
@@ -314,29 +318,33 @@ class PyArlo(object):
     def _refresh_bases(self, initial):
         for base in self._bases:
             base.update_modes(initial)
-            self._be.notify(
-                base=base,
-                body={"action": "get", "resource": "cameras", "publishResponse": False},
-                wait_for="response",
-            )
-            self._be.notify(
-                base=base,
-                body={
-                    "action": "get",
-                    "resource": "doorbells",
-                    "publishResponse": False,
-                },
-                wait_for="response",
-            )
-            self._be.notify(
-                base=base,
-                body={"action": "get", "resource": "lights", "publishResponse": False},
-                wait_for="response",
-            )
+            if base.has_capability(RESOURCE_CAPABILITY):
+                self._be.notify(
+                    base=base,
+                    body={"action": "get", "resource": "cameras", "publishResponse": False},
+                    wait_for="response",
+                )
+                self._be.notify(
+                    base=base,
+                    body={
+                        "action": "get",
+                        "resource": "doorbells",
+                        "publishResponse": False,
+                    },
+                    wait_for="response",
+                )
+                self._be.notify(
+                    base=base,
+                    body={"action": "get", "resource": "lights", "publishResponse": False},
+                    wait_for="response",
+                )
+            else:
+                self.vdebug(f"NO resource for {base.device_id}")
 
     def _refresh_modes(self):
         self.vdebug("refresh modes")
         for base in self._bases:
+            base.update_modes()
             base.update_mode()
 
     def _fast_refresh(self):
@@ -399,8 +407,9 @@ class PyArlo(object):
             self._lock.notify_all()
 
     def stop(self):
-        """Stop connection to Arlo and logout. """
+        """Stop connection to Arlo and logout."""
         self._st.save()
+        self._bg._worker.stop()
         self._be.logout()
 
     @property
