@@ -5,7 +5,7 @@
 # Based on https://github.com/twrecked/pyaarlo
 # Michael Urspringer
 
-VERSION = "1.1.6a"
+VERSION = "1.1.8"
 
 import pyaarlo
 import argparse
@@ -154,35 +154,35 @@ while True:
 
         elif command == 'set-mode':
             if parameter1 == 'deaktiviert':
-                base = getDeviceFromName("Home",arlo.base_stations)
+                base = getDeviceFromName("Base",arlo.base_stations)
                 base.mode = 'disarmed'
                 base = getDeviceFromName("Bridge_AZMichael",arlo.base_stations)
                 base.mode = 'disarmed'
                 base = getDeviceFromName("Bridge_AZSabine",arlo.base_stations)
                 base.mode = 'disarmed'
             elif parameter1 == 'aktiviert':
-                base = getDeviceFromName("Home",arlo.base_stations)
+                base = getDeviceFromName("Base",arlo.base_stations)
                 base.mode = 'armed'
                 base = getDeviceFromName("Bridge_AZMichael",arlo.base_stations)
                 base.mode = 'armed'
                 base = getDeviceFromName("Bridge_AZSabine",arlo.base_stations)
                 base.mode = 'armed'
             elif parameter1 == 'aktiviert_tag':
-                base = getDeviceFromName("Home",arlo.base_stations)
+                base = getDeviceFromName("Base",arlo.base_stations)
                 base.mode = 'aktiviert_tag'
                 base = getDeviceFromName("Bridge_AZMichael",arlo.base_stations)
                 base.mode = 'aktiviert_tag'
                 base = getDeviceFromName("Bridge_AZSabine",arlo.base_stations)
                 base.mode = 'aktiviert_tag'
             elif parameter1 == 'garten':
-                base = getDeviceFromName("Home",arlo.base_stations)
+                base = getDeviceFromName("Base",arlo.base_stations)
                 base.mode = 'garten_alle'
                 base = getDeviceFromName("Bridge_AZMichael",arlo.base_stations)
                 base.mode = 'garten'
                 base = getDeviceFromName("Bridge_AZSabine",arlo.base_stations)
                 base.mode = 'armed'
             elif parameter1 == 'garten_hinten':
-                base = getDeviceFromName("Home",arlo.base_stations)
+                base = getDeviceFromName("Base",arlo.base_stations)
                 base.mode = 'garten_2'
                 base = getDeviceFromName("Bridge_AZMichael",arlo.base_stations)
                 base.mode = 'disarmed'
@@ -193,7 +193,7 @@ while True:
                 break
 
         elif command == 'get-mode':
-            base = getDeviceFromName("Home",arlo.base_stations)
+            base = getDeviceFromName("Base",arlo.base_stations)
             statusHome = base.mode
             sendCommandtoFHEM(FHEM_HOST, FHEM_PORT, FHEM_PASSWORD, "setreading Arlo_Cam.dum status-Home "+base.mode)
             base = getDeviceFromName("Bridge_AZMichael",arlo.base_stations)

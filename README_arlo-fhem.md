@@ -155,6 +155,5 @@ Mode | Purpose
 aktiviert | Activate (Arm) all cams
 deaktiviert | Deactivate (Disarm) all cams
 aktiviert_tag | Set several custom modes for my different cams with different sensitivity during the day
-aktiviert_ohne_terrasse | Only activate some of my cams
 garten | Only activate some of my cams
 garten_hinten | Only activate some of my cams

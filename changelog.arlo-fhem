@@ -1,3 +1,8 @@
+1.1.8:  Changed:    Update upstream code to most current 0.8.0a11 (not released yet!)
+                    README.md is now the original upstream one, my own specific description is now in README_arlo-fhem.md
+
+1.1.7:  Changed:    Update upstream code to 0.8.0a6
+
 1.1.6a: Changed:    Added new prerequisite "cloudscraper" to readme file
 
 1.1.6:  Changed:    Update upstream code to 0.7.1b9
