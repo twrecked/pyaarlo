@@ -3,3 +3,4 @@ click
 pycryptodome
 unidecode
 cloudscraper>=1.2.58
+paho-mqtt
