@@ -1,3 +1,4 @@
+0.8.0a12: Use new MQTT backend
 0.8.0a11: Add random user agent support.
 0.8.0a10: Don't request resources for Wirefree doorbells.
 0.8.0a9: Support IMAP port.
