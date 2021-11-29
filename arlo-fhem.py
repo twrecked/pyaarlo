@@ -5,7 +5,7 @@
 # Based on https://github.com/twrecked/pyaarlo
 # Michael Urspringer
 
-VERSION = "1.1.9"
+VERSION = "1.1.9a"
 
 import pyaarlo
 import argparse
@@ -20,7 +20,7 @@ import sys
 import telnetlib
 import time
 import unidecode
-# import ssl
+import ssl
 
 
 # Login to Arlo Account, retry if not successfull
@@ -30,7 +30,7 @@ def loginToArlo(username, password, tfa_host, tfa_username, tfa_password, max_tr
     while count < max_tries:
         count = count + 1 
         print(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "- arlo-fhem - Trying to connect ",count," of ",max_tries)
-        arlo = pyaarlo.PyArlo(username=username, password=password,tfa_source='imap', tfa_type='email', tfa_host=tfa_host, tfa_username=tfa_username, tfa_password=tfa_password, synchronous_mode=False, refresh_devices_every=1,reconnect_every=90, stream_timeout=180, request_timeout=120, verbose_debug=False)
+        arlo = pyaarlo.PyArlo(username=username, password=password,tfa_source='imap', tfa_type='email', tfa_host=tfa_host, tfa_username=tfa_username, tfa_password=tfa_password, synchronous_mode=False, refresh_devices_every=1,reconnect_every=90, stream_timeout=180, request_timeout=120, user_agent='linux', verbose_debug=True)
         if arlo.is_connected:
             break
         if count == max_tries:
@@ -59,7 +59,7 @@ def getDeviceFromName(name, devices):
 
 print(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "- arlo-fhem - version", VERSION)
 
-# ssl.SSLContext.verify_mode = ssl.VerifyMode.CERT_OPTIONAL
+ssl.SSLContext.verify_mode = ssl.VerifyMode.CERT_OPTIONAL
 
 # set up logging, change ERROR or INFO to DEBUG for a *lot* more information
 logging.basicConfig(level=logging.ERROR,
