@@ -40,7 +40,7 @@ from .util import time_to_arlotime
 
 _LOGGER = logging.getLogger("pyaarlo")
 
-__version__ = "0.8.0a11"
+__version__ = "0.8.0a13"
 
 
 class PyArlo(object):
@@ -238,7 +238,10 @@ class PyArlo(object):
         self._st.set(["ARLO", TOTAL_BELLS_KEY], len(self._doorbells))
         self._st.set(["ARLO", TOTAL_LIGHTS_KEY], len(self._lights))
 
-        # Always ping bases first!
+        # Subscribe to events.
+        self._be.start_monitoring()
+
+        # Now ping the bases.
         self._ping_bases()
 
         # Initial config and state retrieval.
@@ -321,7 +324,11 @@ class PyArlo(object):
             if base.has_capability(RESOURCE_CAPABILITY):
                 self._be.notify(
                     base=base,
-                    body={"action": "get", "resource": "cameras", "publishResponse": False},
+                    body={
+                        "action": "get",
+                        "resource": "cameras",
+                        "publishResponse": False,
+                    },
                     wait_for="response",
                 )
                 self._be.notify(
@@ -335,7 +342,11 @@ class PyArlo(object):
                 )
                 self._be.notify(
                     base=base,
-                    body={"action": "get", "resource": "lights", "publishResponse": False},
+                    body={
+                        "action": "get",
+                        "resource": "lights",
+                        "publishResponse": False,
+                    },
                     wait_for="response",
                 )
             else:
@@ -422,6 +433,10 @@ class PyArlo(object):
     @property
     def name(self):
         return "ARLO CONTROLLER"
+
+    @property
+    def devices(self):
+        return self._devices
 
     @property
     def device_id(self):
