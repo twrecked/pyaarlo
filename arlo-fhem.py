@@ -5,7 +5,7 @@
 # Based on https://github.com/twrecked/pyaarlo
 # Michael Urspringer
 
-VERSION = "1.1.9a"
+VERSION = "1.1.9"
 
 import pyaarlo
 import argparse
@@ -20,8 +20,6 @@ import sys
 import telnetlib
 import time
 import unidecode
-# import ssl
-
 
 # Login to Arlo Account, retry if not successfull
 def loginToArlo(username, password, tfa_host, tfa_username, tfa_password, max_tries, login_wait):
@@ -59,10 +57,8 @@ def getDeviceFromName(name, devices):
 
 print(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "- arlo-fhem - version", VERSION)
 
-# ssl.SSLContext.verify_mode = ssl.VerifyMode.CERT_OPTIONAL
-
 # set up logging, change ERROR or INFO to DEBUG for a *lot* more information
-logging.basicConfig(level=logging.DEBUG,
+logging.basicConfig(level=logging.ERROR,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     filename='debug.log')
 _LOGGER = logging.getLogger('arlo-fhem')
