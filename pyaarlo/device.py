@@ -106,7 +106,6 @@ class ArloDevice(object):
         return self._arlo.st.get_matching(self._to_storage_key(attr), default)
 
     def update_resources(self, props):
-        props = attrs.get("properties", {})
         for key in RESOURCE_KEYS + RESOURCE_UPDATE_KEYS:
             value = props.get(key, None)
             if value is not None:
