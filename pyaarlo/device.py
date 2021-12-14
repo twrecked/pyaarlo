@@ -155,7 +155,6 @@ class ArloDevice(object):
     @property
     def device_type(self):
         """Returns the Arlo reported device type.
-\
         """
         return self._device_type
 
