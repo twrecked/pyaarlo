@@ -1,6 +1,7 @@
 0.8.0a13: Better loading of initial settings from new devices.
   Update devices from device refresh
   Allow old backend to be used.
+  Quiet down traditional chimes.
 0.8.0a12: Use new MQTT backend
 0.8.0a11: Add random user agent support.
 0.8.0a10: Don't request resources for Wirefree doorbells.
