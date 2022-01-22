@@ -831,17 +831,18 @@ class ArloBackEnd(object):
             trans_id = self.gen_trans_id()
 
         body["to"] = base.device_id
-        body["from"] = self._web_id
+        if not "from" in body:
+            body["from"] = self._web_id
         body["transId"] = trans_id
 
-        if (
-            self.post(
-                NOTIFY_PATH + base.device_id, body, headers={"xcloudId": base.xcloud_id}
-            )
-            is None
-        ):
+        response = self.post(
+            NOTIFY_PATH + base.device_id, body, headers={"xcloudId": base.xcloud_id}
+        )
+
+        if response is None:
             return None
-        return trans_id
+        else:
+            return trans_id
 
     def _start_transaction(self, tid=None):
         if tid is None:
