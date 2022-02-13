@@ -271,6 +271,17 @@ ar = pyaarlo.PyArlo(username=USERNAME, password=PASSWORD,
                     tfa_password='your-imap-password' )
 ```
 
+If you have multiple e-mail addresses associated with Arlo, you might also try configuring `tfa_nickname` to ensure that the correct factor is triggered:
+
+```python
+ar = pyaarlo.PyArlo(username=USERNAME, password=PASSWORD,
+                    tfa_source='imap',tfa_type='email',
+                    tfa_host='imap.host.com',
+                    tfa_username='your-user-name',
+                    tfa_password='your-imap-password',
+                    tfa_nickname='your-user-name@your-domain.com' )
+```
+
 It's working well with my gmail account, see
 [here](https://support.google.com/mail/answer/185833?hl=en) for help setting up
 single app passwords. If needed, you can specify a port by appending it to the

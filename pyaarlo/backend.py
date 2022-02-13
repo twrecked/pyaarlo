@@ -674,10 +674,23 @@ class ArloBackEnd(object):
 
             # look for code source choice
             self._arlo.debug("looking for {}".format(self._arlo.cfg.tfa_type))
+            factors_of_type = []
             factor_id = None
+
             for factor in factors["items"]:
                 if factor["factorType"].lower() == self._arlo.cfg.tfa_type:
-                    factor_id = factor["factorId"]
+                    factors_of_type.append(factor)
+
+            if len(factors_of_type) > 0:
+                # Try to match the factorNickname with the tfa_nickname
+                for factor in factors_of_type:
+                    if self._arlo.cfg.tfa_nickname == factor["factorNickname"]:
+                        factor_id = factor["factorId"]
+                        break
+                # Otherwise fallback to using the first option
+                else:
+                    factor_id = factors_of_type[0]["factorId"]
+
             if factor_id is None:
                 self._arlo.error("2fa no suitable secondary choice available")
                 return False
