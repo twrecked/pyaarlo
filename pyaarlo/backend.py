@@ -20,6 +20,8 @@ from .constant import (
     DEVICES_PATH,
     LOGOUT_PATH,
     NOTIFY_PATH,
+    ORIGIN_HOST,
+    REFERER_HOST,
     SESSION_PATH,
     SUBSCRIBE_PATH,
     TFA_CONSOLE_SOURCE,
@@ -445,11 +447,12 @@ class ArloBackEnd(object):
 
     def _auth(self):
         headers = {
-            "Auth-Version": "2",
             "Accept": "application/json, text/plain, */*",
-            "Referer": self._arlo.cfg.host,
-            "User-Agent": self._user_agent,
+            "Accept-Language": "en-US,en;q=0.9",
+            "Origin": ORIGIN_HOST,
+            "Referer": REFERER_HOST,
             "Source": "arloCamWeb",
+            "User-Agent": self._user_agent,
         }
 
         # Handle 1015 error
@@ -577,10 +580,11 @@ class ArloBackEnd(object):
 
     def _validate(self):
         headers = {
-            "Auth-Version": "2",
             "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "en-US,en;q=0.9",
             "Authorization": self._token64,
-            "Referer": self._arlo.cfg.host,
+            "Origin": ORIGIN_HOST,
+            "Referer": REFERER_HOST,
             "User-Agent": self._user_agent,
             "Source": "arloCamWeb",
         }
@@ -630,18 +634,16 @@ class ArloBackEnd(object):
 
         # update sessions headers
         headers = {
-            "Accept": "application/json, text/plain, */*",
-            "Accept-Language": "en-GB,en;q=0.9,en-US;q=0.8",
+            "Accept": "application/json",
+            "Accept-Language": "en-US,en;q=0.9",
             "Auth-Version": "2",
-            "Cache-Control": "no-cache",
-            "SchemaVersion": "1",
-            "Host": re.sub("https?://", "", self._arlo.cfg.host),
-            "Content-Type": "application/json; charset=utf-8;",
-            "Origin": self._arlo.cfg.host,
-            "Pragma": "no-cache",
-            "Referer": self._arlo.cfg.host,
-            "User-Agent": self._user_agent,
             "Authorization": self._token,
+            "Content-Type": "application/json; charset=utf-8;",
+            "Origin": ORIGIN_HOST,
+            "Pragma": "no-cache",
+            "Referer": REFERER_HOST,
+            "SchemaVersion": "1",
+            "User-Agent": self._user_agent,
         }
         self._session.headers.update(headers)
 
