@@ -21,7 +21,8 @@ setup(
         'pycryptodome',
         'unidecode',
         'cloudscraper>=1.2.58',
-        'paho-mqtt'
+        'paho-mqtt',
+        'cryptography'
     ],
 
     author='Steve Herrell',
