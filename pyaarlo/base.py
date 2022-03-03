@@ -29,9 +29,10 @@ from .constant import (
 )
 from .device import ArloDevice
 from .util import time_to_arlotime
+from .media import ArloBaseStationMediaLibrary
+from .ratls import ArloRatls
 
 day_of_week = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su", "Mo"]
-
 
 class ArloBase(ArloDevice):
     def __init__(self, name, arlo, attrs):
@@ -39,6 +40,7 @@ class ArloBase(ArloDevice):
         self._refresh_rate = 15
         self._schedules = None
         self._last_update = 0
+        self._ratls = None
 
     def _id_to_name(self, mode_id):
         return self._load([MODE_ID_TO_NAME_KEY, mode_id], None)
@@ -501,3 +503,23 @@ class ArloBase(ArloDevice):
                 return False
             return True
         return super().has_capability(cap)
+
+    def build_ratls(self, public=False):
+        self._ratls = ArloRatls(self._arlo, self, public=public)
+
+    def keep_ratls_open(self):
+        if self._ratls:
+            self._arlo.debug("refreshing ratls for {}".format(self.name))
+            self._ratls.open_port()
+
+    def build_media_library(self):
+        self._ml = ArloBaseStationMediaLibrary(self._arlo, self)
+        self._ml.load()
+
+    @property
+    def ml(self):
+        return self._ml
+
+    @property
+    def ratls(self):
+        return self._ratls

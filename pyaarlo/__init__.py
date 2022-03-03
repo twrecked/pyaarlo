@@ -341,6 +341,7 @@ class PyArlo(object):
     def _refresh_bases(self, initial):
         for base in self._bases:
             base.update_modes(initial)
+            base.keep_ratls_open()
             if base.has_capability(RESOURCE_CAPABILITY):
                 self._be.notify(
                     base=base,
