@@ -153,7 +153,7 @@ class ArloMediaLibrary(object):
 
     def _fetch_library(self, date_from, date_to):
         return self._arlo.be.post(
-            LIBRARY_PATH, {"dateFrom": date_to, "dateTo": date_to}
+            LIBRARY_PATH, {"dateFrom": date_from, "dateTo": date_to}
         )
 
     # grab recordings from last day, add to existing library if not there

@@ -1,3 +1,4 @@
+0.8.0a15: Fix media library day count.
 0.8.0a14: Fix sse reconnect.
   Provide access to base station recordings.
 0.8.0a13: Better loading of initial settings from new devices.
