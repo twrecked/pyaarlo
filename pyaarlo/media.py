@@ -183,7 +183,7 @@ class ArloMediaLibrary(object):
                 if camera.device_id not in snapshots:
                     self._arlo.debug(f"adding snapshot for {camera.name}")
                     snapshots[camera.device_id] = ArloSnapshot(
-                        video, camera, self._arlo
+                        video, camera, self._arlo, camera.base_station
                     )
                 continue
 
@@ -253,7 +253,7 @@ class ArloMediaLibrary(object):
                 if camera.device_id not in snapshots:
                     self._arlo.debug(f"adding snapshot for {camera.name}")
                     snapshots[camera.device_id] = ArloSnapshot(
-                        video, camera, self._arlo
+                        video, camera, self._arlo, camera.base_station
                     )
                 continue
 
