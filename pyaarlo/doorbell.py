@@ -124,7 +124,7 @@ class ArloDoorBell(ArloChildDevice):
         )
 
     def _build_chimes(self, on_or_off):
-        chimes = {"traditional": on_or_off}
+        chimes = {"traditionalChime": on_or_off}
         for chime in self._chimes:
             chimes[chime] = on_or_off
         return chimes

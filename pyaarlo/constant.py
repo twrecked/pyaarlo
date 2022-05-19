@@ -21,6 +21,12 @@ RESTART_PATH = "/hmsweb/users/devices/restart"
 STREAM_SNAPSHOT_PATH = "/hmsweb/users/devices/takeSnapshot"
 STREAM_START_PATH = "/hmsweb/users/devices/startStream"
 IDLE_SNAPSHOT_PATH = "/hmsweb/users/devices/fullFrameSnapshot"
+CREATE_DEVICE_CERTS_PATH = "/hmsweb/users/devices/v2/security/cert/create"
+RATLS_TOKEN_GENERATE_PATH = "/hmsweb/users/device/ratls/token"
+RATLS_CONNECTIVITY_PATH = '/hmsls/connectivity'
+RATLS_DOWNLOAD_PATH = "/hmsls/download"
+RATLS_LIBRARY_PATH = "/hmsls/list" # Supports list/{YYYYMMDD}/{YYYYMMMDD} or list/{YYYYMMDD}/{YYYYMMMDD}/{device_id}
+
 MQTT_PATH = "/mqtt"
 TRANSID_PREFIX = "web"
 
@@ -90,6 +96,7 @@ SPOTLIGHT_BRIGHTNESS_KEY = "spotlightBrightness"
 SIGNAL_STR_KEY = "signalStrength"
 SIREN_STATE_KEY = "sirenState"
 TEMPERATURE_KEY = "temperature"
+TIMEZONE_KEY = "olsonTimeZone"
 TRADITIONAL_CHIME_KEY = "traditionalChime"
 NIGHTLIGHT_KEY = "nightLight"
 MEDIA_PLAYER_KEY = "mediaPlayer"
@@ -232,6 +239,8 @@ BLANK_IMAGE = (
     "tivOs6f/QsrFAAAAAElFTkSuQmCC"
 )
 
+VIDEO_CONTENT_TYPES = ['2k', '4k', 'hd']
+
 # DEFAULT_MODES = [ { u'id':u'mode0',u'type':u'disarmed' }, { u'id':u'mode1',u'type':u'armed' } ]
 DEFAULT_MODES = {"disarmed": "mode0", "armed": "mode1"}
 DEFAULT_RESOURCES = {"modes", "siren", "doorbells", "lights", "cameras", "devices"}
@@ -273,3 +282,6 @@ USER_AGENTS = {
         "Mozilla/5.0 (X11; Linux x86_64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.96 Safari/537.36"
 }
+
+CERT_BEGIN = '-----BEGIN CERTIFICATE-----\n'
+CERT_END = '-----END CERTIFICATE-----\n'

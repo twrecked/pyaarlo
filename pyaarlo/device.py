@@ -13,6 +13,7 @@ from .constant import (
     RESOURCE_KEYS,
     RESOURCE_UPDATE_KEYS,
     SIGNAL_STR_KEY,
+    TIMEZONE_KEY,
     XCLOUD_ID_KEY,
 )
 
@@ -77,14 +78,7 @@ class ArloDevice(object):
 
         # Find properties. Event either contains a item called properties or it
         # is the whole thing.
-        props = event.get("properties", event)
-
-        # Save out new values.
-        for key in props:
-            if key in RESOURCE_KEYS or key in RESOURCE_UPDATE_KEYS:
-                value = props.get(key, None)
-                if value is not None:
-                    self._save_and_do_callbacks(key, value)
+        self.update_resources(event.get("properties", event))
 
     def _do_callbacks(self, attr, value):
         cbs = []
@@ -111,6 +105,12 @@ class ArloDevice(object):
 
     def _load_matching(self, attr, default=None):
         return self._arlo.st.get_matching(self._to_storage_key(attr), default)
+
+    def update_resources(self, props):
+        for key in RESOURCE_KEYS + RESOURCE_UPDATE_KEYS:
+            value = props.get(key, None)
+            if value is not None:
+                self._save_and_do_callbacks(key, value)
 
     @property
     def entity_id(self):
@@ -156,7 +156,6 @@ class ArloDevice(object):
     @property
     def device_type(self):
         """Returns the Arlo reported device type.
-\
         """
         return self._device_type
 
@@ -173,7 +172,10 @@ class ArloDevice(object):
     @property
     def timezone(self):
         """Returns the timezone."""
-        return self._attrs.get("properties", {}).get("olsonTimeZone", None)
+        time_zone = self._load(TIMEZONE_KEY, None)
+        if time_zone is None:
+            return self._attrs.get("properties", {}).get("olsonTimeZone", None)
+        return time_zone
 
     @property
     def user_id(self):
@@ -389,6 +391,18 @@ class ArloChildDevice(ArloDevice):
         if self._parent_id is not None:
             return self._parent_id
         return self.device_id
+
+    @property
+    def timezone(self):
+        """Returns the timezone.
+
+        Tries to be clever. If it doesn't have a timezone it will try its
+        basestation.
+        """
+        time_zone = super().timezone
+        if time_zone is None:
+            return self.base_station.timezone
+        return time_zone
 
     @property
     def base_station(self):

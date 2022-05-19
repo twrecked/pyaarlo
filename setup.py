@@ -11,7 +11,7 @@ def readme():
 setup(
 
     name='pyaarlo',
-    version='0.8.0a13',
+    version='0.8.0a15',
     packages=['pyaarlo'],
 
     python_requires='>=3.6',
@@ -21,7 +21,8 @@ setup(
         'pycryptodome',
         'unidecode',
         'cloudscraper>=1.2.58',
-        'paho-mqtt'
+        'paho-mqtt',
+        'cryptography'
     ],
 
     author='Steve Herrell',
