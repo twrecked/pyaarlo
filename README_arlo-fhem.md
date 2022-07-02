@@ -130,11 +130,31 @@ The commands are sent as text messages to a TCPIP socket. To send messages you c
 
 **Example:**
 
+Linux ("netcat" package):
+
 ```
 echo 'command' |  nc -N 127.0.0.1 5005
 ```
 
+Windows (ncat.exe from https://nmap.org/ncat/):
+
+```
+echo command | c:\tools\ncat.exe --send-only 127.0.0.1 5005
+```
+
 where "5005" is the port number you had defined as socket port number in the config file.
+
+We provided a command file for sending commands. "cl.bat" for Windows, and "cl.sh" for Linux. Just use the syntax
+
+```
+cl.bat <your command>
+```
+resp.
+```
+./cl.sh <your command>
+```
+
+
 
 The following commands are currently implemented:
 

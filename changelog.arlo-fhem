@@ -1,3 +1,5 @@
+1.1.9a: Added:      Added command line tool to send commands to the daemon from Windows via nccat.exe (https://nmap.org/ncat/)
+
 1.1.9:  Changed:    Update upstream code to 0.8.0a13 (mqtt)
         Fix:        https://github.com/m0urs/arlo-fhem/issues/31
 
