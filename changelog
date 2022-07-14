@@ -1,3 +1,6 @@
+0.8.0b1: Fix yahoo imap support.
+  Fix creation of ArloSnapshot objects.
+
 0.8.0a15: Fix media library day count.
 0.8.0a14: Fix sse reconnect.
   Provide access to base station recordings.
