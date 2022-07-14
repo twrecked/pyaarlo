@@ -109,18 +109,18 @@ class Arlo2FAImap:
 
                     # new message. look for HTML part and look code code in it
                     self._arlo.debug("2fa-imap: new-msg={}".format(msg_id))
-                    res, msg = self._imap.fetch(msg_id, "(BODY[])")
-                    for part in email.message_from_bytes(msg[0][1]).walk():
-                        if part.get_content_type() == "text/html":
-                            for line in part.get_payload(decode=True).splitlines():
-
-                                # match code in email, this might need some work if the email changes
-                                code = re.match(r"^\W*(\d{6})\W*$", line.decode())
-                                if code is not None:
-                                    self._arlo.debug(
-                                        "2fa-imap: code={}".format(code.group(1))
-                                    )
-                                    return code.group(1)
+                    res, msg = self._imap.fetch(msg_id, "(BODY[TEXT])")
+                    if isinstance(msg[0][1], bytes):
+                        for part in email.message_from_bytes(msg[0][1]).walk():
+                            if part.get_content_type() == "text/plain":
+                                for line in part.get_payload(decode=True).splitlines():
+                                    # match code in email, this might need some work if the email changes
+                                    code = re.match(r"^\W*(\d{6})\W*$", line.decode())
+                                    if code is not None:
+                                        self._arlo.debug(
+                                            "2fa-imap: code={}".format(code.group(1))
+                                        )
+                                        return code.group(1)
 
                 # update old so we don't keep trying new
                 self._old_ids = self._new_ids
