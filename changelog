@@ -1,4 +1,7 @@
 0.8.0b2: Better shutdown of threads.
+  Allow ciphers to be set to SSL defaults.
+  Try to parse all email parts looking for the authentication code.
+  Open mailbox read only, stops the wrong emails getting marked as read.
 0.8.0b1: Fix yahoo imap support.
   Fix creation of ArloSnapshot objects.
 
