@@ -92,7 +92,10 @@ class ArloBackgroundWorker(threading.Thread):
         return False
     
     def stop(self):
-        self._stopThread = True
+        with self._lock:
+            self._stopThread = True
+            self._lock.notify()
+        self.join(10)
 
 
 class ArloBackground:
@@ -145,3 +148,6 @@ class ArloBackground:
     def cancel(self, to_delete):
         if to_delete is not None:
             self._worker.stop_job(to_delete)
+
+    def stop(self):
+        self._worker.stop()
