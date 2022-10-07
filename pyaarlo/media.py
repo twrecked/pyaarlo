@@ -19,6 +19,7 @@ class ArloMediaDownloader(threading.Thread):
         self._save_format = save_format
         self._lock = threading.Condition()
         self._queue = []
+        self._stopThread = False
         self._downloading = False
 
     # noinspection PyPep8Naming
@@ -96,18 +97,19 @@ class ArloMediaDownloader(threading.Thread):
         if self._save_format == "":
             self._arlo.debug("not starting downloader")
             return
-        while True:
-            media = None
-            result = 0
-            with self._lock:
+        with self._lock:
+            while not self._stopThread:
+                media = None
+                result = 0
                 if len(self._queue) > 0:
                     media = self._queue.pop(0)
                     self._downloading = True
 
-            if media is not None:
-                result = self._download(media)
+                self._lock.release()
+                if media is not None:
+                    result = self._download(media)
+                self._lock.acquire()
 
-            with self._lock:
                 self._downloading = False
                 # Nothing else to do then just wait.
                 if len(self._queue) == 0:
@@ -124,6 +126,14 @@ class ArloMediaDownloader(threading.Thread):
             self._queue.append(media)
             if len(self._queue) == 1:
                 self._lock.notify()
+
+    def stop(self):
+        if self._save_format == "":
+            return
+        with self._lock:
+            self._stopThread = True
+            self._lock.notify()
+        self.join(10)
 
     @property
     def processing(self):
@@ -307,6 +317,10 @@ class ArloMediaLibrary(object):
                 self._arlo.debug("queueing image library update")
                 self._arlo.bg.run_low_in(self.update, 2)
             self._load_cbs_.append(cb)
+
+    def stop(self):
+        self._downloader.stop()
+
 
 class ArloBaseStationMediaLibrary(ArloMediaLibrary):
     """Arlo Media Library for Base Stations"""

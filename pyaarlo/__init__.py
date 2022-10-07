@@ -40,7 +40,7 @@ from .util import time_to_arlotime
 
 _LOGGER = logging.getLogger("pyaarlo")
 
-__version__ = "0.8.0b1"
+__version__ = "0.8.0b2"
 
 
 class PyArlo(object):
@@ -441,7 +441,8 @@ class PyArlo(object):
     def stop(self):
         """Stop connection to Arlo and logout."""
         self._st.save()
-        self._bg._worker.stop()
+        self._bg.stop()
+        self._ml.stop()
         self._be.logout()
 
     @property
