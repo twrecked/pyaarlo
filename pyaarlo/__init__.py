@@ -438,12 +438,13 @@ class PyArlo(object):
             self._started = True
             self._lock.notify_all()
 
-    def stop(self):
-        """Stop connection to Arlo and logout."""
+    def stop(self, logout=False):
+        """Stop connection to Arlo and, optionally, logout."""
         self._st.save()
         self._bg.stop()
         self._ml.stop()
-        self._be.logout()
+        if logout:
+            self._be.logout()
 
     @property
     def entity_id(self):
