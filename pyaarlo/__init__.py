@@ -234,9 +234,9 @@ class PyArlo(object):
                 self._lights.append(ArloLight(dname, self, device))
 
         # Save out unchanging stats!
-        self._st.set(["ARLO", TOTAL_CAMERAS_KEY], len(self._cameras))
-        self._st.set(["ARLO", TOTAL_BELLS_KEY], len(self._doorbells))
-        self._st.set(["ARLO", TOTAL_LIGHTS_KEY], len(self._lights))
+        self._st.set(["ARLO", TOTAL_CAMERAS_KEY], len(self._cameras), prefix="aarlo")
+        self._st.set(["ARLO", TOTAL_BELLS_KEY], len(self._doorbells), prefix="aarlo")
+        self._st.set(["ARLO", TOTAL_LIGHTS_KEY], len(self._lights), prefix="aarlo")
 
         # Subscribe to events.
         self._be.start_monitoring()
@@ -299,7 +299,7 @@ class PyArlo(object):
             props = device.get("properties", None)
             if device_id is None or props is None:
                 continue
-            self.debug(f"updating {device_id} from device refresh")
+            self.debug(f"aarlo: updating {device_id} from device refresh")
             base = self.lookup_base_station_by_id(device_id)
             if base is not None:
                 base.update_resources(props)
@@ -336,7 +336,7 @@ class PyArlo(object):
             if base.has_capability(PING_CAPABILITY):
                 base.ping()
             else:
-                self.vdebug(f"NO ping to {base.device_id}")
+                self.vdebug(f"aarlo: NO ping to {base.device_id}")
 
     def _refresh_bases(self, initial):
         for base in self._bases:
@@ -371,7 +371,7 @@ class PyArlo(object):
                     wait_for="response",
                 )
             else:
-                self.vdebug(f"NO resource for {base.device_id}")
+                self.vdebug(f"aarlo: NO resource for {base.device_id}")
 
     def _refresh_modes(self):
         self.vdebug("aarlo: refresh modes")
