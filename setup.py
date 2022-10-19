@@ -11,7 +11,7 @@ def readme():
 setup(
 
     name='pyaarlo',
-    version='0.8.0b2',
+    version='0.8.0b3',
     packages=['pyaarlo'],
 
     python_requires='>=3.6',
@@ -20,7 +20,7 @@ setup(
         'click',
         'pycryptodome',
         'unidecode',
-        'cloudscraper>=1.2.58',
+        'cloudscraper>=1.2.64',
         'paho-mqtt',
         'cryptography'
     ],
