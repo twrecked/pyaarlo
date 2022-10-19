@@ -74,7 +74,7 @@ class ArloDevice(object):
             return [self.__class__.__name__, self._device_id, attr]
 
     def _event_handler(self, resource, event):
-        self._arlo.vdebug("{}: got {} event **".format(self.name, resource))
+        self.vdebug("{}: got {} event **".format(self.name, resource))
 
         # Find properties. Event either contains a item called properties or it
         # is the whole thing.
@@ -90,15 +90,15 @@ class ArloDevice(object):
             cb(self, attr, value)
 
     def _save(self, attr, value):
-        self._arlo.st.set(self._to_storage_key(attr), value)
+        self._arlo.st.set(self._to_storage_key(attr), value, prefix=self.device_id)
 
     def _save_and_do_callbacks(self, attr, value):
         if value != self._load(attr):
             self._save(attr, value)
             self._do_callbacks(attr, value)
-            self._arlo.debug(f"{attr}: NEW {str(value)[:80]}")
+            self.debug(f"{attr}: NEW {str(value)[:80]}")
         else:
-            self._arlo.debug(f"{attr}: OLD {str(value)[:80]}")
+            self.debug(f"{attr}: OLD {str(value)[:80]}")
 
     def _load(self, attr, default=None):
         return self._arlo.st.get(self._to_storage_key(attr), default)
@@ -346,6 +346,12 @@ class ArloDevice(object):
         """Returns the WiFi signal strength (0-5)."""
         return self._load(SIGNAL_STR_KEY, 3)
 
+    def debug(self, msg):
+        self._arlo.debug(f"{self.device_id}: {msg}")
+
+    def vdebug(self, msg):
+        self._arlo.vdebug(f"{self.device_id}: {msg}")
+
 
 class ArloChildDevice(ArloDevice):
     """Base class for all Arlo devices that attach to a base station."""
@@ -353,11 +359,11 @@ class ArloChildDevice(ArloDevice):
     def __init__(self, name, arlo, attrs):
         super().__init__(name, arlo, attrs)
 
-        self._arlo.debug("parent is {}".format(self._parent_id))
-        self._arlo.vdebug("resource is {}".format(self.resource_id))
+        self.debug("parent is {}".format(self._parent_id))
+        self.vdebug("resource is {}".format(self.resource_id))
 
     def _event_handler(self, resource, event):
-        self._arlo.vdebug("{}: child got {} event **".format(self.name, resource))
+        self.vdebug("{}: child got {} event **".format(self.name, resource))
 
         if resource.endswith("/states"):
             self._arlo.bg.run(self.base_station.update_mode)

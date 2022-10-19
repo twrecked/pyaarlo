@@ -34,7 +34,7 @@ class ArloDoorBell(ArloChildDevice):
             self._ding_time_job = None
 
     def _event_handler(self, resource, event):
-        self._arlo.debug(self.name + " DOORBELL got one " + resource)
+        self.debug(self.name + " DOORBELL got one " + resource)
 
         # create fake motion/button press event...
         if resource == self.resource_id:
@@ -43,7 +43,7 @@ class ArloDoorBell(ArloChildDevice):
             # Newer doorbells send a motionDetected True followed by False. If we
             # see this then turn off connectionState checking.
             if MOTION_DETECTED_KEY in props:
-                self._arlo.debug(self.name + " has motion detection support")
+                self.debug(self.name + " has motion detection support")
                 self._has_motion_detect = True
 
             # Older doorbells signal a connectionState as available when motion
@@ -141,7 +141,7 @@ class ArloDoorBell(ArloChildDevice):
 
         # Build request
         properties = {SILENT_MODE_KEY: silence_settings}
-        self._arlo.debug(self.name + " silence is " + str(properties))
+        self.debug(self.name + " silence is " + str(properties))
 
         # Send out request.
         response = self._arlo.be.notify(

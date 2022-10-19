@@ -30,7 +30,7 @@ class ArloStorage(object):
                     with open(self._state_file, "rb") as dump:
                         self.db = pickle.load(dump)
             except Exception:
-                self._arlo.debug("file not read")
+                self._arlo.debug("storage: file not read")
 
     def save(self):
         if self._state_file is not None:
@@ -39,7 +39,7 @@ class ArloStorage(object):
                     with open(self._state_file, "wb") as dump:
                         pickle.dump(self.db, dump)
             except Exception:
-                self._arlo.warning("file not written")
+                self._arlo.warning("storage: file not written")
 
     def file_name(self):
         return self._state_file
@@ -60,10 +60,10 @@ class ArloStorage(object):
         with self.lock:
             return self._keys_matching(key)
 
-    def set(self, key, value):
+    def set(self, key, value, prefix=""):
         ekey = self._ekey(key)
         output = "set:" + ekey + "=" + str(value)
-        self._arlo.debug(output[:80])
+        self._arlo.debug(f"{prefix}: {output[:80]}")
         with self.lock:
             self.db[ekey] = value
             return value
