@@ -125,10 +125,10 @@ class ArloCamera(ArloChildDevice):
         while i < len(data):
             points.append(
                 {
-                    "timestamp": int(1e3 * self._parse_statistic(data[i : (i + 4)], 0)),
-                    "temperature": self._parse_statistic(data[(i + 8) : (i + 10)], 1),
-                    "humidity": self._parse_statistic(data[(i + 14) : (i + 16)], 1),
-                    "airQuality": self._parse_statistic(data[(i + 20) : (i + 22)], 1),
+                    "timestamp": int(1e3 * self._parse_statistic(data[i: (i + 4)], 0)),
+                    "temperature": self._parse_statistic(data[(i + 8): (i + 10)], 1),
+                    "humidity": self._parse_statistic(data[(i + 14): (i + 16)], 1),
+                    "airQuality": self._parse_statistic(data[(i + 20): (i + 22)], 1),
                 }
             )
             i += 22

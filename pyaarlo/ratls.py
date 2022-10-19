@@ -2,7 +2,6 @@ import ssl
 import json
 import os
 from urllib.request import Request, build_opener, HTTPSHandler
-import requests
 from .security_utils import SecurityUtils
 
 from .constant import (
@@ -11,8 +10,11 @@ from .constant import (
     CREATE_DEVICE_CERTS_PATH
 )
 
+
 class ArloRatls(object):
     def __init__(self, arlo, base, public=False):
+        self._base_connection_details = None
+        self._base_station_token = None
         self._arlo = arlo
         self._base = base
         self._public = public
@@ -69,14 +71,14 @@ class ArloRatls(object):
             return None
 
     def _ratls_req_headers(self):
-      return {
-          "Authorization": f"Bearer {self._base_station_token}",
-          "Accept": "application/json; charset=utf-8;",
-          "Accept-Language": "en-US,en;q=0.9",
-          "Origin": "https://my.arlo.com",
-          "SchemaVersion": "1",
-          "User-Agent": self._arlo.be.user_agent(self._arlo.cfg.user_agent)
-      }
+        return {
+            "Authorization": f"Bearer {self._base_station_token}",
+            "Accept": "application/json; charset=utf-8;",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Origin": "https://my.arlo.com",
+            "SchemaVersion": "1",
+            "User-Agent": self._arlo.be.user_agent(self._arlo.cfg.user_agent)
+        }
 
     def _get_station_token(self):
         """ Tokens expire after 10 minutes """

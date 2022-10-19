@@ -38,6 +38,7 @@ day_of_week = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su", "Mo"]
 class ArloBase(ArloDevice):
     def __init__(self, name, arlo, attrs):
         super().__init__(name, arlo, attrs)
+        self._ml = None
         self._refresh_rate = 15
         self._schedules = None
         self._last_update = 0
@@ -374,7 +375,7 @@ class ArloBase(ArloDevice):
                 modes = modes.get(self.unique_id, {})
                 self._parse_modes(modes.get("modes", []))
                 self._parse_schedules(modes.get("schedules", []))
-                self._save(TIMEZONE_KEY,modes.get("olsonTimeZone", None))
+                self._save(TIMEZONE_KEY, modes.get("olsonTimeZone", None))
             else:
                 self._arlo.error("failed to read modes (v2)")
 
