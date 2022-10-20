@@ -1084,8 +1084,14 @@ class ArloBackEnd(object):
         User provides a default user agent they want for most interactions but it can be overridden
         for stream operations.
 
+        `!real-string` will use the provided string as-is, used when passing user agent
+        from a browser.
+
         `random` will provide a different user agent for each log in attempt.
         """
+        if agent.startswith("!"):
+            self.debug(f"using user supplied user_agent {agent[:70]}")
+            return agent[1:]
         agent = agent.lower()
         self.debug(f"looking for user_agent {agent}")
         if agent == "random":
