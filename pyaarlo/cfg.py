@@ -27,7 +27,7 @@ class ArloCfg(object):
         """
         self._arlo = arlo
         self._kw = kwargs
-        self._arlo.debug("Cfg started")
+        self._arlo.debug("config: loaded")
 
     @property
     def storage_dir(self):
@@ -181,7 +181,7 @@ class ArloCfg(object):
 
     @property
     def tfa_nickname(self):
-       return self._kw.get("tfa_nickname", self.tfa_username)
+        return self._kw.get("tfa_nickname", self.tfa_username)
 
     @property
     def wait_for_initial_setup(self):

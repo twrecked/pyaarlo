@@ -25,7 +25,7 @@ CREATE_DEVICE_CERTS_PATH = "/hmsweb/users/devices/v2/security/cert/create"
 RATLS_TOKEN_GENERATE_PATH = "/hmsweb/users/device/ratls/token"
 RATLS_CONNECTIVITY_PATH = '/hmsls/connectivity'
 RATLS_DOWNLOAD_PATH = "/hmsls/download"
-RATLS_LIBRARY_PATH = "/hmsls/list" # Supports list/{YYYYMMDD}/{YYYYMMMDD} or list/{YYYYMMDD}/{YYYYMMMDD}/{device_id}
+RATLS_LIBRARY_PATH = "/hmsls/list"  # Supports list/{YYYYMMDD}/{YYYYMMMDD} or list/{YYYYMMDD}/{YYYYMMMDD}/{device_id}
 
 MQTT_PATH = "/mqtt"
 TRANSID_PREFIX = "web"

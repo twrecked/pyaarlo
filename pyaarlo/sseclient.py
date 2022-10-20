@@ -95,10 +95,10 @@ class SSEClient(object):
                 http.client.IncompleteRead,
             ) as e:
                 if not self.running:
-                    self.log.debug("stopping #1")
+                    self.debug("stopping #1")
                     return None
 
-                self.log.debug("sseclient-error={}".format(type(e).__name__))
+                self.debug("error={}".format(type(e).__name__))
                 time.sleep(self.retry / 1000.0)
                 self._connect()
 
@@ -113,7 +113,7 @@ class SSEClient(object):
                 continue
 
         if not self.running:
-            self.log.debug("stopping #2")
+            self.debug("stopping #2")
             return None
 
         # Split the complete event (up to the end_of_field) into event_string,
@@ -132,6 +132,9 @@ class SSEClient(object):
             self.last_id = msg.id
 
         return msg
+
+    def debug(self, msg):
+        self.log.debug(f"sseclient: {msg}")
 
 
 class Event(object):

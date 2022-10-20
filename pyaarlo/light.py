@@ -19,7 +19,7 @@ class ArloLight(ArloChildDevice):
         return "lights"
 
     def _event_handler(self, resource, event):
-        self._arlo.debug(self.name + " LIGHT got one " + resource)
+        self.debug(self.name + " LIGHT got one " + resource)
 
         # pass on to lower layer
         super()._event_handler(resource, event)
@@ -41,7 +41,7 @@ class ArloLight(ArloChildDevice):
             # properties["single"] = rgb_to_hex(rgb)
             pass
 
-        self._arlo.debug("{} sending {}".format(self._name, pprint.pformat(properties)))
+        self.debug("{} sending {}".format(self._name, pprint.pformat(properties)))
         self._arlo.be.notify(
             base=self.base_station,
             body={

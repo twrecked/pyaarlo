@@ -104,7 +104,7 @@ class ArloBackground:
         self._worker.name = "ArloBackgroundWorker"
         self._worker.daemon = True
         self._worker.start()
-        arlo.debug("starting")
+        arlo.debug("background: starting")
 
     def _run(self, bg_cb, prio, **kwargs):
         job = {"callback": bg_cb, "args": kwargs}
