@@ -1,6 +1,8 @@
 0.8.0b3: Better snapshot tidy up.
   Improve debugging - add component or ID to debug entry.
   Allow actual user agent to be used by prefixing with a !
+  Undo broken IMAP
+  Fix doorbell motion
 0.8.0b2: Better shutdown of threads.
   Allow ciphers to be set to SSL defaults.
   Try to parse all email parts looking for the authentication code.

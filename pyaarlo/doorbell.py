@@ -42,8 +42,8 @@ class ArloDoorBell(ArloChildDevice):
 
             # Newer doorbells send a motionDetected True followed by False. If we
             # see this then turn off connectionState checking.
-            if MOTION_DETECTED_KEY in props:
-                self.debug(self.name + " has motion detection support")
+            if props.get(MOTION_DETECTED_KEY, False):
+                self._arlo.debug(self.name + " has motion detection support")
                 self._has_motion_detect = True
 
             # Older doorbells signal a connectionState as available when motion
