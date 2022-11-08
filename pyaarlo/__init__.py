@@ -24,6 +24,7 @@ from .constant import (
     MODEL_WIRED_VIDEO_DOORBELL,
     MODEL_WIREFREE_VIDEO_DOORBELL,
     MODEL_GO,
+    MODEL_GO_2,
     PING_CAPABILITY,
     REFRESH_CAMERA_DELAY,
     RESOURCE_CAPABILITY,
@@ -213,6 +214,7 @@ class PyArlo(object):
                 or device.get("modelId").startswith(MODEL_ESSENTIAL)
                 or device.get("modelId").startswith(MODEL_ESSENTIAL_INDOOR)
                 or device.get("modelId").startswith(MODEL_WIREFREE_VIDEO_DOORBELL)
+                or device.get("modelId").startswith(MODEL_GO_2)
             ):
                 parent_id = device.get("parentId", None)
                 if parent_id is None or parent_id == device.get("deviceId", None):
