@@ -97,6 +97,7 @@ class PyArlo(object):
       Arlo username.
     * **tfa_password** - When using `imap` or `rest-api`, password/token on server. If `None`
       will use Arlo password.
+    * **cipher_list** - Set if your IMAP server is using less secure ciphers.
 
     **Infrequently used `kwargs` parameters:**
 

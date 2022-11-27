@@ -1,5 +1,6 @@
 0.8.0b4: Allow ping when devices are on chargers.
   Added event_id and time to URL paths.
+  Added custom cipher list.
 0.8.0b3: Better snapshot tidy up.
   Improve debugging - add component or ID to debug entry.
   Allow actual user agent to be used by prefixing with a !
