@@ -304,20 +304,17 @@ class ArloBackEnd(object):
         # This a list ditch effort to funnel the answer the correct place...
         #  Check for device_id
         #  Check for unique_id
+        #  Check for locationId
         # If none of those then is unhandled
         # Packet number #?.
         else:
-            device_id = response.get("deviceId", None)
+            device_id = response.get("deviceId",
+                                     response.get("uniqueId",
+                                                  response.get("locationId")))
             if device_id is not None:
                 responses.append((device_id, resource, response))
             else:
-                device_id = response.get("uniqueId", None)
-                if device_id is not None:
-                    responses.append((device_id, resource, response))
-                else:
-                    self.debug(
-                        "unhandled response {} - {}".format(resource, response)
-                    )
+                self.debug(f"unhandled response {resource} - {response}")
 
         # Now find something waiting for this/these.
         for device_id, resource, response in responses:
@@ -856,6 +853,7 @@ class ArloBackEnd(object):
             "Referer": REFERER_HOST,
             "SchemaVersion": "1",
             "User-Agent": self._user_agent,
+            "x-user-device-id": self._user_id
         }
         self._session.headers.update(headers)
 
@@ -1065,6 +1063,10 @@ class ArloBackEnd(object):
     @property
     def sub_id(self):
         return self._sub_id
+
+    @property
+    def user_id(self):
+        return self._user_id
 
     def add_listener(self, device, callback):
         with self._lock:

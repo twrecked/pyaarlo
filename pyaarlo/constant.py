@@ -27,6 +27,10 @@ RATLS_CONNECTIVITY_PATH = '/hmsls/connectivity'
 RATLS_DOWNLOAD_PATH = "/hmsls/download"
 RATLS_LIBRARY_PATH = "/hmsls/list"  # Supports list/{YYYYMMDD}/{YYYYMMMDD} or list/{YYYYMMDD}/{YYYYMMMDD}/{device_id}
 
+LOCATIONS_PATH_FORMAT = "/hmsdevicemanagement/users/{0}/locations"  # {0} is _user_id
+LOCATION_MODES_PATH_FORMAT = "/hmsweb/automation/v3/modes?locationId={0}"  # {0} is _location_id
+LOCATION_ACTIVEMODE_PATH_FORMAT = "/hmsweb/automation/v3/activeMode?locationId={0}"  # {0} is _location_id
+
 MQTT_PATH = "/mqtt"
 TRANSID_PREFIX = "web"
 
@@ -65,6 +69,7 @@ MODE_UPDATE_INTERVAL = 2
 # update keys
 ACTIVITY_STATE_KEY = "activityState"
 AIR_QUALITY_KEY = "airQuality"
+ALS_STATE_KEY = "alsState"
 AUDIO_DETECTED_KEY = "audioDetected"
 AUDIO_ANALYTICS_KEY = "audioAnalytics"
 BATTERY_KEY = "batteryLevel"
@@ -75,12 +80,14 @@ CHARGER_KEY = "chargerTech"
 CHARGING_KEY = "chargingState"
 CHIMES_KEY = "chimes"
 CONNECTION_KEY = "connectionState"
+CONTACT_STATE_KEY = "contactState"
 CRY_DETECTION_KEY = "babyCryDetection"
 FLIP_KEY = "flip"
 HUMIDITY_KEY = "humidity"
 LAMP_STATE_KEY = "lampState"
 MIRROR_KEY = "mirror"
 MOTION_DETECTED_KEY = "motionDetected"
+MOTION_STATE_KEY = "motionState"
 MOTION_ENABLED_KEY = "motionSetupModeEnabled"
 MOTION_SENS_KEY = "motionSetupModeSensitivity"
 PING_CAPABILITY = "pingCapability"
@@ -103,6 +110,8 @@ MEDIA_PLAYER_KEY = "mediaPlayer"
 FLOODLIGHT_KEY = "floodlight"
 FLOODLIGHT_BRIGHTNESS1_KEY = "brightness1"
 FLOODLIGHT_BRIGHTNESS2_KEY = "brightness2"
+TAMPER_STATE_KEY = 'tamperState'
+WATER_STATE_KEY = "waterState"
 
 AUDIO_CONFIG_KEY = "config"
 AUDIO_PLAYLIST_KEY = "playlist"
@@ -147,6 +156,7 @@ RESOURCE_KEYS = [
 RESOURCE_UPDATE_KEYS = [
     ACTIVITY_STATE_KEY,
     AIR_QUALITY_KEY,
+    ALS_STATE_KEY,
     AUDIO_CONFIG_KEY,
     AUDIO_DETECTED_KEY,
     AUDIO_PLAYLIST_KEY,
@@ -159,14 +169,17 @@ RESOURCE_UPDATE_KEYS = [
     CHARGER_KEY,
     CHARGING_KEY,
     CONNECTION_KEY,
+    CONTACT_STATE_KEY,
     FLOODLIGHT_KEY,
     HUMIDITY_KEY,
     LAMP_STATE_KEY,
     MOTION_DETECTED_KEY,
+    MOTION_STATE_KEY,
     PRIVACY_KEY,
     SIGNAL_STR_KEY,
     SILENT_MODE_KEY,
     SIREN_STATE_KEY,
+    TAMPER_STATE_KEY,
     TEMPERATURE_KEY,
 ]
 
@@ -213,6 +226,7 @@ MEDIA_UPLOAD_KEYS = [MEDIA_COUNT_KEY, LAST_IMAGE_KEY]
 CAPTURED_TODAY_KEY = "capturedToday"
 LAST_CAPTURE_KEY = "lastCapture"
 MODE_KEY = "activeMode"
+MODE_REVISION_KEY = "activeModeRevision"
 MODES_KEY = "configuredMode"
 LAST_IMAGE_DATA_KEY = "presignedLastImageData"
 LAST_IMAGE_SRC_KEY = "lastImageSource"
@@ -243,9 +257,11 @@ VIDEO_CONTENT_TYPES = ['2k', '4k', 'hd']
 
 # DEFAULT_MODES = [ { u'id':u'mode0',u'type':u'disarmed' }, { u'id':u'mode1',u'type':u'armed' } ]
 DEFAULT_MODES = {"disarmed": "mode0", "armed": "mode1"}
-DEFAULT_RESOURCES = {"modes", "siren", "doorbells", "lights", "cameras", "devices"}
+DEFAULT_RESOURCES = {"modes", "siren", "doorbells", "lights", "cameras", "devices", "sensors"}
 
 # MODEL PREFIXES
+MODEL_HUB = "SH1001"
+
 MODEL_HD = "VMC3030"
 MODEL_PRO_2 = "VMC4030"
 MODEL_PRO_3 = "VMC4040"
@@ -260,6 +276,8 @@ MODEL_WIRED_VIDEO_DOORBELL = "AVD1001"
 MODEL_WIREFREE_VIDEO_DOORBELL = "AVD2001"
 
 MODEL_GO = "VML4030"
+
+MODEL_ALL_IN_1_SENSOR = "MS1001"
 MODEL_GO_2 = "VML2030"
 
 USER_AGENTS = {
