@@ -423,8 +423,8 @@ class ArloBase(ArloDevice):
             self._arlo.debug("V3Modes - None on BaseStation")
             curr_location = None
             for location in self._arlo.locations:
-                for gatewayDeviceUniqueId in location.device_ids:
-                    if gatewayDeviceUniqueId == self.unique_id:
+                for device_id in location.device_ids:
+                    if device_id == self.unique_id:
                         curr_location = location
                         break
                 if curr_location is not None:
