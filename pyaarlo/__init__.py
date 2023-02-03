@@ -170,6 +170,7 @@ class PyArlo(object):
             return
 
         self._lock = threading.Condition()
+        self._locations = []
         self._bases = []
         self._cameras = []
         self._lights = []
@@ -189,9 +190,12 @@ class PyArlo(object):
         self._blank_image = base64.standard_b64decode(BLANK_IMAGE)
 
         # Slow piece.
+        # Get locations for multi location sites.
         # Get devices, fill local db, and create device instance.
         self.info("pyaarlo starting")
         self._started = False
+        if self._be.multi_location:
+            self._refresh_locations()
         self._refresh_devices()
 
         for device in self._devices:
@@ -242,8 +246,6 @@ class PyArlo(object):
                 self._lights.append(ArloLight(dname, self, device))
             if dtype == "sensors":
                 self._sensors.append(ArloSensor(dname, self, device))
-
-        self._refresh_locations()
 
         # Save out unchanging stats!
         self._st.set(["ARLO", TOTAL_CAMERAS_KEY], len(self._cameras), prefix="aarlo")
