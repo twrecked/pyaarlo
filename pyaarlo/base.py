@@ -432,6 +432,24 @@ class ArloBase(ArloDevice):
             if curr_location:
                 curr_location.update_mode()
 
+    def update_states(self):
+        """Get device state from 'old' style base stations.
+        Most new devices return their state from the the devices URL but we
+        need to query the original base stations for their child states.
+        """
+        # Only do work on 'old' style base stations
+        if self.device_type == 'basestation' or self.device_type == 'arlobridge':
+            self.debug("updating state")
+            self._arlo.be.notify(
+                base=self,
+                body={
+                    "action": "get",
+                    "resource": "devices",
+                    "publishResponse": False,
+                },
+                wait_for="response",
+            )
+
     @property
     def schedule(self):
         """Returns current schedule name or `None` if no schedule active."""
