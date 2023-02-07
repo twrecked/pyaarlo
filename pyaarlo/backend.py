@@ -248,35 +248,49 @@ class ArloBackEnd(object):
         #
 
         # Answer for async ping. Note and finish.
-        # Packet number #1.
+        # Packet type #1
         if resource.startswith("subscriptions/"):
-            self.vdebug("async ping response " + resource)
+            self.vdebug("packet: async ping response " + resource)
             return
 
         # These is a base station mode response. Find base station ID and
         # forward response.
-        # Packet number #4.
+        # Packet type #2
         if resource == "activeAutomations":
+            self.debug("packet: base station mode response")
             for device_id in response:
                 if device_id != "resource":
                     responses.append((device_id, resource, response[device_id]))
 
         # Mode update response
+        # XXX these might be deprecated
         elif "states" in response:
+            self.debug("packet: mode update")
             device_id = response.get("from", None)
             if device_id is not None:
                 responses.append((device_id, "states", response["states"]))
 
-        # These are individual device responses. Find device ID and forward
-        # response.
-        # Packet number #?.
+        # These are individual device updates, they are usually used to signal
+        # things like motion detection or temperature changes.
+        # Packet type #3
         elif [x for x in self._resource_types if resource.startswith(x + "/")]:
+            self.debug("packet: device update")
             device_id = resource.split("/")[1]
             responses.append((device_id, resource, response))
 
+        # Base station its child device statuses. We split this apart here
+        # and pass directly to the referenced devices.
+        # Packet type #4
+        elif resource == 'devices':
+            self.debug("packet: base and child statuses")
+            for device_id in response.get('devices', {}):
+                self._arlo.debug(f"DEVICES={device_id}")
+                props = response['devices'][device_id]
+                responses.append((device_id, resource, props))
+
         # These are base station responses. Which can be about the base station
         # or devices on it... Check if property is list.
-        # Packet number #3/#2
+        # XXX these might be deprecated
         elif resource in self._resource_types:
             prop_or_props = response.get("properties", [])
             if isinstance(prop_or_props, list):
@@ -289,6 +303,7 @@ class ArloBackEnd(object):
                 device_id = response.get("from", None)
                 responses.append((device_id, resource, response))
 
+        # ArloBabyCam packets.
         elif resource.startswith("audioPlayback"):
             device_id = response.get("from")
             properties = response.get("properties")
@@ -307,11 +322,10 @@ class ArloBackEnd(object):
         #  Check for unique_id
         #  Check for locationId
         # If none of those then is unhandled
-        # Packet number #?.
         else:
             device_id = response.get("deviceId",
                                      response.get("uniqueId",
-                                                  response.get("locationId")))
+                                                  response.get("locationId", None)))
             if device_id is not None:
                 responses.append((device_id, resource, response))
             else:
@@ -608,7 +622,7 @@ class ArloBackEnd(object):
         self._event_thread = threading.Thread(
             name="ArloEventStream", target=self._event_main, args=()
         )
-        self._event_thread.setDaemon(True)
+        self._event_thread.daemon = True
 
         with self._lock:
             self._event_thread.start()

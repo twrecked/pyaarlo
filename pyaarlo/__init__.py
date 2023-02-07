@@ -45,7 +45,7 @@ from .util import time_to_arlotime
 
 _LOGGER = logging.getLogger("pyaarlo")
 
-__version__ = "0.8.0b5"
+__version__ = "0.8.0b6"
 
 
 class PyArlo(object):
@@ -262,7 +262,7 @@ class PyArlo(object):
         # Initial config and state retrieval.
         if self._cfg.synchronous_mode:
             # Synchronous; run them one after the other
-            self.debug("aarlo: getting initial settings")
+            self.debug("getting initial settings")
             self._refresh_bases(initial=True)
             self._refresh_modes()
             self._refresh_ambient_sensors()
@@ -273,7 +273,7 @@ class PyArlo(object):
             self._initial_refresh_done()
         else:
             # Asynchronous; queue them to run one after the other
-            self.debug("aarlo: queueing initial settings")
+            self.debug("queueing initial settings")
             self._bg.run(self._refresh_bases, initial=True)
             self._bg.run(self._refresh_modes)
             self._bg.run(self._refresh_ambient_sensors)
@@ -284,7 +284,7 @@ class PyArlo(object):
             self._bg.run(self._initial_refresh_done)
 
         # Register house keeping cron jobs.
-        self.debug("aarlo: registering cron jobs")
+        self.debug("registering cron jobs")
         self._bg.run_every(self._fast_refresh, FAST_REFRESH_INTERVAL)
         self._bg.run_every(self._slow_refresh, SLOW_REFRESH_INTERVAL)
 
@@ -292,9 +292,9 @@ class PyArlo(object):
         if self._cfg.wait_for_initial_setup:
             with self._lock:
                 while not self._started:
-                    self.debug("aarlo: waiting for initial setup...")
+                    self.debug("waiting for initial setup...")
                     self._lock.wait(1)
-            self.debug("aarlo: setup finished...")
+            self.debug("setup finished...")
 
     def __repr__(self):
         # Representation string of object.
@@ -307,32 +307,30 @@ class PyArlo(object):
         return self.cfg.mode_api.lower() == "v3"
 
     def _refresh_devices(self):
+        """Read in the devices list.
+        This returns all devices known to the Arlo system. The newer devices
+        include state information - battery levels etc - while the old devices
+        don't. We update what we can.
+        """
         url = DEVICES_PATH + "?t={}".format(time_to_arlotime())
         self._devices = self._be.get(url)
         if not self._devices:
             self.warning("No devices returned from " + url)
             self._devices = []
-        self.vdebug("aarlo: devices={}".format(pprint.pformat(self._devices)))
+        self.vdebug(f"devices={pprint.pformat(self._devices)}")
         
         # Newer devices include information in this response. Be sure to update it.
         for device in self._devices:
             device_id = device.get("deviceId", None)
             props = device.get("properties", None)
-            if device_id is None or props is None:
-                continue
-            self.debug(f"aarlo: updating {device_id} from device refresh")
-            base = self.lookup_base_station_by_id(device_id)
-            if base is not None:
-                base.update_resources(props)
-            camera = self.lookup_camera_by_id(device_id)
-            if camera is not None:
-                camera.update_resources(props)
-            doorbell = self.lookup_doorbell_by_id(device_id)
-            if doorbell is not None:
-                doorbell.update_resources(props)
-            light = self.lookup_light_by_id(device_id)
-            if light is not None:
-                light.update_resources(props)
+            self.vdebug(f"device-id={device_id}")
+            if device_id is not None and props is not None:
+                device = self.lookup_device_by_id(device_id)
+                if device is not None:
+                    self.vdebug(f"updating {device_id} from device refresh")
+                    device.update_resources(props)
+                else:
+                    self.vdebug(f"not updating {device_id} from device refresh")
 
     def _refresh_locations(self):
         """Retrieve location list from the backend
@@ -381,45 +379,16 @@ class PyArlo(object):
             if base.has_capability(PING_CAPABILITY):
                 base.ping()
             else:
-                self.vdebug(f"aarlo: NO ping to {base.device_id}")
+                self.vdebug(f"NO ping to {base.device_id}")
 
     def _refresh_bases(self, initial):
         for base in self._bases:
             base.update_modes(initial)
             base.keep_ratls_open()
-            if base.has_capability(RESOURCE_CAPABILITY):
-                self._be.notify(
-                    base=base,
-                    body={
-                        "action": "get",
-                        "resource": "cameras",
-                        "publishResponse": False,
-                    },
-                    wait_for="response",
-                )
-                self._be.notify(
-                    base=base,
-                    body={
-                        "action": "get",
-                        "resource": "doorbells",
-                        "publishResponse": False,
-                    },
-                    wait_for="response",
-                )
-                self._be.notify(
-                    base=base,
-                    body={
-                        "action": "get",
-                        "resource": "lights",
-                        "publishResponse": False,
-                    },
-                    wait_for="response",
-                )
-            else:
-                self.vdebug(f"aarlo: NO resource for {base.device_id}")
+            base.update_states()
 
     def _refresh_modes(self):
-        self.vdebug("aarlo: refresh modes")
+        self.vdebug("refresh modes")
         for base in self._bases:
             base.update_modes()
             base.update_mode()
@@ -428,7 +397,7 @@ class PyArlo(object):
             location.update_mode()
 
     def _fast_refresh(self):
-        self.vdebug("aarlo: fast refresh")
+        self.vdebug("fast refresh")
         self._bg.run(self._st.save)
         self._ping_bases()
 
@@ -439,11 +408,11 @@ class PyArlo(object):
                 "mode reload check {} {}".format(str(now), str(self._refresh_modes_at))
             )
             if now > self._refresh_modes_at:
-                self.debug("aarlo: mode reload needed")
+                self.debug("mode reload needed")
                 self._refresh_modes_at = now + self._cfg.refresh_modes_every
                 self._bg.run(self._refresh_modes)
         else:
-            self.vdebug("aarlo: no mode reload")
+            self.vdebug("no mode reload")
 
         # do we need to reload the devices?
         if self._cfg.refresh_devices_every != 0:
@@ -454,34 +423,34 @@ class PyArlo(object):
                 )
             )
             if now > self._refresh_devices_at:
-                self.debug("aarlo: device reload needed")
+                self.debug("device reload needed")
                 self._refresh_devices_at = now + self._cfg.refresh_devices_every
                 self._bg.run(self._refresh_devices)
         else:
-            self.vdebug("aarlo: no device reload")
+            self.vdebug("no device reload")
 
         # if day changes then reload recording library and camera counts
         today = datetime.date.today()
-        self.vdebug("aarlo: day testing with {}!".format(str(today)))
+        self.vdebug("day testing with {}!".format(str(today)))
         if self._today != today:
-            self.debug("aarlo: day changed to {}!".format(str(today)))
+            self.debug("day changed to {}!".format(str(today)))
             self._today = today
             self._bg.run(self._ml.load)
             self._bg.run(self._refresh_camera_media, wait=False)
 
     def _slow_refresh(self):
-        self.vdebug("aarlo: slow refresh")
+        self.vdebug("slow refresh")
         self._bg.run(self._refresh_bases, initial=False)
         self._bg.run(self._refresh_ambient_sensors)
 
     def _initial_refresh(self):
-        self.debug("aarlo: initial refresh")
+        self.debug("initial refresh")
         self._bg.run(self._refresh_bases, initial=True)
         self._bg.run(self._refresh_ambient_sensors)
         self._bg.run(self._initial_refresh_done)
 
     def _initial_refresh_done(self):
-        self.debug("aarlo: initial refresh done")
+        self.debug("initial refresh done")
         with self._lock:
             self._started = True
             self._lock.notify_all()
@@ -586,6 +555,10 @@ class PyArlo(object):
         :rtype: list(ArloLocation)
         """
         return self._locations
+
+    @property
+    def all_devices(self):
+        return self.cameras + self.doorbells + self.lights + self.base_stations + self.locations
 
     @property
     def sensors(self):
@@ -696,6 +669,16 @@ class PyArlo(object):
             return base_station[0]
         return None
 
+    def lookup_device_by_id(self, device_id):
+        device = self.lookup_base_station_by_id(device_id)
+        if device is None:
+            device = self.lookup_camera_by_id(device_id)
+        if device is None:
+            device = self.lookup_doorbell_by_id(device_id)
+        if device is None:
+            device = self.lookup_light_by_id(device_id)
+        return device
+
     def inject_response(self, response):
         """Inject a test packet into the event stream.
 
@@ -704,7 +687,7 @@ class PyArlo(object):
         :param response: packet to inject.
         :type response: JSON data
         """
-        self.debug("aarlo: injecting\n{}".format(pprint.pformat(response)))
+        self.debug("injecting\n{}".format(pprint.pformat(response)))
         self._be.ev_inject(response)
 
     def attribute(self, attr):
