@@ -1,6 +1,7 @@
 0.8.0b7:
   Fix missing event issue.
   Tidy capture code.
+  Specify Python 3
 0.8.0b6: Simplify state checking; bring API up to date and remove deprecated
     calls
   Add back the packet docs.
