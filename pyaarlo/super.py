@@ -159,6 +159,10 @@ class ArloSuper(object):
         with self._lock:
             self._attr_cbs_.append((attr, cb))
 
+    @property
+    def state(self):
+        return "ok"
+
     def debug(self, msg):
         self._arlo.debug(f"{self._name}: {msg}")
 
