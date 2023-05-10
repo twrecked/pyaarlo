@@ -20,7 +20,7 @@ setup(
         'click',
         'pycryptodome',
         'unidecode',
-        'cloudscraper>=1.2.64',
+        'cloudscraper>=1.2.71',
         'paho-mqtt',
         'cryptography'
     ],
