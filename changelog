@@ -1,4 +1,6 @@
 0.8.0b7:
+  Allow more MQTT config.
+  Fix headers.
   Distinguish between user/shared location.
   Fix missing event issue.
   Tidy capture code.
