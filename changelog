@@ -1,3 +1,6 @@
+0.8.0b8:
+  Ping wired doorbell.
+  Try proper device id for cloud flare
 0.8.0b7:
   Allow more MQTT config.
   Fix headers.
