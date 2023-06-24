@@ -673,8 +673,8 @@ class ArloBackEnd(object):
         self._sub_id = "subscriptions/" + self._web_id
         self._expires_in = body["expiresIn"]
 
-    def _auth(self):
-        headers = {
+    def _auth_headers(self):
+        return {
             "Accept": "application/json, text/plain, */*",
             "Accept-Encoding": "gzip, deflate, br",
             "Accept-Language": "en-GB,en;q=0.9,en-US;q=0.8",
@@ -686,6 +686,9 @@ class ArloBackEnd(object):
             "x-user-device-automation-name": "QlJPV1NFUg==",
             "x-user-device-type": "BROWSER",
         }
+
+    def _auth(self):
+        headers = self._auth_headers()
 
         # Handle 1015 error
         attempt = 0
@@ -798,7 +801,12 @@ class ArloBackEnd(object):
                 self.debug(
                     "starting auth with {}".format(self._arlo.cfg.tfa_type)
                 )
-                body = self.auth_post(AUTH_START_PATH, {"factorId": factor_id}, headers)
+                payload = {
+                    "factorId": factor_id,
+                    "factorType": "",
+                    "userId": self._user_id
+                }
+                body = self.auth_post(AUTH_START_PATH, payload, headers)
                 if body is None:
                     self._arlo.error("2fa startAuth failed")
                     return False
@@ -829,19 +837,8 @@ class ArloBackEnd(object):
         return True
 
     def _validate(self):
-        headers = {
-            "Accept": "application/json, text/plain, */*",
-            "Accept-Encoding": "gzip, deflate, br",
-            "Accept-Language": "en-GB,en;q=0.9,en-US;q=0.8",
-            "Authorization": self._token64,
-            "Origin": ORIGIN_HOST,
-            "Referer": REFERER_HOST,
-            "User-Agent": self._user_agent,
-            "Source": "arloCamWeb",
-            "x-user-device-id": self._user_device_id,
-            "x-user-device-automation-name": "QlJPV1NFUg==",
-            "x-user-device-type": "BROWSER",
-        }
+        headers = self._auth_headers()
+        headers["Authorization"] = self._token64
 
         # Validate it!
         validated = self.auth_get(
