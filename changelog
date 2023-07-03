@@ -1,5 +1,7 @@
 0.8.0b9:
   Fix push headers.
+  Added cache to headers [thank KoolLSL for pointing that out]
+  Force SSE client over requests not cloudscraper.
 0.8.0b8:
   Ping wired doorbell.
   Try proper device id for cloud flare
