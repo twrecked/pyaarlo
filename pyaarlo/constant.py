@@ -302,7 +302,7 @@ USER_AGENTS = {
         "Gecko/20100101 Firefox/85.0",
     "linux":
         "Mozilla/5.0 (X11; Linux x86_64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.96 Safari/537.36"
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
 }
 
 CERT_BEGIN = '-----BEGIN CERTIFICATE-----\n'
