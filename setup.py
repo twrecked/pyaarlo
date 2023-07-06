@@ -11,10 +11,10 @@ def readme():
 setup(
 
     name='pyaarlo',
-    version='0.8.0b9',
+    version='0.8.0b10',
     packages=['pyaarlo'],
 
-    python_requires='>=3.6',
+    python_requires='>=3.7',
     install_requires=[
         'requests',
         'click',
