@@ -180,7 +180,7 @@ class Arlo2FARestAPI:
         self.debug("clearing")
         response = requests.get(
             "{}/clear?email={}&token={}".format(
-                self._arlo.cfg.tfa_host,
+                self._arlo.cfg._add_scheme(self._arlo.cfg.tfa_host),
                 self._arlo.cfg.tfa_username,
                 self._arlo.cfg.tfa_password,
             ),
@@ -208,7 +208,7 @@ class Arlo2FARestAPI:
             self.debug("checking")
             response = requests.get(
                 "{}/get?email={}&token={}".format(
-                    self._arlo.cfg.tfa_host,
+                    self._arlo.cfg._add_scheme(self._arlo.cfg.tfa_host),
                     self._arlo.cfg.tfa_username,
                     self._arlo.cfg.tfa_password,
                 ),
