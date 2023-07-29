@@ -1,3 +1,6 @@
+0.8.0b11:
+  Fix scheme in cgf
+  Add host unit tests
 0.8.0b10:
   Add schemaversion back.
 0.8.0b9:
