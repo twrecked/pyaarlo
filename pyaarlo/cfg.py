@@ -36,6 +36,17 @@ class ArloCfg(object):
         else:
             self._storage_dir = self._kw.get("storage_dir", "/tmp/.aarlo")
 
+    def _remove_scheme(self, host):
+        bits = host.split("://")
+        if len(bits) > 1:
+            return bits[1]
+        return host
+
+    def _add_scheme(self, host, scheme='https'):
+        if "://" in host:
+            return host
+        return f"{scheme}://{host}"
+
     @property
     def storage_dir(self):
         return self._storage_dir
@@ -54,15 +65,15 @@ class ArloCfg(object):
 
     @property
     def host(self):
-        return self._kw.get("host", DEFAULT_HOST)
+        return self._add_scheme(self._kw.get("host", DEFAULT_HOST), "https")
 
     @property
     def auth_host(self):
-        return self._kw.get("auth_host", DEFAULT_AUTH_HOST)
+        return self._add_scheme(self._kw.get("auth_host", DEFAULT_AUTH_HOST), "https")
 
     @property
     def mqtt_host(self):
-        return self._kw.get("mqtt_host", MQTT_HOST)
+        return self._remove_scheme(self._kw.get("mqtt_host", MQTT_HOST))
 
     @property
     def mqtt_hostname_check(self):
@@ -173,16 +184,16 @@ class ArloCfg(object):
 
     @property
     def tfa_host(self):
-        h = self._kw.get("tfa_host", TFA_DEFAULT_HOST).split(":")
-        return h[0]
+        host = self._remove_scheme(self._kw.get("tfa_host", TFA_DEFAULT_HOST))
+        return host.split(":")[0]
 
     @property
     def tfa_port(self):
-        h = self._kw.get("tfa_host", TFA_DEFAULT_HOST).split(":")
-        if len(h) == 1:
+        host = self._remove_scheme(self._kw.get("tfa_host", TFA_DEFAULT_HOST))
+        bits = host.split(":")
+        if len(bits) == 1:
             return 993
-        else:
-            return h[1]
+        return int(bits[1])
 
     @property
     def tfa_username(self):

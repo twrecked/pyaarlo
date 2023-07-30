@@ -3,15 +3,15 @@ import tests.arlo
 
 
 class TestArloCfg(TestCase):
-    def test_extract(self):
+    def test_scheme(self):
         arlo = tests.arlo.PyArlo()
-        self.assertEqual(arlo.cfg.remove_scheme_("abc.com"), "abc.com")
-        self.assertEqual(arlo.cfg.remove_scheme_("https://abc.com"), "abc.com")
-        self.assertEqual(arlo.cfg.add_scheme_("abc.com"), "https://abc.com")
-        self.assertEqual(arlo.cfg.add_scheme_("https://abc.com"), "https://abc.com")
-        self.assertEqual(arlo.cfg.add_scheme_("http://abc.com"), "http://abc.com")
-        self.assertEqual(arlo.cfg.add_scheme_("abc.com", "imap"), "imap://abc.com")
-        self.assertEqual(arlo.cfg.add_scheme_("https://abc.com", "imap"), "https://abc.com")
+        self.assertEqual(arlo.cfg._remove_scheme("abc.com"), "abc.com")
+        self.assertEqual(arlo.cfg._remove_scheme("https://abc.com"), "abc.com")
+        self.assertEqual(arlo.cfg._add_scheme("abc.com"), "https://abc.com")
+        self.assertEqual(arlo.cfg._add_scheme("https://abc.com"), "https://abc.com")
+        self.assertEqual(arlo.cfg._add_scheme("http://abc.com"), "http://abc.com")
+        self.assertEqual(arlo.cfg._add_scheme("abc.com", "imap"), "imap://abc.com")
+        self.assertEqual(arlo.cfg._add_scheme("https://abc.com", "imap"), "https://abc.com")
 
     def test_host_00(self):
         arlo = tests.arlo.PyArlo()
