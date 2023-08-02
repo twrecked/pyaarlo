@@ -1,4 +1,5 @@
 0.8.0b11:
+  Latest arlo/cloudflare work arounds.
   Fix scheme in cgf
   Add host unit tests
 0.8.0b10:
