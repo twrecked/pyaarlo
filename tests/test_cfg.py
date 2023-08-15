@@ -16,59 +16,66 @@ class TestArloCfg(TestCase):
     def test_host_00(self):
         arlo = tests.arlo.PyArlo()
         self.assertEqual(arlo.cfg.tfa_host, "pyaarlo-tfa.appspot.com")
-        self.assertEqual(arlo.cfg.tfa_host_with_scheme, "https://pyaarlo-tfa.appspot.com")
+        self.assertEqual(arlo.cfg.tfa_host_with_scheme(), "https://pyaarlo-tfa.appspot.com")
+        self.assertEqual(arlo.cfg.tfa_host_with_scheme("roygbiv"), "https://pyaarlo-tfa.appspot.com")
         self.assertEqual(arlo.cfg.tfa_port, 993)
 
     def test_host_10(self):
-        arlo = tests.arlo.PyArlo(tfa_host="imap.gmail.com")
-        self.assertEqual(arlo.cfg.tfa_host, "imap.gmail.com")
-        self.assertEqual(arlo.cfg.tfa_host_with_scheme, "https://imap.gmail.com")
+        arlo = tests.arlo.PyArlo(tfa_host="test.host.com")
+        self.assertEqual(arlo.cfg.tfa_host, "test.host.com")
+        self.assertEqual(arlo.cfg.tfa_host_with_scheme(), "https://test.host.com")
+        self.assertEqual(arlo.cfg.tfa_host_with_scheme("imap"), "imap://test.host.com")
         self.assertEqual(arlo.cfg.tfa_port, 993)
 
     def test_host_11(self):
-        arlo = tests.arlo.PyArlo(tfa_host="imap://imap.gmail.com")
-        self.assertEqual(arlo.cfg.tfa_host, "imap.gmail.com")
-        self.assertEqual(arlo.cfg.tfa_host_with_scheme, "imap://imap.gmail.com")
-        self.assertEqual(arlo.cfg.tfa_port, 993)
-
-    def test_host_20(self):
-        arlo = tests.arlo.PyArlo(tfa_host="imap.gmail.com:998")
-        self.assertEqual(arlo.cfg.tfa_host, "imap.gmail.com")
-        self.assertEqual(arlo.cfg.tfa_host_with_scheme, "https://imap.gmail.com")
+        arlo = tests.arlo.PyArlo(tfa_host="test.host.com:998")
+        self.assertEqual(arlo.cfg.tfa_host, "test.host.com")
+        self.assertEqual(arlo.cfg.tfa_host_with_scheme(), "https://test.host.com")
+        self.assertEqual(arlo.cfg.tfa_host_with_scheme("imap"), "imap://test.host.com")
         self.assertEqual(arlo.cfg.tfa_port, 998)
 
+    def test_host_20(self):
+        arlo = tests.arlo.PyArlo(tfa_host="imap://test.host.com")
+        self.assertEqual(arlo.cfg.tfa_host, "test.host.com")
+        self.assertEqual(arlo.cfg.tfa_host_with_scheme(), "imap://test.host.com")
+        self.assertEqual(arlo.cfg.tfa_host_with_scheme("roygbiv"), "imap://test.host.com")
+        self.assertEqual(arlo.cfg.tfa_port, 993)
+
     def test_host_21(self):
-        arlo = tests.arlo.PyArlo(tfa_host="imap://imap.gmail.com:998")
-        self.assertEqual(arlo.cfg.tfa_host, "imap.gmail.com")
-        self.assertEqual(arlo.cfg.tfa_host_with_scheme, "imap://imap.gmail.com")
+        arlo = tests.arlo.PyArlo(tfa_host="imap://test.host.com:998")
+        self.assertEqual(arlo.cfg.tfa_host, "test.host.com")
+        self.assertEqual(arlo.cfg.tfa_host_with_scheme(), "imap://test.host.com")
+        self.assertEqual(arlo.cfg.tfa_host_with_scheme("imap"), "imap://test.host.com")
         self.assertEqual(arlo.cfg.tfa_port, 998)
 
     def test_host_30(self):
-        arlo = tests.arlo.PyArlo(tfa_host="https://imap.gmail.com")
-        self.assertEqual(arlo.cfg.tfa_host, "imap.gmail.com")
-        self.assertEqual(arlo.cfg.tfa_host_with_scheme, "https://imap.gmail.com")
+        arlo = tests.arlo.PyArlo(tfa_host="https://test.host.com")
+        self.assertEqual(arlo.cfg.tfa_host, "test.host.com")
+        self.assertEqual(arlo.cfg.tfa_host_with_scheme(), "https://test.host.com")
+        self.assertEqual(arlo.cfg.tfa_host_with_scheme("roygbiv"), "https://test.host.com")
         self.assertEqual(arlo.cfg.tfa_port, 993)
 
     def test_host_31(self):
-        arlo = tests.arlo.PyArlo(tfa_host="https://imap.gmail.com:998")
-        self.assertEqual(arlo.cfg.tfa_host, "imap.gmail.com")
-        self.assertEqual(arlo.cfg.tfa_host_with_scheme, "https://imap.gmail.com")
+        arlo = tests.arlo.PyArlo(tfa_host="https://test.host.com:998")
+        self.assertEqual(arlo.cfg.tfa_host, "test.host.com")
+        self.assertEqual(arlo.cfg.tfa_host_with_scheme(), "https://test.host.com")
+        self.assertEqual(arlo.cfg.tfa_host_with_scheme("roygbiv"), "https://test.host.com")
         self.assertEqual(arlo.cfg.tfa_port, 998)
 
     def test_host_40(self):
-        arlo = tests.arlo.PyArlo(host="https://testhost.com", auth_host="https://testhost.com", mqtt_host="https://testhost.com")
-        self.assertEqual(arlo.cfg.host, "https://testhost.com")
-        self.assertEqual(arlo.cfg.auth_host, "https://testhost.com")
-        self.assertEqual(arlo.cfg.mqtt_host, "testhost.com")
+        arlo = tests.arlo.PyArlo(host="https://test.host.com", auth_host="https://test.host.com", mqtt_host="https://test.host.com")
+        self.assertEqual(arlo.cfg.host, "https://test.host.com")
+        self.assertEqual(arlo.cfg.auth_host, "https://test.host.com")
+        self.assertEqual(arlo.cfg.mqtt_host, "test.host.com")
 
     def test_host_41(self):
-        arlo = tests.arlo.PyArlo(host="testhost.com", auth_host="testhost.com", mqtt_host="testhost.com")
-        self.assertEqual(arlo.cfg.host, "https://testhost.com")
-        self.assertEqual(arlo.cfg.auth_host, "https://testhost.com")
-        self.assertEqual(arlo.cfg.mqtt_host, "testhost.com")
+        arlo = tests.arlo.PyArlo(host="test.host.com", auth_host="test.host.com", mqtt_host="test.host.com")
+        self.assertEqual(arlo.cfg.host, "https://test.host.com")
+        self.assertEqual(arlo.cfg.auth_host, "https://test.host.com")
+        self.assertEqual(arlo.cfg.mqtt_host, "test.host.com")
 
     def test_host_42(self):
-        arlo = tests.arlo.PyArlo(host="http://testhost.com", auth_host="http://testhost.com", mqtt_host="http://testhost.com")
-        self.assertEqual(arlo.cfg.host, "http://testhost.com")
-        self.assertEqual(arlo.cfg.auth_host, "http://testhost.com")
-        self.assertEqual(arlo.cfg.mqtt_host, "testhost.com")
+        arlo = tests.arlo.PyArlo(host="http://test.host.com", auth_host="http://test.host.com", mqtt_host="http://test.host.com")
+        self.assertEqual(arlo.cfg.host, "http://test.host.com")
+        self.assertEqual(arlo.cfg.auth_host, "http://test.host.com")
+        self.assertEqual(arlo.cfg.mqtt_host, "test.host.com")

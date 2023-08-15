@@ -187,9 +187,8 @@ class ArloCfg(object):
         host = self._remove_scheme(self._kw.get("tfa_host", TFA_DEFAULT_HOST))
         return host.split(":")[0]
 
-    @property
-    def tfa_host_with_scheme(self):
-        host = self._add_scheme(self._kw.get("tfa_host", TFA_DEFAULT_HOST))
+    def tfa_host_with_scheme(self, scheme="https"):
+        host = self._add_scheme(self._kw.get("tfa_host", TFA_DEFAULT_HOST), scheme)
         return ":".join(host.split(":")[:2])
 
     @property
