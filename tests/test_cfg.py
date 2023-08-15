@@ -16,36 +16,43 @@ class TestArloCfg(TestCase):
     def test_host_00(self):
         arlo = tests.arlo.PyArlo()
         self.assertEqual(arlo.cfg.tfa_host, "pyaarlo-tfa.appspot.com")
+        self.assertEqual(arlo.cfg.tfa_host_with_scheme, "https://pyaarlo-tfa.appspot.com")
         self.assertEqual(arlo.cfg.tfa_port, 993)
 
     def test_host_10(self):
         arlo = tests.arlo.PyArlo(tfa_host="imap.gmail.com")
         self.assertEqual(arlo.cfg.tfa_host, "imap.gmail.com")
+        self.assertEqual(arlo.cfg.tfa_host_with_scheme, "https://imap.gmail.com")
         self.assertEqual(arlo.cfg.tfa_port, 993)
 
     def test_host_11(self):
         arlo = tests.arlo.PyArlo(tfa_host="imap://imap.gmail.com")
         self.assertEqual(arlo.cfg.tfa_host, "imap.gmail.com")
+        self.assertEqual(arlo.cfg.tfa_host_with_scheme, "imap://imap.gmail.com")
         self.assertEqual(arlo.cfg.tfa_port, 993)
 
     def test_host_20(self):
         arlo = tests.arlo.PyArlo(tfa_host="imap.gmail.com:998")
         self.assertEqual(arlo.cfg.tfa_host, "imap.gmail.com")
+        self.assertEqual(arlo.cfg.tfa_host_with_scheme, "https://imap.gmail.com")
         self.assertEqual(arlo.cfg.tfa_port, 998)
 
     def test_host_21(self):
         arlo = tests.arlo.PyArlo(tfa_host="imap://imap.gmail.com:998")
         self.assertEqual(arlo.cfg.tfa_host, "imap.gmail.com")
+        self.assertEqual(arlo.cfg.tfa_host_with_scheme, "imap://imap.gmail.com")
         self.assertEqual(arlo.cfg.tfa_port, 998)
 
     def test_host_30(self):
         arlo = tests.arlo.PyArlo(tfa_host="https://imap.gmail.com")
         self.assertEqual(arlo.cfg.tfa_host, "imap.gmail.com")
+        self.assertEqual(arlo.cfg.tfa_host_with_scheme, "https://imap.gmail.com")
         self.assertEqual(arlo.cfg.tfa_port, 993)
 
     def test_host_31(self):
         arlo = tests.arlo.PyArlo(tfa_host="https://imap.gmail.com:998")
         self.assertEqual(arlo.cfg.tfa_host, "imap.gmail.com")
+        self.assertEqual(arlo.cfg.tfa_host_with_scheme, "https://imap.gmail.com")
         self.assertEqual(arlo.cfg.tfa_port, 998)
 
     def test_host_40(self):
