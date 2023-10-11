@@ -307,3 +307,5 @@ USER_AGENTS = {
 
 CERT_BEGIN = '-----BEGIN CERTIFICATE-----\n'
 CERT_END = '-----END CERTIFICATE-----\n'
+
+ECDH_CURVE = 'prime256v1'
