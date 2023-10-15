@@ -1,6 +1,7 @@
 0.8.0b12:
   Add Arlo Pro 5 support
   Allow cloudflare curves to be set
+  Fix scheme in cfg
 0.8.0b11:
   Latest arlo/cloudflare work arounds.
   Fix scheme in cgf
