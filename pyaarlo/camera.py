@@ -47,6 +47,7 @@ from .constant import (
     MODEL_PRO_3,
     MODEL_PRO_3_FLOODLIGHT,
     MODEL_PRO_4,
+    MODEL_PRO_5,
     MODEL_ULTRA,
     MODEL_WIRED_VIDEO_DOORBELL,
     MODEL_WIREFREE_VIDEO_DOORBELL,
@@ -1373,6 +1374,7 @@ class ArloCamera(ArloChildDevice):
                     MODEL_PRO_3,
                     MODEL_PRO_3_FLOODLIGHT,
                     MODEL_PRO_4,
+                    MODEL_PRO_5,
                     MODEL_ULTRA,
                     MODEL_GO,
                     MODEL_BABY,
@@ -1389,6 +1391,7 @@ class ArloCamera(ArloChildDevice):
                     MODEL_PRO_3,
                     MODEL_PRO_3_FLOODLIGHT,
                     MODEL_PRO_4,
+                    MODEL_PRO_5,
                     MODEL_ULTRA,
                     MODEL_WIREFREE_VIDEO_DOORBELL,
                 )
@@ -1396,7 +1399,8 @@ class ArloCamera(ArloChildDevice):
                 return True
         if cap in (SPOTLIGHT_KEY,):
             if self.model_id.startswith(
-                (MODEL_ESSENTIAL, MODEL_PRO_3, MODEL_PRO_4, MODEL_ULTRA)
+                (MODEL_ESSENTIAL, MODEL_PRO_3, MODEL_PRO_4, MODEL_PRO_5,
+                 MODEL_ULTRA)
             ):
                 return True
         if cap in (TEMPERATURE_KEY, HUMIDITY_KEY, AIR_QUALITY_KEY):
@@ -1415,6 +1419,7 @@ class ArloCamera(ArloChildDevice):
                     MODEL_BABY,
                     MODEL_PRO_3_FLOODLIGHT,
                     MODEL_PRO_4,
+                    MODEL_PRO_5,
                     MODEL_ESSENTIAL,
                     MODEL_WIRED_VIDEO_DOORBELL,
                     MODEL_WIREFREE_VIDEO_DOORBELL,
