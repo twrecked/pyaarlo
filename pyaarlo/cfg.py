@@ -10,6 +10,7 @@ from .constant import (
     TFA_DELAY,
     TFA_EMAIL_TYPE,
     TFA_RETRIES,
+    ECDH_CURVE
 )
 
 
@@ -286,3 +287,8 @@ class ArloCfg(object):
         if self._kw.get("default_ciphers", False):
             return 'DEFAULT'
         return self._kw.get("cipher_list", "")
+    
+    @property
+    def ecdh_curve(self):
+        return self._kw.get("ecdh_curve", ECDH_CURVE)
+
