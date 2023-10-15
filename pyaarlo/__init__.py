@@ -21,6 +21,7 @@ from .constant import (
     MODEL_ESSENTIAL_INDOOR,
     MODEL_PRO_3_FLOODLIGHT,
     MODEL_PRO_4,
+    MODEL_PRO_5,
     MODEL_WIRED_VIDEO_DOORBELL,
     MODEL_WIREFREE_VIDEO_DOORBELL,
     MODEL_GO,
@@ -45,7 +46,7 @@ from .util import time_to_arlotime
 
 _LOGGER = logging.getLogger("pyaarlo")
 
-__version__ = "0.8.0b11"
+__version__ = "0.8.0b12"
 
 
 class PyArlo(object):
@@ -226,6 +227,7 @@ class PyArlo(object):
                 device.get("modelId").startswith(MODEL_WIRED_VIDEO_DOORBELL)
                 or device.get("modelId").startswith(MODEL_PRO_3_FLOODLIGHT)
                 or device.get("modelId").startswith(MODEL_PRO_4)
+                or device.get("modelId").startswith(MODEL_PRO_5)
                 or device.get("modelId").startswith(MODEL_ESSENTIAL)
                 or device.get("modelId").startswith(MODEL_ESSENTIAL_INDOOR)
                 or device.get("modelId").startswith(MODEL_WIREFREE_VIDEO_DOORBELL)
