@@ -896,15 +896,18 @@ class ArloBackEnd(object):
         # If token looks invalid we'll try the whole process.
         get_new_session = days_until(self._expires_in) < 2
         if get_new_session:
-            self._session = cloudscraper.create_scraper(
-                ecdhCurve=self._arlo.cfg.ecdh_curve
-            )
             self.debug("oldish session, getting a new one")
-            if not self._auth():
+            success = False
+            for curve in self._arlo.cfg.ecdh_curves:
+                self._session = cloudscraper.create_scraper(
+                    ecdhCurve=curve
+                )
+                if self._auth() and self._validate():
+                    success = True
+                    break
+                self.debug("login failed, trying another ecdh_curve")
+            if not success:
                 return False
-            if not self._validate():
-                return False
-
         else:
             self._session = requests.session()
             self.debug("newish sessions, re-using")

@@ -80,7 +80,8 @@ class PyArlo(object):
     * **synchronous_mode** - Wait for operations to complete before returing. If you are coming from Pyarlo this
       will make Pyaarlo behave more like you expect.
     * **save_media_to** - Save media to a local directory.
-    * **ecdh_curve** - Sets ecdhCurve for Cloudscraper. Default is `prime256v1`. Users also report success with `secp384r1`.
+    * **ecdh_curve** - Sets initial ecdhCurve for Cloudscraper. Available options are `prime256v1` and `secp384r1`.
+      Backend will try all options if login fails.
     
     **Debug `kwargs` parameters:**
 
