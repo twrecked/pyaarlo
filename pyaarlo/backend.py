@@ -899,6 +899,7 @@ class ArloBackEnd(object):
             self.debug("oldish session, getting a new one")
             success = False
             for curve in self._arlo.cfg.ecdh_curves:
+                self.debug(f"CloudFlare curve set to: {curve}")
                 self._session = cloudscraper.create_scraper(
                     ecdhCurve=curve
                 )
