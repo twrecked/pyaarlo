@@ -10,7 +10,7 @@ from .constant import (
     TFA_DELAY,
     TFA_EMAIL_TYPE,
     TFA_RETRIES,
-    ECDH_CURVE
+    ECDH_CURVES
 )
 
 
@@ -287,8 +287,11 @@ class ArloCfg(object):
         if self._kw.get("default_ciphers", False):
             return 'DEFAULT'
         return self._kw.get("cipher_list", "")
-    
-    @property
-    def ecdh_curve(self):
-        return self._kw.get("ecdh_curve", ECDH_CURVE)
 
+    @property
+    def ecdh_curves(self):
+        curve = self._kw.get("ecdh_curve", None)
+        if curve in ECDH_CURVES:
+            # Moves user-selected curve to front of list
+            ECDH_CURVES.insert(0, ECDH_CURVES.pop(ECDH_CURVES.index(curve)))
+        return ECDH_CURVES

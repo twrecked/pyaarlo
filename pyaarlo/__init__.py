@@ -80,8 +80,7 @@ class PyArlo(object):
     * **synchronous_mode** - Wait for operations to complete before returing. If you are coming from Pyarlo this
       will make Pyaarlo behave more like you expect.
     * **save_media_to** - Save media to a local directory.
-    * **ecdh_curve** - Sets ecdhCurve for Cloudscraper. Default is `prime256v1`. Users also report success with `secp384r1`.
-    
+
     **Debug `kwargs` parameters:**
 
     * **dump** - Save event stream packets to a file.
@@ -131,6 +130,8 @@ class PyArlo(object):
     * **mqtt_host** - specify the mqtt host to use, default mqtt-cluster.arloxcld.com
     * **mqtt_hostname_check** - disable MQTT host SSL certificate checking, default True
     * **mqtt_transport** - specify either `websockets` or `tcp`, default `tcp`
+    * **ecdh_curve** - Sets initial ecdhCurve for Cloudscraper. Available options are `prime256v1`
+      and `secp384r1`. Backend will try all options if login fails.
 
     **Attributes**
 
