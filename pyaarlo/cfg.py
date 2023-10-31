@@ -295,3 +295,7 @@ class ArloCfg(object):
             # Moves user-selected curve to front of list
             ECDH_CURVES.insert(0, ECDH_CURVES.pop(ECDH_CURVES.index(curve)))
         return ECDH_CURVES
+
+    @property
+    def send_source(self):
+        return self._kw.get("send_source", False)
