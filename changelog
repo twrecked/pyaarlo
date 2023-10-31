@@ -1,3 +1,7 @@
+0.8.0.0
+  Try multiple EDHC curves
+  Allow `Source: arloWebCam` header entry to be turned on and off
+
 0.8.0b12:
   Add Arlo Pro 5 support
   Allow cloudflare curves to be set

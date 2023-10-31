@@ -674,7 +674,7 @@ class ArloBackEnd(object):
         self._expires_in = body["expiresIn"]
 
     def _auth_headers(self):
-        return {
+        headers = {
             "Accept": "application/json, text/plain, */*",
             "Accept-Encoding": "gzip, deflate, br",
             "Accept-Language": "en-GB,en;q=0.9,en-US;q=0.8",
@@ -688,12 +688,19 @@ class ArloBackEnd(object):
             # "Sec-Fetch-Dest": "empty",
             # "Sec-Fetch-Mode": "cors",
             # "Sec-Fetch-Site": "same-site",
-            # "Source": "arloCamWeb",
             "User-Agent": self._user_agent,
             "X-User-Device-Automation-name": "QlJPV1NFUg==",
             "X-User-Device-Id": self._user_device_id,
             "X-User-Device-Type": "BROWSER",
         }
+
+        # Add Source if asked for.
+        if self._arlo.cfg.send_source:
+            headers.update({
+                "Source": "arloCamWeb",
+            })
+
+        return headers
 
     def _headers(self):
         return {

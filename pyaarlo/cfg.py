@@ -287,8 +287,11 @@ class ArloCfg(object):
         if self._kw.get("default_ciphers", False):
             return 'DEFAULT'
         return self._kw.get("cipher_list", "")
-    
+
     @property
     def ecdh_curve(self):
         return self._kw.get("ecdh_curve", ECDH_CURVE)
 
+    @property
+    def send_source(self):
+        return self._kw.get("send_source", False)
