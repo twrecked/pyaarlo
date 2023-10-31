@@ -1,3 +1,6 @@
+0.8.0.1
+  Better Yahoo IMAP handling. It will now better parse out the emails and
+  better keep track of the used IDs.
 0.8.0.0
   Try multiple EDHC curves
   Allow `Source: arloWebCam` header entry to be turned on and off

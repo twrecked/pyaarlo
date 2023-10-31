@@ -771,7 +771,7 @@ class ArloBackEnd(object):
                 return False
 
             # look for code source choice
-            self.debug("looking for {}".format(self._arlo.cfg.tfa_type))
+            self.debug(f"looking for {self._arlo.cfg.tfa_type}/{self._arlo.cfg.tfa_nickname}")
             factors_of_type = []
             factor_id = None
 
