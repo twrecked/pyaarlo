@@ -112,36 +112,40 @@ class Arlo2FAImap:
                     self.debug("no change in emails")
                     continue
 
-                # new message...
+                # New message. Reverse so we look at the newest one first.
                 old_ids = self._old_ids[0].split()
-                for msg_id in self._new_ids[0].split():
+                msg_ids = self._new_ids[0].split()
+                msg_ids.reverse()
+                for msg_id in msg_ids:
 
-                    # seen it?
+                    # Seen it?
                     if msg_id in old_ids:
                         continue
 
                     # New message. Look at all the parts and try to grab the code, if we catch an exception
                     # just move onto the next part.
                     self.debug("new-msg={}".format(msg_id))
-                    res, msg = self._imap.fetch(msg_id, "(BODY.PEEK[])")
-                    if isinstance(msg[0][1], bytes):
-                        for part in email.message_from_bytes(msg[0][1]).walk():
-                            if part.get_content_type() != "text/html":
-                                continue
-                            try:
-                                for line in part.get_payload(decode=True).splitlines():
-                                    # match code in email, this might need some work if the email changes
-                                    code = re.match(r"^\W+(\d{6})\W*$", line.decode())
-                                    if code is not None:
-                                        self.debug(
-                                            "code={}".format(code.group(1))
-                                        )
-                                        return code.group(1)
-                            except:
-                                self.debug("trying next part")
+                    res, parts = self._imap.fetch(msg_id, "(BODY.PEEK[])")
+                    # res, parts = self._imap.fetch(msg_id, "(RFC822)")
 
-                # update old so we don't keep trying new
-                self._old_ids = self._new_ids
+                    for msg in parts:
+                        try:
+                            if isinstance(msg[1], bytes):
+                                for part in email.message_from_bytes(msg[1]).walk():
+                                    if part.get_content_type() != "text/html":
+                                        continue
+                                    for line in part.get_payload(decode=True).splitlines():
+                                        # match code in email, this might need some work if the email changes
+                                        code = re.match(r"^\W+(\d{6})\W*$", line.decode())
+                                        if code is not None:
+                                            self.debug(f"code={code.group(1)}")
+                                            return code.group(1)
+                        except Exception as e:
+                            self.debug(f"trying next part {str(e)}")
+
+                # Update old so we don't keep trying new.
+                # Yahoo can lose ids so we extend the old list.
+                self._old_ids.extend(new_id for new_id in self._new_ids if new_id not in self._old_ids)
 
             # problem parsing the message, force a fail
             except Exception as e:
