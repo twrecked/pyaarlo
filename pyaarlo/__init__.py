@@ -81,7 +81,8 @@ class PyArlo(object):
       will make Pyaarlo behave more like you expect.
     * **save_media_to** - Save media to a local directory.
     * **ecdh_curve** - Sets ecdhCurve for Cloudscraper. Default is `prime256v1`. Users also report success with `secp384r1`.
-    
+    * **send_source** - Add a `Source` item to the authentication header, default is False.
+
     **Debug `kwargs` parameters:**
 
     * **dump** - Save event stream packets to a file.
