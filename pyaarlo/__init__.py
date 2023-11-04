@@ -34,7 +34,7 @@ from .constant import (
     TOTAL_CAMERAS_KEY,
     TOTAL_LIGHTS_KEY,
     LOCATIONS_PATH_FORMAT,
-    LOCATIONS_EMERGENCY_PATH,
+    LOCATIONS_EMERGENCY_PATH, VALID_DEVICE_STATES,
 )
 from .doorbell import ArloDoorBell
 from .light import ArloLight
@@ -46,7 +46,7 @@ from .util import time_to_arlotime
 
 _LOGGER = logging.getLogger("pyaarlo")
 
-__version__ = "0.8.0.1"
+__version__ = "0.8.0.2"
 
 
 class PyArlo(object):
@@ -209,8 +209,9 @@ class PyArlo(object):
         for device in self._devices:
             dname = device.get("deviceName")
             dtype = device.get("deviceType")
-            if device.get("state", "unknown") != "provisioned":
-                self.info("skipping " + dname + ": state unknown")
+            device_state = device.get("state", "unknown").lower()
+            if device_state not in VALID_DEVICE_STATES:
+                self.info(f"skipping {dname}: state is {device_state}")
                 continue
 
             # This needs it's own code now... Does no parent indicate a base station???
