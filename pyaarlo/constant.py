@@ -310,3 +310,5 @@ CERT_BEGIN = '-----BEGIN CERTIFICATE-----\n'
 CERT_END = '-----END CERTIFICATE-----\n'
 
 ECDH_CURVES = ['prime256v1', 'secp384r1']
+
+VALID_DEVICE_STATES = ["provisioned", "synced"]

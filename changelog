@@ -1,3 +1,5 @@
+0.8.0.2
+  Handle 'synced' device state.
 0.8.0.1
   Better Yahoo IMAP handling. It will now better parse out the emails and
   better keep track of the used IDs.
