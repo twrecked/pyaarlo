@@ -34,7 +34,8 @@ from .constant import (
     TOTAL_CAMERAS_KEY,
     TOTAL_LIGHTS_KEY,
     LOCATIONS_PATH_FORMAT,
-    LOCATIONS_EMERGENCY_PATH, VALID_DEVICE_STATES,
+    LOCATIONS_EMERGENCY_PATH,
+    VALID_DEVICE_STATES,
 )
 from .doorbell import ArloDoorBell
 from .light import ArloLight
