@@ -6,40 +6,47 @@ pyaarlo \- List devices, perform simple actions and anonymize/encrypt logs for d
 .SH DESCRIPTION
 pyaarlo is a Python module to manage Aarlo cameras. \fBpyaarlo\fR executable perform simple actions.
 
-This manual page is for the \fBpyaarlo\fR executable. The Python module documentation is in \fI/usr/share/doc/python3-pyaarlo/README.md.gz\fR.
+This manual page is for the \fBpyaarlo\fR executable. The Python module documentation is available in \fI/usr/share/doc/python3-pyaarlo/README.md.gz\fR.
 
 .SS COMMANDS
+
+Help specific for each command is available executing \fBpyaarlo COMMAND --help\fR.
 
 .TP
 \fBanonymize\fR
 Anonymize and encrypt logs for debugging purposes. For example:
 .IP
-cat output-file | pyaarlo -u 'your-user-name' -p 'your-password' anonymize
+cat output-file | pyaarlo -u username -p password anonymize
 
 .TP
 \fBcamera\fR
-pyaarlo camera --help
-
-For the details of this action.
+Start, stop or take thumbnails from the camera. Requires an argument from {start-stream|stop-stream|last-thumbnail}. Example:
+.IP
+pyaarlo -u username -p password camera last-thumbnail
 
 .TP
 \fBdecrypt\fR
-For example:
+Decrypt from stdin. For example:
 .IP
 cat encrypted | pyaarlo decrypt
 
 .TP
 \fBdump\fR
+Print out everything that was returned from Arlo about the devices in the system.
+.IP
+pyaarlo dump all
 
 .TP
 \fBencrypt\fR
-For example:
+Encrypt from stdin. For example:
 .IP
 cat output-file | pyaarlo encrypt
 
-.SS
+.TP
 \fBlist\fR
-Needs an option from {all, cameras, bases, lights, doorbells}.
+Requires an argument from {all|cameras|bases|lights|doorbells}. Example:
+.IP
+pyaarlo -u username -p password list all
 
 .SS OPTIONS
 .TP
@@ -84,7 +91,7 @@ Wait for all information to arrive starting up.
 
 .TP
 \fB-v, --verbose\fR.
-Be chatty. More is more chatty!
+More vebose with multiple -v.
 
 .TP
 \fB--help\fR.
@@ -93,5 +100,6 @@ Show help message and exit.
 .SH AUTHOR
 This manual page was written by Carles Pina i Estany <carles@pina.cat> for the \fBDebian\fR system (but may be used by others). Permission is granted to copy, distribute and/or modify this document under the terms of the GNU General Public License, Version 3 any later version published by the Free Software Foundation.
 
-Full documentation in \fI/usr/share/doc/python3-pyaarlo/README.md.gz\fP
+.SH SEE ALSO
+Full Pyaarlo full documentation <https://pyaarlo.readthedocs.io/en/latest/> or available locally in </usr/share/doc/python3-pyaarlo/README.md.gz>.
 
