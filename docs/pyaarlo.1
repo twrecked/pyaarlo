@@ -1,0 +1,97 @@
+.TH PYAARLO 1
+.SH NAME
+pyaarlo \- List devices, perform simple actions and anonymize/encrypt logs for debugging
+.SH SYNOPSIS
+\fBpyaarlo [OPTIONS] COMMAND [ARGS]...\fR
+.SH DESCRIPTION
+pyaarlo is a Python module to manage Aarlo cameras. \fBpyaarlo\fR executable perform simple actions.
+
+This manual page is for the \fBpyaarlo\fR executable. The Python module documentation is in \fI/usr/share/doc/python3-pyaarlo/README.md.gz\fR.
+
+.SS COMMANDS
+
+.TP
+\fBanonymize\fR
+Anonymize and encrypt logs for debugging purposes. For example:
+.IP
+cat output-file | pyaarlo -u 'your-user-name' -p 'your-password' anonymize
+
+.TP
+\fBcamera\fR
+pyaarlo camera --help
+
+For the details of this action.
+
+.TP
+\fBdecrypt\fR
+For example:
+.IP
+cat encrypted | pyaarlo decrypt
+
+.TP
+\fBdump\fR
+
+.TP
+\fBencrypt\fR
+For example:
+.IP
+cat output-file | pyaarlo encrypt
+
+.SS
+\fBlist\fR
+Needs an option from {all, cameras, bases, lights, doorbells}.
+
+.SS OPTIONS
+.TP
+\fB-u, --username TEXT\fR
+Aarlo username.
+
+.TP
+\fB-p, --password TEXT\fR
+Aarlo password.
+
+.TP
+\fB-a, --anonymize / --no-anonymize\fR
+Anonymize ids.
+
+.TP
+\fB-c, --compact / --no-compact\fR
+Minimize lists.
+
+.TP
+\fB-e, --encrypt / --no-encrypt\fR
+Where possible, encrypt output.
+
+.TP
+\fB-k, --public-key TEXT\fR
+Public key for encryption.
+
+.TP
+\fB-K, --private-key TEXT\fR
+Private key for decryption.
+
+.TP
+\fB-P, --pass-phrase TEXT\fR
+Pass phrase for private key.
+
+.TP
+\fB-s, --storage-dir TEXT\fR.
+Where to store Arlo state and packet dump [default: (current dir)]
+
+.TP
+\fB-w, --wait / --no-wait\fR.
+Wait for all information to arrive starting up.
+
+.TP
+\fB-v, --verbose\fR.
+Be chatty. More is more chatty!
+
+.TP
+\fB--help\fR.
+Show help message and exit.
+
+.SH AUTHOR
+This manual page was written by Carles Pina i Estany <carles@pina.cat> for the \fBDebian\fR system (but may be used by others). Permission is granted to copy, distribute and/or modify this document under the terms of the GNU General Public License, Version 3 any later version published by the Free Software Foundation.
+
+Full documentation in \fI/usr/share/doc/python3-pyaarlo/README.md.gz\fP
+
