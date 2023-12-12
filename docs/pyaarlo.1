@@ -4,13 +4,13 @@ pyaarlo \- List devices, perform simple actions and anonymize/encrypt logs for d
 .SH SYNOPSIS
 \fBpyaarlo [OPTIONS] COMMAND [ARGS]...\fR
 .SH DESCRIPTION
-pyaarlo is a Python module to manage Aarlo cameras. \fBpyaarlo\fR executable perform simple actions.
+pyaarlo is a Python module to manage Aarlo cameras. The \fBpyaarlo\fR executable performs simple actions.
 
 This manual page is for the \fBpyaarlo\fR executable. The Python module documentation is available in \fI/usr/share/doc/python3-pyaarlo/README.md.gz\fR.
 
 .SS COMMANDS
 
-Help specific for each command is available executing \fBpyaarlo COMMAND --help\fR.
+Help specific to each command is available by executing \fBpyaarlo COMMAND --help\fR.
 
 .TP
 \fBanonymize\fR
@@ -20,7 +20,7 @@ cat output-file | pyaarlo -u username -p password anonymize
 
 .TP
 \fBcamera\fR
-Start, stop or take thumbnails from the camera. Requires an argument from {start-stream|stop-stream|last-thumbnail}. Example:
+Start or stop the camera, or take thumbnails. Requires an argument from {start-stream|stop-stream|last-thumbnail}. For example:
 .IP
 pyaarlo -u username -p password camera last-thumbnail
 
@@ -32,7 +32,7 @@ cat encrypted | pyaarlo decrypt
 
 .TP
 \fBdump\fR
-Print out everything that was returned from Arlo about the devices in the system.
+Print out everything that was returned from Arlo about the devices in the system. For example:
 .IP
 pyaarlo dump all
 
@@ -44,7 +44,7 @@ cat output-file | pyaarlo encrypt
 
 .TP
 \fBlist\fR
-Requires an argument from {all|cameras|bases|lights|doorbells}. Example:
+Requires an argument from {all|cameras|bases|lights|doorbells}. For example:
 .IP
 pyaarlo -u username -p password list all
 
@@ -83,11 +83,11 @@ Pass phrase for private key.
 
 .TP
 \fB-s, --storage-dir TEXT\fR.
-Where to store Arlo state and packet dump [default: (current dir)]
+Where to store Aarlo state and packet dump [default: (current dir)]
 
 .TP
 \fB-w, --wait / --no-wait\fR.
-Wait for all information to arrive starting up.
+Wait for all information to arrive on start-up.
 
 .TP
 \fB-v, --verbose\fR.
