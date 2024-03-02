@@ -1,0 +1,105 @@
+.TH PYAARLO 1
+.SH NAME
+pyaarlo \- List devices, perform simple actions and anonymize/encrypt logs for debugging
+.SH SYNOPSIS
+\fBpyaarlo [OPTIONS] COMMAND [ARGS]...\fR
+.SH DESCRIPTION
+pyaarlo is a Python module to manage Aarlo cameras. The \fBpyaarlo\fR executable performs simple actions.
+
+This manual page is for the \fBpyaarlo\fR executable. The Python module documentation is available in \fI/usr/share/doc/python3-pyaarlo/README.md.gz\fR.
+
+.SS COMMANDS
+
+Help specific to each command is available by executing \fBpyaarlo COMMAND --help\fR.
+
+.TP
+\fBanonymize\fR
+Anonymize and encrypt logs for debugging purposes. For example:
+.IP
+cat output-file | pyaarlo -u username -p password anonymize
+
+.TP
+\fBcamera\fR
+Start or stop the camera, or take thumbnails. Requires an argument from {start-stream|stop-stream|last-thumbnail}. For example:
+.IP
+pyaarlo -u username -p password camera last-thumbnail
+
+.TP
+\fBdecrypt\fR
+Decrypt from stdin. For example:
+.IP
+cat encrypted | pyaarlo decrypt
+
+.TP
+\fBdump\fR
+Print out everything that was returned from Arlo about the devices in the system. For example:
+.IP
+pyaarlo dump all
+
+.TP
+\fBencrypt\fR
+Encrypt from stdin. For example:
+.IP
+cat output-file | pyaarlo encrypt
+
+.TP
+\fBlist\fR
+Requires an argument from {all|cameras|bases|lights|doorbells}. For example:
+.IP
+pyaarlo -u username -p password list all
+
+.SS OPTIONS
+.TP
+\fB-u, --username TEXT\fR
+Aarlo username.
+
+.TP
+\fB-p, --password TEXT\fR
+Aarlo password.
+
+.TP
+\fB-a, --anonymize / --no-anonymize\fR
+Anonymize ids.
+
+.TP
+\fB-c, --compact / --no-compact\fR
+Minimize lists.
+
+.TP
+\fB-e, --encrypt / --no-encrypt\fR
+Where possible, encrypt output.
+
+.TP
+\fB-k, --public-key TEXT\fR
+Public key for encryption.
+
+.TP
+\fB-K, --private-key TEXT\fR
+Private key for decryption.
+
+.TP
+\fB-P, --pass-phrase TEXT\fR
+Pass phrase for private key.
+
+.TP
+\fB-s, --storage-dir TEXT\fR.
+Where to store Aarlo state and packet dump [default: (current dir)]
+
+.TP
+\fB-w, --wait / --no-wait\fR.
+Wait for all information to arrive on start-up.
+
+.TP
+\fB-v, --verbose\fR.
+More vebose with multiple -v.
+
+.TP
+\fB--help\fR.
+Show help message and exit.
+
+.SH AUTHOR
+This manual page was written by Carles Pina i Estany <carles@pina.cat> for the \fBDebian\fR system (but may be used by others). Permission is granted to copy, distribute and/or modify this document under the terms of the GNU General Public License, Version 3 any later version published by the Free Software Foundation.
+
+.SH SEE ALSO
+Full Pyaarlo full documentation <https://pyaarlo.readthedocs.io/en/latest/> or available locally in </usr/share/doc/python3-pyaarlo/README.md.gz>.
+
