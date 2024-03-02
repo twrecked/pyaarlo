@@ -38,7 +38,7 @@ Pyaarlo is a module for Python that provides asynchronous access to Netgear
 Arlo cameras.
 
 When you start Pyaarlo, it starts a background thread that opens a single,
-persistant connection, an *event stream*, to the Arlo servers. As things happen
+persistent connection, an *event stream*, to the Arlo servers. As things happen
 to the Arlo devices - motion detected, battery level changes, mode changes,
 etc... - the Arlo servers post these events onto the event stream. The
 background thread reads these events from the stream, updates Pyaarlo's internal
