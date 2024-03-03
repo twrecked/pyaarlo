@@ -26,6 +26,7 @@ from .constant import (
     MODEL_WIREFREE_VIDEO_DOORBELL,
     MODEL_GO,
     MODEL_GO_2,
+    MODEL_ESSENTIAL_XL,
     PING_CAPABILITY,
     REFRESH_CAMERA_DELAY,
     RESOURCE_CAPABILITY,
@@ -234,6 +235,7 @@ class PyArlo(object):
                 or device.get("modelId").startswith(MODEL_PRO_5)
                 or device.get("modelId").startswith(MODEL_ESSENTIAL)
                 or device.get("modelId").startswith(MODEL_ESSENTIAL_INDOOR)
+                or device.get("modelId").startswith(MODEL_ESSENTIAL_XL)
                 or device.get("modelId").startswith(MODEL_WIREFREE_VIDEO_DOORBELL)
                 or device.get("modelId").startswith(MODEL_GO_2)
             ):
