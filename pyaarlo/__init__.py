@@ -530,6 +530,8 @@ class PyArlo(object):
         :return: a list of cameras.
         :rtype: list(ArloCamera)
         """
+        if not hasattr(self, '_cameras'):
+            self._cameras = []
         return self._cameras
 
     @property
@@ -557,6 +559,8 @@ class PyArlo(object):
         :return: a list of base stations.
         :rtype: list(ArloBase)
         """
+        if not hasattr(self, '_bases'):
+            self._bases = []
         return self._bases
 
     @property

@@ -16,6 +16,7 @@ import requests.adapters
 
 from .constant import (
     AUTH_FINISH_PATH,
+    AUTH_GET_FACTORID,
     AUTH_GET_FACTORS,
     AUTH_PATH,
     AUTH_START_PATH,
@@ -74,6 +75,7 @@ class ArloBackEnd(object):
 
         # login
         self._session = None
+        self._cookies = self._load_cookies()
         self._logged_in = self._login()
         if not self._logged_in:
             self.debug("failed to log in")
@@ -133,6 +135,18 @@ class ArloBackEnd(object):
         except Exception as e:
             self._arlo.warning("session file not written" + str(e))
 
+    def _save_cookies(self, requests_cookiejar):
+        with open(self._arlo.cfg.cookies_file, 'wb') as f:
+            pickle.dump(requests_cookiejar, f)
+
+    def _load_cookies(self):
+        try:
+            with open(self._arlo.cfg.cookies_file, 'rb') as f:
+                return pickle.load(f)
+        except Exception as e:
+            self._arlo.info("cookies file not created yet: " + str(e))
+            return None
+
     def _transaction_id(self):
         return 'FE!' + str(uuid.uuid4())
 
@@ -152,6 +166,7 @@ class ArloBackEnd(object):
         timeout=None,
         host=None,
         authpost=False,
+        cookies=None,
     ):
         if params is None:
             params = {}
@@ -173,6 +188,7 @@ class ArloBackEnd(object):
                 self.vdebug("request-url={}".format(url))
                 self.vdebug("request-params=\n{}".format(pprint.pformat(params)))
                 self.vdebug("request-headers=\n{}".format(pprint.pformat(headers)))
+
                 if method == "GET":
                     r = self._session.get(
                         url,
@@ -180,23 +196,35 @@ class ArloBackEnd(object):
                         headers=headers,
                         stream=stream,
                         timeout=timeout,
+                        cookies=cookies,
                     )
+                    self._save_cookies(r.cookies)
                     if stream is True:
                         return r
                 elif method == "PUT":
                     r = self._session.put(
-                        url, json=params, headers=headers, timeout=timeout
+                        url, json=params, headers=headers, timeout=timeout, cookies=cookies,
                     )
+                    self._save_cookies(r.cookies)
                 elif method == "POST":
                     r = self._session.post(
+                        url, json=params, headers=headers, timeout=timeout, cookies=cookies,
+                    )
+                    self._save_cookies(r.cookies)
+                elif method == "OPTIONS":
+                    r = self._session.options(
                         url, json=params, headers=headers, timeout=timeout
                     )
+                    self._save_cookies(r.cookies)
         except Exception as e:
             self._arlo.warning("request-error={}".format(type(e).__name__))
             return None
 
         try:
-            body = r.json()
+            if "application/json" in r.headers["Content-Type"]:
+                body = r.json()
+            else:
+                body = r.text
             self.vdebug("request-body=\n{}".format(pprint.pformat(body)))
         except Exception as e:
             self._arlo.warning("body-error={}".format(type(e).__name__))
@@ -679,6 +707,8 @@ class ArloBackEnd(object):
             "Accept-Encoding": "gzip, deflate, br",
             "Accept-Language": "en-GB,en;q=0.9,en-US;q=0.8",
             "Cache-Control": "no-cache",
+            "Content-Type": "application/json",
+            "Dnt": "1",
             "Origin": ORIGIN_HOST,
             "Pragma": "no-cache",
             "Referer": REFERER_HOST,
@@ -689,7 +719,7 @@ class ArloBackEnd(object):
             # "Sec-Fetch-Mode": "cors",
             # "Sec-Fetch-Site": "same-site",
             "User-Agent": self._user_agent,
-            "X-User-Device-Automation-name": "QlJPV1NFUg==",
+            "X-User-Device-Automation-Name": "QlJPV1NFUg==",
             "X-User-Device-Id": self._user_device_id,
             "X-User-Device-Type": "BROWSER",
         }
@@ -711,6 +741,7 @@ class ArloBackEnd(object):
             "Authorization": self._token,
             "Cache-Control": "no-cache",
             "Content-Type": "application/json; charset=utf-8;",
+            "Dnt": "1",
             "Origin": ORIGIN_HOST,
             "Pragma": "no-cache",
             "Referer": REFERER_HOST,
@@ -733,6 +764,9 @@ class ArloBackEnd(object):
         while attempt < 3:
             attempt += 1
             self.debug("login attempt #{}".format(attempt))
+            self._options = self.auth_options(AUTH_PATH, headers)
+            self._cookies = self._load_cookies()
+
             body = self.auth_post(
                 AUTH_PATH,
                 {
@@ -742,10 +776,11 @@ class ArloBackEnd(object):
                     "EnvSource": "prod",
                 },
                 headers,
+                cookies=self._cookies,
             )
             if body is not None:
                 break
-            time.sleep(1)
+            time.sleep(3)
         if body is None:
             self._arlo.error("authentication failed")
             return False
@@ -763,31 +798,48 @@ class ArloBackEnd(object):
 
             # get available 2fa choices,
             self.debug("getting tfa choices")
-            factors = self.auth_get(
-                AUTH_GET_FACTORS + "?data = {}".format(int(time.time())), {}, headers
-            )
-            if factors is None:
-                self._arlo.error("2fa: no secondary choices available")
-                return False
+
+            self._options = self.auth_options(AUTH_GET_FACTORID, headers)
+            self._cookies = self._load_cookies()
 
             # look for code source choice
             self.debug(f"looking for {self._arlo.cfg.tfa_type}/{self._arlo.cfg.tfa_nickname}")
             factors_of_type = []
             factor_id = None
 
-            for factor in factors["items"]:
-                if factor["factorType"].lower() == self._arlo.cfg.tfa_type:
-                    factors_of_type.append(factor)
+            payload = {
+                "factorType": "BROWSER",
+                "factorData": "",
+                "userId": self._user_id
+            }
 
-            if len(factors_of_type) > 0:
-                # Try to match the factorNickname with the tfa_nickname
-                for factor in factors_of_type:
-                    if self._arlo.cfg.tfa_nickname == factor["factorNickname"]:
-                        factor_id = factor["factorId"]
-                        break
-                # Otherwise fallback to using the first option
-                else:
-                    factor_id = factors_of_type[0]["factorId"]
+            r = self.auth_post(
+                AUTH_GET_FACTORID, payload, headers, cookies=self._cookies
+            )
+
+            if r != None:
+                factor_id = r["factorId"]
+            else:
+                factors = self.auth_get(
+                    AUTH_GET_FACTORS + "?data = {}".format(int(time.time())), {}, headers
+                )
+                if factors is None:
+                    self._arlo.error("2fa: no secondary choices available")
+                    return False
+
+                for factor in factors["items"]:
+                    if factor["factorType"].lower() == self._arlo.cfg.tfa_type:
+                        factors_of_type.append(factor)
+
+                if len(factors_of_type) > 0:
+                    # Try to match the factorNickname with the tfa_nickname
+                    for factor in factors_of_type:
+                        if self._arlo.cfg.tfa_nickname == factor["factorNickname"]:
+                            factor_id = factor["factorId"]
+                            break
+                    # Otherwise fallback to using the first option
+                    else:
+                        factor_id = factors_of_type[0]["factorId"]
 
             if factor_id is None:
                 self._arlo.error("2fa no suitable secondary choice available")
@@ -808,6 +860,7 @@ class ArloBackEnd(object):
                     "factorType": "BROWSER",
                     "userId": self._user_id
                 }
+                self._options = self.auth_options(AUTH_START_PATH, headers)
                 body = self.auth_post(AUTH_START_PATH, payload, headers)
                 if body is None:
                     self._arlo.error("2fa startAuth failed")
@@ -900,6 +953,12 @@ class ArloBackEnd(object):
         # pickup user configured user agent
         self._user_agent = self.user_agent(self._arlo.cfg.user_agent)
 
+        # If we want to use cloudscraper's random user agent and set the cookies during a first call to the origin host
+        # Used during a debugging session about CloudFlare's 403.
+        # _cookies, self._user_agent = cloudscraper.get_tokens(ORIGIN_HOST)
+        # if self._cookies is None:
+        #     self._cookies = _cookies
+
         # If token looks invalid we'll try the whole process.
         get_new_session = days_until(self._expires_in) < 2
         if get_new_session:
@@ -908,7 +967,15 @@ class ArloBackEnd(object):
             for curve in self._arlo.cfg.ecdh_curves:
                 self.debug(f"CloudFlare curve set to: {curve}")
                 self._session = cloudscraper.create_scraper(
-                    ecdhCurve=curve
+                    # browser={
+                    #     'browser': 'chrome',
+                    #     'platform': 'darwin',
+                    #     'desktop': True,
+                    #     'mobile': False,
+                    # },
+                    disableCloudflareV1=True,
+                    ecdhCurve=curve,
+                    debug=False,
                 )
                 if self._auth() and self._validate():
                     success = True
@@ -917,7 +984,17 @@ class ArloBackEnd(object):
             if not success:
                 return False
         else:
-            self._session = requests.session()
+            # self._session = requests.session()
+            # Use cloudscraper to initiate newer sessions
+            # https://github.com/VeNoMouS/cloudscraper?tab=readme-ov-file#note
+            self._session = cloudscraper.create_scraper(
+                # browser={
+                #     'browser': 'chrome',
+                #     'platform': 'darwin',
+                #     'desktop': True,
+                #     'mobile': False,
+                # }
+            )
             self.debug("newish sessions, re-using")
 
         # save session in case we updated it
@@ -1044,11 +1121,12 @@ class ArloBackEnd(object):
         timeout=None,
         host=None,
         wait_for="response",
+        cookies=None,
     ):
         if wait_for == "response":
             self.vdebug("get+response running")
             return self._request(
-                path, "GET", params, headers, stream, raw, timeout, host
+                path, "GET", params, headers, stream, raw, timeout, host, cookies
             )
         else:
             self.vdebug("get sent")
@@ -1064,10 +1142,11 @@ class ArloBackEnd(object):
         raw=False,
         timeout=None,
         wait_for="response",
+        cookies=None,
     ):
         if wait_for == "response":
             self.vdebug("put+response running")
-            return self._request(path, "PUT", params, headers, False, raw, timeout)
+            return self._request(path, "PUT", params, headers, False, raw, timeout, cookies)
         else:
             self.vdebug("put sent")
             self._arlo.bg.run(
@@ -1083,6 +1162,7 @@ class ArloBackEnd(object):
         timeout=None,
         tid=None,
         wait_for="response",
+        cookies=None,
     ):
         """Post a request to the Arlo servers.
 
@@ -1114,16 +1194,23 @@ class ArloBackEnd(object):
                 self._request, path, "POST", params, headers, False, raw, timeout
             )
 
-    def auth_post(self, path, params=None, headers=None, raw=False, timeout=None):
+    def auth_post(self, path, params=None, headers=None, raw=False, timeout=None, cookies=None):
         return self._request(
-            path, "POST", params, headers, False, raw, timeout, self._arlo.cfg.auth_host, authpost=True
+            path, "POST", params, headers, False, raw, timeout, self._arlo.cfg.auth_host, authpost=True, cookies=cookies
         )
 
     def auth_get(
-        self, path, params=None, headers=None, stream=False, raw=False, timeout=None
+        self, path, params=None, headers=None, stream=False, raw=False, timeout=None, cookies=None
     ):
         return self._request(
-            path, "GET", params, headers, stream, raw, timeout, self._arlo.cfg.auth_host, authpost=True
+            path, "GET", params, headers, stream, raw, timeout, self._arlo.cfg.auth_host, authpost=True, cookies=cookies
+        )
+
+    def auth_options(
+        self, path, headers=None, timeout=None
+     ):
+        return self._request(
+            path, "OPTIONS", headers, timeout, self._arlo.cfg.auth_host, authpost=True
         )
 
     @property

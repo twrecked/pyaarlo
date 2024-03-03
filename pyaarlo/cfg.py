@@ -241,6 +241,10 @@ class ArloCfg(object):
         return self._kw.get("save_session", True)
 
     @property
+    def cookies_file(self):
+        return self.storage_dir + "/cookies.txt"
+
+    @property
     def dump_file(self):
         if self.dump:
             return self.storage_dir + "/" + "packets.dump"
