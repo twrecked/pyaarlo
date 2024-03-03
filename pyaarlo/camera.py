@@ -51,6 +51,8 @@ from .constant import (
     MODEL_PRO_5,
     MODEL_ULTRA,
     MODEL_WIRED_VIDEO_DOORBELL,
+    MODEL_WIRED_VIDEO_DOORBELL2_HD,
+    MODEL_WIRED_VIDEO_DOORBELL2_2K,
     MODEL_WIREFREE_VIDEO_DOORBELL,
     MODEL_GO,
     MOTION_DETECTED_KEY,
@@ -1367,8 +1369,7 @@ class ArloCamera(ArloChildDevice):
         if cap in (LAST_CAPTURE_KEY, CAPTURED_TODAY_KEY, RECENT_ACTIVITY_KEY):
             return True
         if cap in (AUDIO_DETECTED_KEY,):
-            if self.model_id.startswith(
-                (
+            if self.model_id.startswith((
                     MODEL_ESSENTIAL,
                     MODEL_ESSENTIAL_INDOOR,
                     MODEL_ESSENTIAL_XL,
@@ -1380,14 +1381,12 @@ class ArloCamera(ArloChildDevice):
                     MODEL_ULTRA,
                     MODEL_GO,
                     MODEL_BABY,
-                )
-            ):
+            )):
                 return True
             if self.device_type.startswith("arloq"):
                 return True
         if cap in (SIREN_STATE_KEY,):
-            if self.model_id.startswith(
-                (
+            if self.model_id.startswith((
                     MODEL_ESSENTIAL,
                     MODEL_ESSENTIAL_INDOOR,
                     MODEL_ESSENTIAL_XL,
@@ -1396,15 +1395,20 @@ class ArloCamera(ArloChildDevice):
                     MODEL_PRO_4,
                     MODEL_PRO_5,
                     MODEL_ULTRA,
+                    MODEL_WIRED_VIDEO_DOORBELL2_HD,
+                    MODEL_WIRED_VIDEO_DOORBELL2_2K,
                     MODEL_WIREFREE_VIDEO_DOORBELL,
-                )
-            ):
+            )):
                 return True
         if cap in (SPOTLIGHT_KEY,):
-            if self.model_id.startswith(
-                (MODEL_ESSENTIAL, MODEL_ESSENTIAL_XL, MODEL_ESSENTIAL_XL, MODEL_PRO_3, MODEL_PRO_4, MODEL_PRO_5,
-                 MODEL_ULTRA)
-            ):
+            if self.model_id.startswith((
+                    MODEL_ESSENTIAL,
+                    MODEL_ESSENTIAL_XL,
+                    MODEL_PRO_3,
+                    MODEL_PRO_4,
+                    MODEL_PRO_5,
+                    MODEL_ULTRA
+            )):
                 return True
         if cap in (TEMPERATURE_KEY, HUMIDITY_KEY, AIR_QUALITY_KEY):
             if self.model_id.startswith(MODEL_BABY):
@@ -1417,8 +1421,7 @@ class ArloCamera(ArloChildDevice):
                 return True
         if cap in (CONNECTION_KEY,):
             # These devices are their own base stations so don't re-add connection key.
-            if self.parent_id == self.device_id and self.model_id.startswith(
-                (
+            if self.parent_id == self.device_id and self.model_id.startswith((
                     MODEL_BABY,
                     MODEL_PRO_3_FLOODLIGHT,
                     MODEL_PRO_4,
@@ -1426,11 +1429,12 @@ class ArloCamera(ArloChildDevice):
                     MODEL_ESSENTIAL,
                     MODEL_ESSENTIAL_XL,
                     MODEL_WIRED_VIDEO_DOORBELL,
+                    MODEL_WIRED_VIDEO_DOORBELL2_HD,
+                    MODEL_WIRED_VIDEO_DOORBELL2_2K,
                     MODEL_WIREFREE_VIDEO_DOORBELL,
                     MODEL_ESSENTIAL_INDOOR,
                     MODEL_GO,
-                )
-            ):
+            )):
                 return False
             if self.device_type in ("arloq", "arloqs"):
                 return False
