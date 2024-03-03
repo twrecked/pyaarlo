@@ -25,7 +25,7 @@ from .constant import (
     MODEL_PRO_4,
     MODEL_PRO_5,
     MODEL_WIRED_VIDEO_DOORBELL,
-    MODEL_WIREFREE_VIDEO_DOORBELL,
+    MODEL_ESSENTIAL_VIDEO_DOORBELL,
     PING_CAPABILITY,
     RESOURCE_CAPABILITY,
     RESTART_PATH,
@@ -563,10 +563,13 @@ class ArloBase(ArloDevice):
                 return True
 
             # Don't ping these devices ever.
-            if self.model_id.startswith(
-                    (MODEL_WIREFREE_VIDEO_DOORBELL, MODEL_ESSENTIAL,
-                     MODEL_PRO_3_FLOODLIGHT, MODEL_PRO_4, MODEL_PRO_5)
-            ):
+            if self.model_id.startswith((
+                    MODEL_ESSENTIAL_VIDEO_DOORBELL,
+                    MODEL_ESSENTIAL,
+                    MODEL_PRO_3_FLOODLIGHT,
+                    MODEL_PRO_4,
+                    MODEL_PRO_5
+            )):
                 return False
 
             # We have to be careful pinging some base stations because it can rapidly
@@ -584,9 +587,10 @@ class ArloBase(ArloDevice):
 
         if cap in (RESOURCE_CAPABILITY,):
             # Not all devices need (or want) to get their resources queried.
-            if self.model_id.startswith(
-                    (MODEL_WIREFREE_VIDEO_DOORBELL, MODEL_ESSENTIAL)
-            ):
+            if self.model_id.startswith((
+                    MODEL_ESSENTIAL_VIDEO_DOORBELL,
+                    MODEL_ESSENTIAL
+            )):
                 return False
             return True
         return super().has_capability(cap)

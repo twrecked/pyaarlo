@@ -25,7 +25,7 @@ from .constant import (
     MODEL_WIRED_VIDEO_DOORBELL,
     MODEL_WIRED_VIDEO_DOORBELL2_HD,
     MODEL_WIRED_VIDEO_DOORBELL2_2K,
-    MODEL_WIREFREE_VIDEO_DOORBELL,
+    MODEL_ESSENTIAL_VIDEO_DOORBELL,
     MODEL_GO,
     MODEL_GO_2,
     MODEL_ESSENTIAL_XL,
@@ -242,7 +242,7 @@ class PyArlo(object):
                     MODEL_ESSENTIAL_XL,
                     MODEL_WIRED_VIDEO_DOORBELL2_HD,
                     MODEL_WIRED_VIDEO_DOORBELL2_2K,
-                    MODEL_WIREFREE_VIDEO_DOORBELL,
+                    MODEL_ESSENTIAL_VIDEO_DOORBELL,
                     MODEL_GO_2
             )):
                 parent_id = device.get("parentId", None)
@@ -258,7 +258,7 @@ class PyArlo(object):
                         MODEL_WIRED_VIDEO_DOORBELL,
                         MODEL_WIRED_VIDEO_DOORBELL2_HD,
                         MODEL_WIRED_VIDEO_DOORBELL2_2K,
-                        MODEL_WIREFREE_VIDEO_DOORBELL
+                        MODEL_ESSENTIAL_VIDEO_DOORBELL
                 ))
             ):
                 self._cameras.append(ArloCamera(dname, self, device))

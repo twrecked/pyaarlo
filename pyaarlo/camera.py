@@ -53,7 +53,7 @@ from .constant import (
     MODEL_WIRED_VIDEO_DOORBELL,
     MODEL_WIRED_VIDEO_DOORBELL2_HD,
     MODEL_WIRED_VIDEO_DOORBELL2_2K,
-    MODEL_WIREFREE_VIDEO_DOORBELL,
+    MODEL_ESSENTIAL_VIDEO_DOORBELL,
     MODEL_GO,
     MOTION_DETECTED_KEY,
     MOTION_SENS_KEY,
@@ -1397,7 +1397,7 @@ class ArloCamera(ArloChildDevice):
                     MODEL_ULTRA,
                     MODEL_WIRED_VIDEO_DOORBELL2_HD,
                     MODEL_WIRED_VIDEO_DOORBELL2_2K,
-                    MODEL_WIREFREE_VIDEO_DOORBELL,
+                    MODEL_ESSENTIAL_VIDEO_DOORBELL,
             )):
                 return True
         if cap in (SPOTLIGHT_KEY,):
@@ -1431,7 +1431,7 @@ class ArloCamera(ArloChildDevice):
                     MODEL_WIRED_VIDEO_DOORBELL,
                     MODEL_WIRED_VIDEO_DOORBELL2_HD,
                     MODEL_WIRED_VIDEO_DOORBELL2_2K,
-                    MODEL_WIREFREE_VIDEO_DOORBELL,
+                    MODEL_ESSENTIAL_VIDEO_DOORBELL,
                     MODEL_ESSENTIAL_INDOOR,
                     MODEL_GO,
             )):
