@@ -1,3 +1,7 @@
+0.8.0.3
+  Add Arlo Essential XL support (thank @mzsanford)
+  Add Gen2 doorbell support.
+  Renamed Essential doorbell.
 0.8.0.2
   Handle 'synced' device state.
 0.8.0.1

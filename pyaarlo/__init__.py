@@ -23,7 +23,9 @@ from .constant import (
     MODEL_PRO_4,
     MODEL_PRO_5,
     MODEL_WIRED_VIDEO_DOORBELL,
-    MODEL_WIREFREE_VIDEO_DOORBELL,
+    MODEL_WIRED_VIDEO_DOORBELL2_HD,
+    MODEL_WIRED_VIDEO_DOORBELL2_2K,
+    MODEL_ESSENTIAL_VIDEO_DOORBELL,
     MODEL_GO,
     MODEL_GO_2,
     MODEL_ESSENTIAL_XL,
@@ -48,7 +50,7 @@ from .util import time_to_arlotime
 
 _LOGGER = logging.getLogger("pyaarlo")
 
-__version__ = "0.8.0.2"
+__version__ = "0.8.0.3"
 
 
 class PyArlo(object):
@@ -219,6 +221,7 @@ class PyArlo(object):
             # This needs it's own code now... Does no parent indicate a base station???
             if (
                 dtype == "basestation"
+                or dtype == "arlobridge"
                 or dtype.lower() == 'hub'
                 or device.get("modelId") == "ABC1000"
                 or device.get("modelId").startswith(MODEL_GO)
@@ -226,31 +229,37 @@ class PyArlo(object):
                 or dtype == "arloqs"
             ):
                 self._bases.append(ArloBase(dname, self, device))
+
             # Newer devices can connect directly to wifi and can be its own base station,
             # it can also be assigned to a real base station
-            if (
-                device.get("modelId").startswith(MODEL_WIRED_VIDEO_DOORBELL)
-                or device.get("modelId").startswith(MODEL_PRO_3_FLOODLIGHT)
-                or device.get("modelId").startswith(MODEL_PRO_4)
-                or device.get("modelId").startswith(MODEL_PRO_5)
-                or device.get("modelId").startswith(MODEL_ESSENTIAL)
-                or device.get("modelId").startswith(MODEL_ESSENTIAL_INDOOR)
-                or device.get("modelId").startswith(MODEL_ESSENTIAL_XL)
-                or device.get("modelId").startswith(MODEL_WIREFREE_VIDEO_DOORBELL)
-                or device.get("modelId").startswith(MODEL_GO_2)
-            ):
+            if device.get("modelId").startswith((
+                    MODEL_WIRED_VIDEO_DOORBELL,
+                    MODEL_PRO_3_FLOODLIGHT,
+                    MODEL_PRO_4,
+                    MODEL_PRO_5,
+                    MODEL_ESSENTIAL,
+                    MODEL_ESSENTIAL_INDOOR,
+                    MODEL_ESSENTIAL_XL,
+                    MODEL_WIRED_VIDEO_DOORBELL2_HD,
+                    MODEL_WIRED_VIDEO_DOORBELL2_2K,
+                    MODEL_ESSENTIAL_VIDEO_DOORBELL,
+                    MODEL_GO_2
+            )):
                 parent_id = device.get("parentId", None)
                 if parent_id is None or parent_id == device.get("deviceId", None):
                     self._bases.append(ArloBase(dname, self, device))
-            if dtype == "arlobridge":
-                self._bases.append(ArloBase(dname, self, device))
+
             if (
                 dtype == "camera"
                 or dtype == "arloq"
                 or dtype == "arloqs"
-                or device.get("modelId").startswith(MODEL_GO)
-                or device.get("modelId").startswith(MODEL_WIRED_VIDEO_DOORBELL)
-                or device.get("modelId").startswith(MODEL_WIREFREE_VIDEO_DOORBELL)
+                or device.get("modelId").startswith((
+                        MODEL_GO,
+                        MODEL_WIRED_VIDEO_DOORBELL,
+                        MODEL_WIRED_VIDEO_DOORBELL2_HD,
+                        MODEL_WIRED_VIDEO_DOORBELL2_2K,
+                        MODEL_ESSENTIAL_VIDEO_DOORBELL
+                ))
             ):
                 self._cameras.append(ArloCamera(dname, self, device))
             if dtype == "doorbell":

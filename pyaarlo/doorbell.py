@@ -4,7 +4,9 @@ from .constant import (
     CHIMES_KEY,
     CONNECTION_KEY,
     MODEL_WIRED_VIDEO_DOORBELL,
-    MODEL_WIREFREE_VIDEO_DOORBELL,
+    MODEL_WIRED_VIDEO_DOORBELL2_HD,
+    MODEL_WIRED_VIDEO_DOORBELL2_2K,
+    MODEL_ESSENTIAL_VIDEO_DOORBELL,
     MOTION_DETECTED_KEY,
     SIGNAL_STR_KEY,
     SILENT_MODE_ACTIVE_KEY,
@@ -89,9 +91,12 @@ class ArloDoorBell(ArloChildDevice):
 
     @property
     def is_video_doorbell(self):
-        return self.model_id.startswith(
-            MODEL_WIRED_VIDEO_DOORBELL
-        ) or self.model_id.startswith(MODEL_WIREFREE_VIDEO_DOORBELL)
+        return self.model_id.startswith((
+            MODEL_WIRED_VIDEO_DOORBELL,
+            MODEL_WIRED_VIDEO_DOORBELL2_HD,
+            MODEL_WIRED_VIDEO_DOORBELL2_2K,
+            MODEL_ESSENTIAL_VIDEO_DOORBELL
+        ))
 
     def has_capability(self, cap):
         # Video Doorbells appear as both ArloCameras and ArloDoorBells, where
