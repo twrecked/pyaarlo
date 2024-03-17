@@ -25,6 +25,8 @@ from .constant import (
     MODEL_PRO_4,
     MODEL_PRO_5,
     MODEL_WIRED_VIDEO_DOORBELL,
+    MODEL_WIRED_VIDEO_DOORBELL2_HD,
+    MODEL_WIRED_VIDEO_DOORBELL2_2K,
     MODEL_ESSENTIAL_VIDEO_DOORBELL,
     PING_CAPABILITY,
     RESOURCE_CAPABILITY,
@@ -564,11 +566,13 @@ class ArloBase(ArloDevice):
 
             # Don't ping these devices ever.
             if self.model_id.startswith((
-                    MODEL_ESSENTIAL_VIDEO_DOORBELL,
                     MODEL_ESSENTIAL,
+                    MODEL_ESSENTIAL_VIDEO_DOORBELL,
                     MODEL_PRO_3_FLOODLIGHT,
                     MODEL_PRO_4,
-                    MODEL_PRO_5
+                    MODEL_PRO_5,
+                    MODEL_WIRED_VIDEO_DOORBELL2_2K,
+                    MODEL_WIRED_VIDEO_DOORBELL2_HD,
             )):
                 return False
 
