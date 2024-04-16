@@ -40,6 +40,7 @@ AUTH_PATH = "/api/auth"
 AUTH_START_PATH = "/api/startAuth"
 AUTH_FINISH_PATH = "/api/finishAuth"
 AUTH_GET_FACTORS = "/api/getFactors"
+AUTH_GET_FACTORID = "/api/getFactorId"
 AUTH_VALIDATE_PATH = "/api/validateAccessToken"
 
 TFA_CONSOLE_SOURCE = "console"
@@ -300,8 +301,8 @@ USER_AGENTS = {
         "Mozilla/5.0 (iPad; CPU OS 12_2 like Mac OS X) "
         "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/12.1 Mobile/15E148 Safari/604.1",
     "mac":
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) "
-        "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/11.1.2 Safari/605.1.15",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36",
     "firefox":
         "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:85.0) "
         "Gecko/20100101 Firefox/85.0",
@@ -313,6 +314,6 @@ USER_AGENTS = {
 CERT_BEGIN = '-----BEGIN CERTIFICATE-----\n'
 CERT_END = '-----END CERTIFICATE-----\n'
 
-ECDH_CURVES = ['prime256v1', 'secp384r1']
+ECDH_CURVES = ['secp384r1', 'prime256v1']
 
 VALID_DEVICE_STATES = ["provisioned", "synced"]
