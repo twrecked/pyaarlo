@@ -1,3 +1,7 @@
+0.8.0.6
+  Improved MQTT support. If you set the backend to auto it will read the
+  MQTT server address and port from a key passed in the session packet.
+  The previous version was too simple.
 0.8.0.5
   Improved cloudfare avoidance.
   Improved MQTT support. If you set the backend to auto it will read the
