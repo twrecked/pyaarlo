@@ -50,7 +50,7 @@ from .util import time_to_arlotime
 
 _LOGGER = logging.getLogger("pyaarlo")
 
-__version__ = "0.8.0.4"
+__version__ = "0.8.0.5"
 
 
 class PyArlo(object):
@@ -177,17 +177,19 @@ class PyArlo(object):
         self._be = ArloBackEnd(self)
         self._ml = ArloMediaLibrary(self)
 
-        # Failed to login, then stop now!
-        if not self._be.is_connected:
-            return
-
-        self._lock = threading.Condition()
+        # Make sure they are empty.
         self._locations = []
         self._bases = []
         self._cameras = []
         self._lights = []
         self._doorbells = []
         self._sensors = []
+
+        # Failed to login, then stop now!
+        if not self._be.is_connected:
+            return
+
+        self._lock = threading.Condition()
 
         # On day flip we do extra work, record today.
         self._today = datetime.date.today()
@@ -539,8 +541,6 @@ class PyArlo(object):
         :return: a list of cameras.
         :rtype: list(ArloCamera)
         """
-        if not hasattr(self, '_cameras'):
-            self._cameras = []
         return self._cameras
 
     @property
@@ -568,8 +568,6 @@ class PyArlo(object):
         :return: a list of base stations.
         :rtype: list(ArloBase)
         """
-        if not hasattr(self, '_bases'):
-            self._bases = []
         return self._bases
 
     @property
