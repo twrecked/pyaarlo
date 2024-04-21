@@ -26,6 +26,7 @@ from .constant import (
     LOGOUT_PATH,
     MQTT_HOST,
     MQTT_PATH,
+    MQTT_URL_KEY,
     NOTIFY_PATH,
     ORIGIN_HOST,
     REFERER_HOST,
@@ -551,7 +552,7 @@ class ArloBackEnd(object):
                        f"transport={self._arlo.cfg.mqtt_transport}")
 
             # Connect.
-            self._event_client.connect(self._arlo.cfg.mqtt_host, port=443, keepalive=60)
+            self._event_client.connect(self._arlo.cfg.mqtt_host, port=self._arlo.cfg.mqtt_port, keepalive=60)
             self._event_client.loop_forever()
 
         except Exception as e:
@@ -817,7 +818,7 @@ class ArloBackEnd(object):
                 AUTH_GET_FACTORID, payload, headers, cookies=self._cookies
             )
 
-            if r != None:
+            if r is not None:
                 factor_id = r["factorId"]
             else:
                 factors = self.auth_get(
@@ -946,6 +947,11 @@ class ArloBackEnd(object):
             return False
         self._multi_location = v2_session.get('supportsMultiLocation', False)
         self._arlo.debug(f"multilocation is {self._multi_location}")
+
+        # Bring in Arlo provided MQTT URL if seen.
+        if self._arlo.cfg.event_backend == "auto" and MQTT_URL_KEY in v2_session:
+            self._arlo.cfg.update_mqtt_from_url(v2_session[MQTT_URL_KEY])
+            self._arlo.debug(f"url={self._arlo.cfg.mqtt_host}:{self._arlo.cfg.mqtt_port}")
         return True
 
     def _login(self):
@@ -1161,8 +1167,7 @@ class ArloBackEnd(object):
         raw=False,
         timeout=None,
         tid=None,
-        wait_for="response",
-        cookies=None,
+        wait_for="response"
     ):
         """Post a request to the Arlo servers.
 

@@ -1,5 +1,7 @@
 0.8.0.5
   Improved cloudfare avoidance.
+  Improved MQTT support. If you set the backend to auto it will read the
+  MQTT server address and port from a key passed in the session packet.
 0.8.0.4
   Tweaked Gen2 doorbell support.
 0.8.0.3
