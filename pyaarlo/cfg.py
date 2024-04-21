@@ -35,6 +35,7 @@ class ArloCfg(object):
         self._arlo = arlo
         self._kw = kwargs
         self._arlo.debug("config: loaded")
+        self._update_backend = False
         if platform.system() == "Windows":
             self._storage_dir = tempfile.gettempdir() + r"\.aarlo"
         else:
@@ -84,9 +85,15 @@ class ArloCfg(object):
         return self._kw.get("mqtt_port", DEFAULT_MQTT_PORT)
 
     def update_mqtt_from_url(self, url):
-        url = urlparse(url)
-        self._kw["mqtt_host"] = url.hostname
-        self._kw["mqtt_port"] = url.port
+        if self._update_backend or self.event_backend == "auto":
+            self._update_backend = True
+            url = urlparse(url)
+            if url.scheme == "wss":
+                self._kw["backend"] = 'sse'
+            else:
+                self._kw["backend"] = 'mqtt'
+                self._kw["mqtt_host"] = url.hostname
+                self._kw["mqtt_port"] = url.port
 
     @property
     def mqtt_hostname_check(self):

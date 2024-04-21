@@ -948,10 +948,10 @@ class ArloBackEnd(object):
         self._multi_location = v2_session.get('supportsMultiLocation', False)
         self._arlo.debug(f"multilocation is {self._multi_location}")
 
-        # Bring in Arlo provided MQTT URL if seen.
-        if self._arlo.cfg.event_backend == "auto" and MQTT_URL_KEY in v2_session:
+        # If Arlo provides an MQTT URL key use it to set the backend.
+        if MQTT_URL_KEY in v2_session:
             self._arlo.cfg.update_mqtt_from_url(v2_session[MQTT_URL_KEY])
-            self._arlo.debug(f"url={self._arlo.cfg.mqtt_host}:{self._arlo.cfg.mqtt_port}")
+            self._arlo.debug(f"back={self._arlo.cfg.event_backend};url={self._arlo.cfg.mqtt_host}:{self._arlo.cfg.mqtt_port}")
         return True
 
     def _login(self):
