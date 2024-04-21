@@ -1,8 +1,11 @@
 import platform
 import tempfile
+from urllib.parse import urlparse
+
 from .constant import (
     DEFAULT_AUTH_HOST,
     DEFAULT_HOST,
+    DEFAULT_MQTT_PORT,
     MQTT_HOST,
     PRELOAD_DAYS,
     TFA_CONSOLE_SOURCE,
@@ -75,6 +78,15 @@ class ArloCfg(object):
     @property
     def mqtt_host(self):
         return self._remove_scheme(self._kw.get("mqtt_host", MQTT_HOST))
+
+    @property
+    def mqtt_port(self):
+        return self._kw.get("mqtt_port", DEFAULT_MQTT_PORT)
+
+    def update_mqtt_from_url(self, url):
+        url = urlparse(url)
+        self._kw["mqtt_host"] = url.hostname
+        self._kw["mqtt_port"] = url.port
 
     @property
     def mqtt_hostname_check(self):
