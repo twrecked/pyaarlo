@@ -43,6 +43,7 @@ from .constant import (
     MODEL_BABY,
     MODEL_ESSENTIAL,
     MODEL_ESSENTIAL_INDOOR,
+    MODEL_ESSENTIAL_INDOOR2,
     MODEL_ESSENTIAL_XL,
     MODEL_PRO_2,
     MODEL_PRO_3,
@@ -1360,7 +1361,10 @@ class ArloCamera(ArloChildDevice):
 
     def has_capability(self, cap):
         if cap in (BATTERY_KEY,):
-            if self.model_id.startswith(MODEL_ESSENTIAL_INDOOR):
+            if self.model_id.startswith((
+                    MODEL_ESSENTIAL_INDOOR,
+                    MODEL_ESSENTIAL_INDOOR2,
+            )):
                 return False
             else:
                 return True
@@ -1372,6 +1376,7 @@ class ArloCamera(ArloChildDevice):
             if self.model_id.startswith((
                     MODEL_ESSENTIAL,
                     MODEL_ESSENTIAL_INDOOR,
+                    MODEL_ESSENTIAL_INDOOR2,
                     MODEL_ESSENTIAL_XL,
                     MODEL_PRO_2,
                     MODEL_PRO_3,
@@ -1389,6 +1394,7 @@ class ArloCamera(ArloChildDevice):
             if self.model_id.startswith((
                     MODEL_ESSENTIAL,
                     MODEL_ESSENTIAL_INDOOR,
+                    MODEL_ESSENTIAL_INDOOR2,
                     MODEL_ESSENTIAL_XL,
                     MODEL_PRO_3,
                     MODEL_PRO_3_FLOODLIGHT,
@@ -1433,6 +1439,7 @@ class ArloCamera(ArloChildDevice):
                     MODEL_WIRED_VIDEO_DOORBELL2_2K,
                     MODEL_ESSENTIAL_VIDEO_DOORBELL,
                     MODEL_ESSENTIAL_INDOOR,
+                    MODEL_ESSENTIAL_INDOOR2,
                     MODEL_GO,
             )):
                 return False
