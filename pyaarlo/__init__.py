@@ -17,6 +17,7 @@ from .constant import (
     FAST_REFRESH_INTERVAL,
     MODEL_ESSENTIAL,
     MODEL_ESSENTIAL_INDOOR,
+    MODEL_ESSENTIAL_INDOOR2,
     MODEL_PRO_3_FLOODLIGHT,
     MODEL_PRO_4,
     MODEL_PRO_5,
@@ -46,7 +47,7 @@ from .util import time_to_arlotime
 
 _LOGGER = logging.getLogger("pyaarlo")
 
-__version__ = "0.8.0.6"
+__version__ = "0.8.0.7"
 
 
 class PyArlo(object):
@@ -237,6 +238,7 @@ class PyArlo(object):
                     MODEL_PRO_5,
                     MODEL_ESSENTIAL,
                     MODEL_ESSENTIAL_INDOOR,
+                    MODEL_ESSENTIAL_INDOOR2,
                     MODEL_ESSENTIAL_XL,
                     MODEL_WIRED_VIDEO_DOORBELL2_HD,
                     MODEL_WIRED_VIDEO_DOORBELL2_2K,
