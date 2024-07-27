@@ -156,18 +156,18 @@ class ArloBackEnd(object):
         now = time_to_arlotime()
         return f"{url}{sep}eventId={tid}&time={now}"
 
-    def _request(
-        self,
-        path,
-        method="GET",
-        params=None,
-        headers=None,
-        stream=False,
-        raw=False,
-        timeout=None,
-        host=None,
-        authpost=False,
-        cookies=None,
+    def _request_tuple(
+            self,
+            path,
+            method="GET",
+            params=None,
+            headers=None,
+            stream=False,
+            raw=False,
+            timeout=None,
+            host=None,
+            authpost=False,
+            cookies=None
     ):
         if params is None:
             params = {}
@@ -201,7 +201,7 @@ class ArloBackEnd(object):
                     )
                     self._save_cookies(r.cookies)
                     if stream is True:
-                        return r
+                        return 200, r
                 elif method == "PUT":
                     r = self._session.put(
                         url, json=params, headers=headers, timeout=timeout, cookies=cookies,
@@ -219,7 +219,7 @@ class ArloBackEnd(object):
                     self._save_cookies(r.cookies)
         except Exception as e:
             self._arlo.warning("request-error={}".format(type(e).__name__))
-            return None
+            return 500, None
 
         try:
             if "application/json" in r.headers["Content-Type"]:
@@ -230,33 +230,51 @@ class ArloBackEnd(object):
         except Exception as e:
             self._arlo.warning("body-error={}".format(type(e).__name__))
             self._arlo.debug(f"request-text={r.text}")
-            return None
+            return 500, None
 
         self.vdebug("request-end={}".format(r.status_code))
         if r.status_code != 200:
-            return None
+            return r.status_code, None
 
         if raw:
-            return body
+            return 200, body
 
         # New auth style and TFA helper
         if "meta" in body:
             if body["meta"]["code"] == 200:
-                return body["data"]
+                return 200, body["data"]
             else:
                 self._arlo.warning("error in new response=" + str(body))
+                return int(body["meta"]["code"]), body["meta"]["message"]
 
         # Original response type
         elif "success" in body:
             if body["success"]:
                 if "data" in body:
-                    return body["data"]
+                    return 200, body["data"]
                 # success, but no data so fake empty data
-                return {}
+                return 200, {}
             else:
                 self._arlo.warning("error in response=" + str(body))
 
-        return None
+        return 500, None
+
+    def _request(
+            self,
+            path,
+            method="GET",
+            params=None,
+            headers=None,
+            stream=False,
+            raw=False,
+            timeout=None,
+            host=None,
+            authpost=False,
+            cookies=None
+    ):
+        code, body = self._request_tuple(path=path, method=method, params=params, headers=headers,
+                                         stream=stream, raw=raw, timeout=timeout, host=host, authpost=authpost, cookies=cookies)
+        return body
 
     def gen_trans_id(self, trans_type=TRANSID_PREFIX):
         return trans_type + "!" + str(uuid.uuid4())
@@ -558,7 +576,7 @@ class ArloBackEnd(object):
         except Exception as e:
             # self._arlo.warning('general exception ' + str(e))
             self._arlo.error(
-                "general-error={}\n{}".format(
+                "mqtt-error={}\n{}".format(
                     type(e).__name__, traceback.format_exc()
                 )
             )
@@ -635,7 +653,7 @@ class ArloBackEnd(object):
         except Exception as e:
             # self._arlo.warning('general exception ' + str(e))
             self._arlo.error(
-                "general-error={}\n{}".format(
+                "sse-error={}\n{}".format(
                     type(e).__name__, traceback.format_exc()
                 )
             )
@@ -761,6 +779,7 @@ class ArloBackEnd(object):
 
         # Handle 1015 error
         attempt = 0
+        code = 0
         body = None
         while attempt < 3:
             attempt += 1
@@ -768,7 +787,7 @@ class ArloBackEnd(object):
             self._options = self.auth_options(AUTH_PATH, headers)
             self._cookies = self._load_cookies()
 
-            body = self.auth_post(
+            code, body = self.auth_post(
                 AUTH_PATH,
                 {
                     "email": self._arlo.cfg.username,
@@ -779,11 +798,13 @@ class ArloBackEnd(object):
                 headers,
                 cookies=self._cookies,
             )
-            if body is not None:
+            if code == 200:
                 break
             time.sleep(3)
-        if body is None:
-            self._arlo.error("authentication failed")
+        if code != 200 or body is None:
+            if body is None:
+                body = "possible cloudflare issue"
+            self._arlo.error(f"login failed: {code} - {body}")
             return False
 
         # save new login information
@@ -814,18 +835,18 @@ class ArloBackEnd(object):
                 "userId": self._user_id
             }
 
-            r = self.auth_post(
+            code, body = self.auth_post(
                 AUTH_GET_FACTORID, payload, headers, cookies=self._cookies
             )
 
-            if r is not None:
-                factor_id = r["factorId"]
+            if code == 200:
+                factor_id = body["factorId"]
             else:
                 factors = self.auth_get(
                     AUTH_GET_FACTORS + "?data = {}".format(int(time.time())), {}, headers
                 )
                 if factors is None:
-                    self._arlo.error("2fa: no secondary choices available")
+                    self._arlo.error("login failed: 2fa: no secondary choices available")
                     return False
 
                 for factor in factors["items"]:
@@ -843,13 +864,13 @@ class ArloBackEnd(object):
                         factor_id = factors_of_type[0]["factorId"]
 
             if factor_id is None:
-                self._arlo.error("2fa no suitable secondary choice available")
+                self._arlo.error("login failed: 2fa: no secondary choices available")
                 return False
 
             if tfa != TFA_PUSH_SOURCE:
                 # snapshot 2fa before sending in request
                 if not tfa.start():
-                    self._arlo.error("2fa startup failed")
+                    self._arlo.error("login failed: 2fa: startup failed")
                     return False
 
                 # start authentication with email
@@ -862,16 +883,16 @@ class ArloBackEnd(object):
                     "userId": self._user_id
                 }
                 self._options = self.auth_options(AUTH_START_PATH, headers)
-                body = self.auth_post(AUTH_START_PATH, payload, headers)
-                if body is None:
-                    self._arlo.error("2fa startAuth failed")
+                code, body = self.auth_post(AUTH_START_PATH, payload, headers)
+                if code != 200:
+                    self._arlo.error(f"login failed: start failed: {code} - {body}")
                     return False
                 factor_auth_code = body["factorAuthCode"]
 
                 # get code from TFA source
                 code = tfa.get()
                 if code is None:
-                    self._arlo.error("2fa core retrieval failed")
+                    self._arlo.error(f"login failed: 2fa: code retrieval failed")
                     return False
 
                 # tidy 2fa
@@ -879,13 +900,13 @@ class ArloBackEnd(object):
 
                 # finish authentication
                 self.debug("finishing auth")
-                body = self.auth_post(
+                code, body = self.auth_post(
                     AUTH_FINISH_PATH,
                     {"factorAuthCode": factor_auth_code, "otp": code},
                     headers,
                 )
-                if body is None:
-                    self._arlo.error("2fa finishAuth failed")
+                if code != 200:
+                    self._arlo.error(f"login failed: finish failed: {code} - {body}")
                     return False
             else:
                 # start authentication
@@ -897,27 +918,27 @@ class ArloBackEnd(object):
                     "factorType": "",
                     "userId": self._user_id
                 }
-                body = self.auth_post(AUTH_START_PATH, payload, headers)
-                if body is None:
-                    self._arlo.error("2fa startAuth failed")
+                code, body = self.auth_post(AUTH_START_PATH, payload, headers)
+                if code != 200:
+                    self._arlo.error(f"login failed: start failed: {code} - {body}")
                     return False
                 factor_auth_code = body["factorAuthCode"]
                 tries = 1
                 while True:
                     # finish authentication
                     self.debug("finishing auth")
-                    body = self.auth_post(
+                    code, body = self.auth_post(
                         AUTH_FINISH_PATH,
                         {"factorAuthCode": factor_auth_code},
                         headers,
                     )
-                    if body is None:
+                    if code != 200:
                         self._arlo.warning("2fa finishAuth - tries {}".format(tries))
                         if tries < self._arlo.cfg.tfa_retries:
                             time.sleep(self._arlo.cfg.tfa_delay)
                             tries += 1
                         else:
-                            self._arlo.error("2fa finishAuth failed")
+                            self._arlo.error(f"login failed: finish failed: {code} - {body}")
                             return False
                     else:
                         break
@@ -1200,7 +1221,7 @@ class ArloBackEnd(object):
             )
 
     def auth_post(self, path, params=None, headers=None, raw=False, timeout=None, cookies=None):
-        return self._request(
+        return self._request_tuple(
             path, "POST", params, headers, False, raw, timeout, self._arlo.cfg.auth_host, authpost=True, cookies=cookies
         )
 
