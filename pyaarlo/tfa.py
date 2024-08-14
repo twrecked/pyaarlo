@@ -61,7 +61,7 @@ class Arlo2FAImap:
                 ctx = None
 
             self._imap = imaplib.IMAP4_SSL(self._arlo.cfg.tfa_host, port=self._arlo.cfg.tfa_port, ssl_context=ctx)
-            if self._arlo._cfg.verbose:
+            if self._arlo.cfg.verbose:
                 self._imap.debug = 4
             res, status = self._imap.login(
                 self._arlo.cfg.tfa_username, self._arlo.cfg.tfa_password

@@ -14,6 +14,8 @@ import paho.mqtt.client as mqtt
 import requests
 import requests.adapters
 
+from enum import IntEnum
+
 from .constant import (
     AUTH_FINISH_PATH,
     AUTH_GET_FACTORID,
@@ -42,6 +44,12 @@ from .constant import (
 from .sseclient import SSEClient
 from .tfa import Arlo2FAConsole, Arlo2FAImap, Arlo2FARestAPI
 from .util import days_until, now_strftime, time_to_arlotime, to_b64
+
+
+class AuthResult(IntEnum):
+    CAN_RETRY = -1,
+    SUCCESS = 0,
+    FAILED = 1
 
 
 # include token and session details
@@ -774,7 +782,7 @@ class ArloBackEnd(object):
             "User-Agent": self._user_agent,
         }
 
-    def _auth(self):
+    def _auth(self) -> AuthResult:
         headers = self._auth_headers()
 
         # Handle 1015 error
@@ -798,14 +806,16 @@ class ArloBackEnd(object):
                 headers,
                 cookies=self._cookies,
             )
-            if code == 200:
+            if code == 200 or code == 401:
                 break
             time.sleep(3)
-        if code != 200 or body is None:
-            if body is None:
-                body = "possible cloudflare issue"
+
+        if body is None:
+            self._arlo.error(f"login failed: {code} - possible cloudflare issue")
+            return AuthResult.CAN_RETRY
+        if code != 200:
             self._arlo.error(f"login failed: {code} - {body}")
-            return False
+            return AuthResult.FAILED
 
         # save new login information
         self._update_auth_info(body)
@@ -847,7 +857,7 @@ class ArloBackEnd(object):
                 )
                 if factors is None:
                     self._arlo.error("login failed: 2fa: no secondary choices available")
-                    return False
+                    return AuthResult.FAILED
 
                 for factor in factors["items"]:
                     if factor["factorType"].lower() == self._arlo.cfg.tfa_type:
@@ -865,13 +875,13 @@ class ArloBackEnd(object):
 
             if factor_id is None:
                 self._arlo.error("login failed: 2fa: no secondary choices available")
-                return False
+                return AuthResult.FAILED
 
             if tfa != TFA_PUSH_SOURCE:
                 # snapshot 2fa before sending in request
                 if not tfa.start():
                     self._arlo.error("login failed: 2fa: startup failed")
-                    return False
+                    return AuthResult.FAILED
 
                 # start authentication with email
                 self.debug(
@@ -886,14 +896,14 @@ class ArloBackEnd(object):
                 code, body = self.auth_post(AUTH_START_PATH, payload, headers)
                 if code != 200:
                     self._arlo.error(f"login failed: start failed: {code} - {body}")
-                    return False
+                    return AuthResult.FAILED
                 factor_auth_code = body["factorAuthCode"]
 
                 # get code from TFA source
                 code = tfa.get()
                 if code is None:
                     self._arlo.error(f"login failed: 2fa: code retrieval failed")
-                    return False
+                    return AuthResult.CAN_RETRY
 
                 # tidy 2fa
                 tfa.stop()
@@ -907,7 +917,7 @@ class ArloBackEnd(object):
                 )
                 if code != 200:
                     self._arlo.error(f"login failed: finish failed: {code} - {body}")
-                    return False
+                    return AuthResult.FAILED
             else:
                 # start authentication
                 self.debug(
@@ -921,7 +931,7 @@ class ArloBackEnd(object):
                 code, body = self.auth_post(AUTH_START_PATH, payload, headers)
                 if code != 200:
                     self._arlo.error(f"login failed: start failed: {code} - {body}")
-                    return False
+                    return AuthResult.FAILED
                 factor_auth_code = body["factorAuthCode"]
                 tries = 1
                 while True:
@@ -939,14 +949,14 @@ class ArloBackEnd(object):
                             tries += 1
                         else:
                             self._arlo.error(f"login failed: finish failed: {code} - {body}")
-                            return False
+                            return AuthResult.FAILED
                     else:
                         break
 
             # save new login information
             self._update_auth_info(body)
 
-        return True
+        return AuthResult.SUCCESS
 
     def _validate(self):
         headers = self._auth_headers()
@@ -990,7 +1000,7 @@ class ArloBackEnd(object):
         get_new_session = days_until(self._expires_in) < 2
         if get_new_session:
             self.debug("oldish session, getting a new one")
-            success = False
+            success = AuthResult.FAILED
             for curve in self._arlo.cfg.ecdh_curves:
                 self.debug(f"CloudFlare curve set to: {curve}")
                 self._session = cloudscraper.create_scraper(
@@ -1004,12 +1014,20 @@ class ArloBackEnd(object):
                     ecdhCurve=curve,
                     debug=False,
                 )
-                if self._auth() and self._validate():
-                    success = True
+
+                # Try to authenticate. We retry if it was a cloud flare
+                # error or we failed to get the 2FA code.
+                success = self._auth()
+                if success == AuthResult.FAILED:
+                    return False
+                if success == AuthResult.SUCCESS and self._validate():
                     break
+                success = AuthResult.FAILED
                 self.debug("login failed, trying another ecdh_curve")
-            if not success:
+
+            if success != AuthResult.SUCCESS:
                 return False
+
         else:
             # self._session = requests.session()
             # Use cloudscraper to initiate newer sessions
@@ -1236,7 +1254,7 @@ class ArloBackEnd(object):
         self, path, headers=None, timeout=None
      ):
         return self._request(
-            path, "OPTIONS", headers, timeout, self._arlo.cfg.auth_host, authpost=True
+            path, "OPTIONS", None, headers, False, False, timeout, self._arlo.cfg.auth_host, authpost=True
         )
 
     @property
