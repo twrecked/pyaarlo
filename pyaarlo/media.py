@@ -2,6 +2,7 @@ import os
 import threading
 from datetime import datetime, timedelta
 from string import Template
+from slugify import slugify
 
 from .constant import (
     LIBRARY_PATH,
@@ -47,6 +48,7 @@ class ArloMediaDownloader(threading.Thread):
                 Template(self._save_format).substitute(
                     SN=media.camera.device_id,
                     N=media.camera.name,
+                    NN=slugify(media.camera.name, separator='_'),
                     Y=Y,
                     m=m,
                     d=d,
