@@ -22,7 +22,8 @@ setup(
         'unidecode',
         'cloudscraper>=1.2.71',
         'paho-mqtt',
-        'cryptography'
+        'cryptography',
+        'slugify'
     ],
 
     author='Steve Herrell',
