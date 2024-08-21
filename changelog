@@ -1,3 +1,5 @@
+0.8.0.9
+  Fix setup.py [thanks @jamesoff]
 0.8.0.8
   Better login error handling and reporting.
   Added slugified naming option
