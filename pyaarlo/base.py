@@ -18,15 +18,16 @@ from .constant import (
     MODE_NAME_TO_ID_KEY,
     MODE_UPDATE_INTERVAL,
     MODEL_BABY,
-    MODEL_ESSENTIAL,
+    MODEL_ESSENTIAL_SPOTLIGHT,
+    MODEL_ESSENTIAL_XL_SPOTLIGHT,
     MODEL_GO,
     MODEL_HUB,
     MODEL_PRO_3_FLOODLIGHT,
     MODEL_PRO_4,
     MODEL_PRO_5,
     MODEL_WIRED_VIDEO_DOORBELL,
-    MODEL_WIRED_VIDEO_DOORBELL2_HD,
-    MODEL_WIRED_VIDEO_DOORBELL2_2K,
+    MODEL_WIRED_VIDEO_DOORBELL_GEN2_HD,
+    MODEL_WIRED_VIDEO_DOORBELL_GEN2_2K,
     MODEL_ESSENTIAL_VIDEO_DOORBELL,
     PING_CAPABILITY,
     RESOURCE_CAPABILITY,
@@ -566,13 +567,14 @@ class ArloBase(ArloDevice):
 
             # Don't ping these devices ever.
             if self.model_id.startswith((
-                    MODEL_ESSENTIAL,
+                    MODEL_ESSENTIAL_SPOTLIGHT,
+                    MODEL_ESSENTIAL_XL_SPOTLIGHT,
                     MODEL_ESSENTIAL_VIDEO_DOORBELL,
                     MODEL_PRO_3_FLOODLIGHT,
                     MODEL_PRO_4,
                     MODEL_PRO_5,
-                    MODEL_WIRED_VIDEO_DOORBELL2_2K,
-                    MODEL_WIRED_VIDEO_DOORBELL2_HD,
+                    MODEL_WIRED_VIDEO_DOORBELL_GEN2_2K,
+                    MODEL_WIRED_VIDEO_DOORBELL_GEN2_HD,
             )):
                 return False
 
@@ -593,7 +595,8 @@ class ArloBase(ArloDevice):
             # Not all devices need (or want) to get their resources queried.
             if self.model_id.startswith((
                     MODEL_ESSENTIAL_VIDEO_DOORBELL,
-                    MODEL_ESSENTIAL
+                    MODEL_ESSENTIAL_SPOTLIGHT,
+                    MODEL_ESSENTIAL_XL_SPOTLIGHT,
             )):
                 return False
             return True

@@ -15,20 +15,21 @@ from .constant import (
     BLANK_IMAGE,
     DEVICES_PATH,
     FAST_REFRESH_INTERVAL,
-    MODEL_ESSENTIAL,
+    MODEL_ESSENTIAL_SPOTLIGHT,
+    MODEL_ESSENTIAL_XL_SPOTLIGHT,
     MODEL_ESSENTIAL_INDOOR,
-    MODEL_ESSENTIAL_INDOOR2,
+    MODEL_ESSENTIAL_INDOOR_GEN2_2K,
     MODEL_ESSENTIAL_INDOOR_GEN2_HD,
     MODEL_PRO_3_FLOODLIGHT,
     MODEL_PRO_4,
     MODEL_PRO_5,
     MODEL_WIRED_VIDEO_DOORBELL,
-    MODEL_WIRED_VIDEO_DOORBELL2_HD,
-    MODEL_WIRED_VIDEO_DOORBELL2_2K,
+    MODEL_WIRED_VIDEO_DOORBELL_GEN2_HD,
+    MODEL_WIRED_VIDEO_DOORBELL_GEN2_2K,
     MODEL_ESSENTIAL_VIDEO_DOORBELL,
     MODEL_GO,
     MODEL_GO_2,
-    MODEL_ESSENTIAL_XL,
+    MODEL_ESSENTIAL_XL_OUTDOOR_GEN2_2K,
     MODEL_ESSENTIAL_XL_OUTDOOR_GEN2_HD,
     MODEL_ESSENTIAL_OUTDOOR_GEN2_2K,
     MODEL_ESSENTIAL_OUTDOOR_GEN2_HD,
@@ -240,16 +241,17 @@ class PyArlo(object):
                     MODEL_PRO_3_FLOODLIGHT,
                     MODEL_PRO_4,
                     MODEL_PRO_5,
-                    MODEL_ESSENTIAL,
+                    MODEL_ESSENTIAL_SPOTLIGHT,
+                    MODEL_ESSENTIAL_XL_SPOTLIGHT,
                     MODEL_ESSENTIAL_INDOOR,
-                    MODEL_ESSENTIAL_INDOOR2,
+                    MODEL_ESSENTIAL_INDOOR_GEN2_2K,
                     MODEL_ESSENTIAL_INDOOR_GEN2_HD,
-                    MODEL_ESSENTIAL_XL,
+                    MODEL_ESSENTIAL_XL_OUTDOOR_GEN2_2K,
                     MODEL_ESSENTIAL_XL_OUTDOOR_GEN2_HD,
                     MODEL_ESSENTIAL_OUTDOOR_GEN2_2K,
                     MODEL_ESSENTIAL_OUTDOOR_GEN2_HD,
-                    MODEL_WIRED_VIDEO_DOORBELL2_HD,
-                    MODEL_WIRED_VIDEO_DOORBELL2_2K,
+                    MODEL_WIRED_VIDEO_DOORBELL_GEN2_HD,
+                    MODEL_WIRED_VIDEO_DOORBELL_GEN2_2K,
                     MODEL_ESSENTIAL_VIDEO_DOORBELL,
                     MODEL_GO_2
             )):
@@ -262,11 +264,11 @@ class PyArlo(object):
                 or dtype == "arloq"
                 or dtype == "arloqs"
                 or device.get("modelId").startswith((
-                        MODEL_GO,
-                        MODEL_WIRED_VIDEO_DOORBELL,
-                        MODEL_WIRED_VIDEO_DOORBELL2_HD,
-                        MODEL_WIRED_VIDEO_DOORBELL2_2K,
-                        MODEL_ESSENTIAL_VIDEO_DOORBELL
+                    MODEL_GO,
+                    MODEL_WIRED_VIDEO_DOORBELL,
+                    MODEL_WIRED_VIDEO_DOORBELL_GEN2_HD,
+                    MODEL_WIRED_VIDEO_DOORBELL_GEN2_2K,
+                    MODEL_ESSENTIAL_VIDEO_DOORBELL
                 ))
             ):
                 self._cameras.append(ArloCamera(dname, self, device))

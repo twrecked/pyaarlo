@@ -41,11 +41,12 @@ from .constant import (
     MEDIA_UPLOAD_KEYS,
     MIRROR_KEY,
     MODEL_BABY,
-    MODEL_ESSENTIAL,
+    MODEL_ESSENTIAL_SPOTLIGHT,
+    MODEL_ESSENTIAL_XL_SPOTLIGHT,
     MODEL_ESSENTIAL_INDOOR,
-    MODEL_ESSENTIAL_INDOOR2,
+    MODEL_ESSENTIAL_INDOOR_GEN2_2K,
     MODEL_ESSENTIAL_INDOOR_GEN2_HD,
-    MODEL_ESSENTIAL_XL,
+    MODEL_ESSENTIAL_XL_OUTDOOR_GEN2_2K,
     MODEL_ESSENTIAL_XL_OUTDOOR_GEN2_HD,
     MODEL_ESSENTIAL_OUTDOOR_GEN2_2K,
     MODEL_ESSENTIAL_OUTDOOR_GEN2_HD,
@@ -56,8 +57,8 @@ from .constant import (
     MODEL_PRO_5,
     MODEL_ULTRA,
     MODEL_WIRED_VIDEO_DOORBELL,
-    MODEL_WIRED_VIDEO_DOORBELL2_HD,
-    MODEL_WIRED_VIDEO_DOORBELL2_2K,
+    MODEL_WIRED_VIDEO_DOORBELL_GEN2_HD,
+    MODEL_WIRED_VIDEO_DOORBELL_GEN2_2K,
     MODEL_ESSENTIAL_VIDEO_DOORBELL,
     MODEL_GO,
     MOTION_DETECTED_KEY,
@@ -1367,7 +1368,7 @@ class ArloCamera(ArloChildDevice):
         if cap in (BATTERY_KEY,):
             if self.model_id.startswith((
                     MODEL_ESSENTIAL_INDOOR,
-                    MODEL_ESSENTIAL_INDOOR2,
+                    MODEL_ESSENTIAL_INDOOR_GEN2_2K,
                     MODEL_ESSENTIAL_INDOOR_GEN2_HD,
             )):
                 return False
@@ -1379,11 +1380,12 @@ class ArloCamera(ArloChildDevice):
             return True
         if cap in (AUDIO_DETECTED_KEY,):
             if self.model_id.startswith((
-                    MODEL_ESSENTIAL,
+                    MODEL_ESSENTIAL_SPOTLIGHT,
+                    MODEL_ESSENTIAL_XL_SPOTLIGHT,
                     MODEL_ESSENTIAL_INDOOR,
-                    MODEL_ESSENTIAL_INDOOR2,
+                    MODEL_ESSENTIAL_INDOOR_GEN2_2K,
                     MODEL_ESSENTIAL_INDOOR_GEN2_HD,
-                    MODEL_ESSENTIAL_XL,
+                    MODEL_ESSENTIAL_XL_OUTDOOR_GEN2_2K,
                     MODEL_ESSENTIAL_XL_OUTDOOR_GEN2_HD,
                     MODEL_ESSENTIAL_OUTDOOR_GEN2_2K,
                     MODEL_ESSENTIAL_OUTDOOR_GEN2_HD,
@@ -1401,11 +1403,12 @@ class ArloCamera(ArloChildDevice):
                 return True
         if cap in (SIREN_STATE_KEY,):
             if self.model_id.startswith((
-                    MODEL_ESSENTIAL,
+                    MODEL_ESSENTIAL_SPOTLIGHT,
+                    MODEL_ESSENTIAL_XL_SPOTLIGHT,
                     MODEL_ESSENTIAL_INDOOR,
-                    MODEL_ESSENTIAL_INDOOR2,
+                    MODEL_ESSENTIAL_INDOOR_GEN2_2K,
                     MODEL_ESSENTIAL_INDOOR_GEN2_HD,
-                    MODEL_ESSENTIAL_XL,
+                    MODEL_ESSENTIAL_XL_OUTDOOR_GEN2_2K,
                     MODEL_ESSENTIAL_XL_OUTDOOR_GEN2_HD,
                     MODEL_ESSENTIAL_OUTDOOR_GEN2_2K,
                     MODEL_ESSENTIAL_OUTDOOR_GEN2_HD,
@@ -1414,15 +1417,16 @@ class ArloCamera(ArloChildDevice):
                     MODEL_PRO_4,
                     MODEL_PRO_5,
                     MODEL_ULTRA,
-                    MODEL_WIRED_VIDEO_DOORBELL2_HD,
-                    MODEL_WIRED_VIDEO_DOORBELL2_2K,
+                    MODEL_WIRED_VIDEO_DOORBELL_GEN2_HD,
+                    MODEL_WIRED_VIDEO_DOORBELL_GEN2_2K,
                     MODEL_ESSENTIAL_VIDEO_DOORBELL,
             )):
                 return True
         if cap in (SPOTLIGHT_KEY,):
             if self.model_id.startswith((
-                    MODEL_ESSENTIAL,
-                    MODEL_ESSENTIAL_XL,
+                    MODEL_ESSENTIAL_SPOTLIGHT,
+                    MODEL_ESSENTIAL_XL_SPOTLIGHT,
+                    MODEL_ESSENTIAL_XL_OUTDOOR_GEN2_2K,
                     MODEL_ESSENTIAL_XL_OUTDOOR_GEN2_HD,
                     MODEL_ESSENTIAL_OUTDOOR_GEN2_2K,
                     MODEL_ESSENTIAL_OUTDOOR_GEN2_HD,
@@ -1448,17 +1452,18 @@ class ArloCamera(ArloChildDevice):
                     MODEL_PRO_3_FLOODLIGHT,
                     MODEL_PRO_4,
                     MODEL_PRO_5,
-                    MODEL_ESSENTIAL,
-                    MODEL_ESSENTIAL_XL,
+                    MODEL_ESSENTIAL_SPOTLIGHT,
+                    MODEL_ESSENTIAL_XL_SPOTLIGHT,
+                    MODEL_ESSENTIAL_XL_OUTDOOR_GEN2_2K,
                     MODEL_ESSENTIAL_XL_OUTDOOR_GEN2_HD,
                     MODEL_ESSENTIAL_OUTDOOR_GEN2_2K,
                     MODEL_ESSENTIAL_OUTDOOR_GEN2_HD,
                     MODEL_WIRED_VIDEO_DOORBELL,
-                    MODEL_WIRED_VIDEO_DOORBELL2_HD,
-                    MODEL_WIRED_VIDEO_DOORBELL2_2K,
+                    MODEL_WIRED_VIDEO_DOORBELL_GEN2_HD,
+                    MODEL_WIRED_VIDEO_DOORBELL_GEN2_2K,
                     MODEL_ESSENTIAL_VIDEO_DOORBELL,
                     MODEL_ESSENTIAL_INDOOR,
-                    MODEL_ESSENTIAL_INDOOR2,
+                    MODEL_ESSENTIAL_INDOOR_GEN2_2K,
                     MODEL_ESSENTIAL_INDOOR_GEN2_HD,
                     MODEL_GO,
             )):
