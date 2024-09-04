@@ -1,3 +1,11 @@
+0.8.0.10
+  Added some missing cameras.
+   Essential Indoor Gen2 HD
+   Essential Outdoor Gen2 HD
+   Essential Outdoor Gen2 2K
+   Essential XL Outdoor Gen2 HD
+   Essential XL Spotlight
+  Renamed some constants.
 0.8.0.9
   Fix setup.py [thanks @jamesoff]
 0.8.0.8
