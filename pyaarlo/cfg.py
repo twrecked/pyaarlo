@@ -38,10 +38,7 @@ class ArloCfg(object):
         self._arlo.debug("config: loaded")
         self._update_backend = False
         strplatform = platform.system()
-        print("Platform: " + strplatform)
-
         termux_dir = "/data/data/com.termux/files/home"
-
         if strplatform == "Windows":
             self._storage_dir = os.path.join(tempfile.gettempdir(), ".aarlo")
         elif os.path.exists(termux_dir):
