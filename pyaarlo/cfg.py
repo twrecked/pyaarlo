@@ -36,8 +36,12 @@ class ArloCfg(object):
         self._kw = kwargs
         self._arlo.debug("config: loaded")
         self._update_backend = False
-        if platform.system() == "Windows":
+        strplatform = platform.system()
+        printf("Platform: ", strplatform)
+        if strplatform == "Windows":
             self._storage_dir = tempfile.gettempdir() + r"\.aarlo"
+        elif strplatform == "Termux":
+            self._storage_dir = self._kw.get("storage_dir", "/data/data/com.termux/files/home/.aarlo")
         else:
             self._storage_dir = self._kw.get("storage_dir", "/tmp/.aarlo")
 
