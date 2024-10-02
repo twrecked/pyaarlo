@@ -1,5 +1,6 @@
 import platform
 import tempfile
+import os
 from urllib.parse import urlparse
 
 from .constant import (
