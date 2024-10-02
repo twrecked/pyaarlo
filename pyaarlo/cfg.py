@@ -38,10 +38,13 @@ class ArloCfg(object):
         self._update_backend = False
         strplatform = platform.system()
         print("Platform: " + strplatform)
+
+        termux_dir = "/data/data/com.termux/files/home"
+
         if strplatform == "Windows":
-            self._storage_dir = tempfile.gettempdir() + r"\.aarlo"
-        elif strplatform == "Termux":
-            self._storage_dir = self._kw.get("storage_dir", "/data/data/com.termux/files/home/.aarlo")
+            self._storage_dir = os.path.join(tempfile.gettempdir(), ".aarlo")
+        elif os.path.exists(termux_dir):
+            self._storage_dir = self._kw.get("storage_dir", os.path.join(termux_dir, ".aarlo"))
         else:
             self._storage_dir = self._kw.get("storage_dir", "/tmp/.aarlo")
 
