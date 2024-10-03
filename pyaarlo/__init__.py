@@ -597,7 +597,7 @@ class PyArlo(object):
 
     @property
     def blank_image(self):
-        """Return a binaryy representation of a blank image.
+        """Return a binary representation of a blank image.
 
         :return: A bytes representation of a blank image.
         :rtype: bytearray
