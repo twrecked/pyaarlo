@@ -936,6 +936,38 @@ class ArloCamera(ArloChildDevice):
         if self.was_recently_active:
             return "recently active"
         return super().state
+    
+    def get_stream_url(self, user_agent=None):
+        """Getting the stream URL without starting local streaming."""
+        body = {
+            "action": "get",
+            "from": self.web_id,
+            "properties": {
+                "cameraId": self.device_id,
+            },
+            "publishResponse": True,
+            "responseUrl": "",
+            "resource": self.resource_id,
+            "to": self.parent_id,
+            "transId": self._arlo.be.gen_trans_id(),
+        }
+
+        headers = {"xcloudId": self.xcloud_id}
+        if user_agent is not None:
+            headers["User-Agent"] = self._arlo.be.user_agent(user_agent)
+
+        self._stream_url = self._arlo.be.post(STREAM_START_PATH, body, headers=headers)
+        if self._stream_url is not None:
+            if not self.has_any_local_users:
+                with self._lock:
+                    self._local_users.add("remote")
+                    self._dump_activities("_get_stream")
+
+            self._stream_url = self._stream_url["url"].replace("rtsp://", "rtsps://")
+            self.debug("url={}".format(self._stream_url))
+        else:
+            self.debug(f"No stream url for {self.name}")
+        return self._stream_url
 
     def get_stream(self, user_agent=None):
         """Start a stream and return the URL for it.
