@@ -252,7 +252,9 @@ class ArloBackEnd(object):
             if body["meta"]["code"] == 200:
                 return 200, body["data"]
             else:
-                self._arlo.warning("error in new response=" + str(body))
+                # don't warn on untrusted errors, they just mean we need to log in
+                if body["meta"]["error"] != 9204:
+                    self._arlo.warning("error in new response=" + str(body))
                 return int(body["meta"]["code"]), body["meta"]["message"]
 
         # Original response type
