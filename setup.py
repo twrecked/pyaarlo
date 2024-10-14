@@ -23,7 +23,7 @@ setup(
         'cloudscraper>=1.2.71',
         'paho-mqtt',
         'cryptography',
-        'slugify'
+        'python-slugify'
     ],
 
     author='Steve Herrell',
