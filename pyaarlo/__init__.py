@@ -109,6 +109,8 @@ class PyArlo(object):
     * **tfa_password** - When using `imap` or `rest-api`, password/token on server. If `None`
       will use Arlo password.
     * **cipher_list** - Set if your IMAP server is using less secure ciphers.
+    * **tfa_grab_all** - When using `imap`, grab all emails from inbox, solves issue with slow indexing mail servers. Defaults to `False`.
+    * **tfa_delete_after** - When using `imap`, delete tfa-email after reading the code. Defaults to `False`.
 
     **Infrequently used `kwargs` parameters:**
 
