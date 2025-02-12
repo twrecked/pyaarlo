@@ -764,15 +764,16 @@ class ArloBackEnd(object):
     def _headers(self):
         return {
             "Accept": "application/json",
-            "Accept-Encoding": "gzip, deflate, br",
+            "Accept-Encoding": "gzip, deflate, br, zstd",
             "Accept-Language": "en-GB,en;q=0.9,en-US;q=0.8",
             "Auth-Version": "2",
             "Authorization": self._token,
             "Cache-Control": "no-cache",
             "Content-Type": "application/json; charset=utf-8;",
-            "Dnt": "1",
+            # "Dnt": "1",
             "Origin": ORIGIN_HOST,
             "Pragma": "no-cache",
+            "Priority": "u=1, i",
             "Referer": REFERER_HOST,
             "SchemaVersion": "1",
             # "Sec-Ch-Ua": '"Not.A/Brand";v="8", "Chromium";v="114", "Google Chrome";v="114"',
