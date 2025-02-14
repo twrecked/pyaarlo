@@ -1,4 +1,3 @@
-import base64
 import json
 import pickle
 import pprint
@@ -688,6 +687,8 @@ class ArloBackEnd(object):
 
         except requests.exceptions.ConnectionError:
             self._arlo.warning("event loop timeout")
+        except requests.exceptions.HTTPError:
+            self._arlo.warning("event loop closed by server")
         except AttributeError as e:
             self._arlo.warning("forced close " + str(e))
         except Exception as e:
@@ -844,7 +845,7 @@ class ArloBackEnd(object):
                     "EnvSource": "prod",
                 },
                 headers,
-                cookies=self._cookies,
+                # cookies=self._cookies,
             )
             if code == 200 or code == 401:
                 break
@@ -950,7 +951,7 @@ class ArloBackEnd(object):
                 code, body = self.auth_post(AUTH_START_PATH, payload, headers)
                 if code != 200:
                     self._arlo.error(f"login failed: start failed: {code} - {body}")
-                    return AuthResult.FAILED
+                    return AuthResult.CAN_RETRY
                 factor_auth_code = body["factorAuthCode"]
 
                 # get code from TFA source
@@ -1034,6 +1035,7 @@ class ArloBackEnd(object):
 
         if not self._needs_pairing:
             self._arlo.debug("no pairing required")
+            self._save_cookies(self._cookies)
             return True
         if self._browser_auth_code is None:
             self._arlo.debug("pairing postponed")
@@ -1050,8 +1052,9 @@ class ArloBackEnd(object):
 
         if code != 200:
             self._arlo.error(f"pairing: failed: {code} - {body}")
-        else:
-            self._arlo.debug("pairing succeeded")
+            return False
+
+        self._arlo.debug("pairing succeeded")
         return True
 
     def _v2_session(self):

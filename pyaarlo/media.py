@@ -331,12 +331,10 @@ class ArloMediaLibrary(object):
         self._downloader.stop()
 
     def debug(self, msg):
-        pass
-        # self._arlo.debug(f"media-library: {msg}")
+        self._arlo.debug(f"media-library: {msg}")
 
     def vdebug(self, msg):
-        pass
-        # self._arlo.vdebug(f"media-library: {msg}")
+        self._arlo.vdebug(f"media-library: {msg}")
 
 
 class ArloBaseStationMediaLibrary(ArloMediaLibrary):
