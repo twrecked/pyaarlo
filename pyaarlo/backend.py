@@ -239,24 +239,20 @@ class ArloBackEnd(object):
                         timeout=timeout,
                         cookies=cookies,
                     )
-                    self._save_cookies(r.cookies)
                     if stream is True:
                         return 200, r
                 elif method == "PUT":
                     r = self._session.put(
                         url, json=params, headers=headers, timeout=timeout, cookies=cookies,
                     )
-                    self._save_cookies(r.cookies)
                 elif method == "POST":
                     r = self._session.post(
                         url, json=params, headers=headers, timeout=timeout, cookies=cookies,
                     )
-                    self._save_cookies(r.cookies)
                 elif method == "OPTIONS":
-                    r = self._session.options(
+                    self._session.options(
                         url, json=params, headers=headers, timeout=timeout
                     )
-                    self._save_cookies(r.cookies)
                     return 200, None
         except Exception as e:
             self._arlo.warning("request-error={}".format(type(e).__name__))
@@ -963,7 +959,6 @@ class ArloBackEnd(object):
                     self._arlo.error(f"login failed: 2fa: code retrieval failed")
                     return AuthResult.CAN_RETRY
 
-#UGluZ09uZVNESzpTTVM6MGZmNDc5YTctMTBjMi00YzQyLWEyZjItNTdiNDY4YzBkMTM2OmI3OTUwYTE2LWE0YjgtNGIyYS05YWVjLWUzZWY3MDcyN2FiYQ==
                 # tidy 2fa
                 tfa.stop()
 
@@ -1050,10 +1045,8 @@ class ArloBackEnd(object):
             "factorData": "",
             "factorType": "BROWSER"
         }
-        # self.debug(self._cookies)
         code, body = self.auth_post(AUTH_START_PAIRING, payload, headers, cookies=self._cookies)
-        # self.debug(self._cookies)
-        # self._save_cookies(self._cookies)
+        self._save_cookies(self._cookies)
 
         if code != 200:
             self._arlo.error(f"pairing: failed: {code} - {body}")
@@ -1080,59 +1073,36 @@ class ArloBackEnd(object):
         # pickup user configured user agent
         self._user_agent = self.user_agent(self._arlo.cfg.user_agent)
 
-        # If we want to use cloudscraper's random user agent and set the cookies during a first call to the origin host
-        # Used during a debugging session about CloudFlare's 403.
-        # _cookies, self._user_agent = cloudscraper.get_tokens(ORIGIN_HOST)
-        # if self._cookies is None:
-        #     self._cookies = _cookies
-
-        # If token looks invalid we'll try the whole process.
-        get_new_session = days_until(self._expires_in) < 2
-        if get_new_session:
-            self.debug("oldish session, getting a new one")
-            success = AuthResult.FAILED
-            for curve in self._arlo.cfg.ecdh_curves:
-                self.debug(f"CloudFlare curve set to: {curve}")
-                self._session = cloudscraper.create_scraper(
-                    # browser={
-                    #     'browser': 'chrome',
-                    #     'platform': 'darwin',
-                    #     'desktop': True,
-                    #     'mobile': False,
-                    # },
-                    disableCloudflareV1=True,
-                    ecdhCurve=curve,
-                    debug=False,
-                )
-                self._session.cookies = self._cookies
-
-                # Try to authenticate. We retry if it was a cloud flare
-                # error or we failed to get the 2FA code.
-                success = self._auth()
-                if success == AuthResult.FAILED:
-                    return False
-                if success == AuthResult.SUCCESS and self._validate() and self._pair_auth_code():
-                    break
-                success = AuthResult.FAILED
-                self.debug("login failed, trying another ecdh_curve")
-
-            if success != AuthResult.SUCCESS:
-                return False
-
-        else:
-            # self._session = requests.session()
-            # Use cloudscraper to initiate newer sessions
-            # https://github.com/VeNoMouS/cloudscraper?tab=readme-ov-file#note
+        # we always login but and let the backend determine if we need to
+        # use 2fa
+        success = AuthResult.FAILED
+        for curve in self._arlo.cfg.ecdh_curves:
+            self.debug(f"CloudFlare curve set to: {curve}")
             self._session = cloudscraper.create_scraper(
                 # browser={
                 #     'browser': 'chrome',
                 #     'platform': 'darwin',
                 #     'desktop': True,
                 #     'mobile': False,
-                # }
+                # },
+                disableCloudflareV1=True,
+                ecdhCurve=curve,
+                debug=False,
             )
             self._session.cookies = self._cookies
-            self.debug("newish sessions, re-using")
+
+            # Try to authenticate. We retry if it was a cloud flare
+            # error or we failed to get the 2FA code.
+            success = self._auth()
+            if success == AuthResult.FAILED:
+                return False
+            if success == AuthResult.SUCCESS and self._validate() and self._pair_auth_code():
+                break
+            success = AuthResult.FAILED
+            self.debug("login failed, trying another ecdh_curve")
+
+        if success != AuthResult.SUCCESS:
+            return False
 
         # save session in case we updated it
         self._save_session()
@@ -1144,10 +1114,6 @@ class ArloBackEnd(object):
         # Grab a session. Needed for new session and used to check existing
         # session. (May not really be needed for existing but will fail faster.)
         if not self._v2_session():
-            if not get_new_session:
-                self._expires_in = 0
-                self._token = None
-                return self._login()
             return False
         return True
 
