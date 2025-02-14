@@ -167,9 +167,6 @@ class ArloBackEnd(object):
         if self._cookies is not None:
             self.debug(f"saving-cookies={self._cookies}")
             self._cookies.save(ignore_discard=True)
-        # print(f"saving-cookies={requests_cookiejar}")
-        # with open(self._arlo.cfg.cookies_file, 'wb') as f:
-        #     pickle.dump(requests_cookiejar, f)
 
     def _load_cookies(self):
         self._cookies = LWPCookieJar(self._arlo.cfg.cookies_file)
@@ -178,14 +175,6 @@ class ArloBackEnd(object):
         except:
             pass
         self.debug(f"loading cookies={self._cookies}")
-        # try:
-        #     with open(self._arlo.cfg.cookies_file, 'rb') as f:
-        #         cookies = pickle.load(f)
-        #         print(f"loading cookies={cookies}")
-        #         return cookies
-        # except Exception as e:
-        #     self._arlo.info("cookies file not created yet: " + str(e))
-        #     return None
 
     def _transaction_id(self):
         return 'FE!' + str(uuid.uuid4())
@@ -834,7 +823,6 @@ class ArloBackEnd(object):
             attempt += 1
             self.debug("login attempt #{}".format(attempt))
             self._options = self.auth_options(AUTH_PATH, headers)
-            # self._cookies = self._load_cookies()
 
             code, body = self.auth_post(
                 AUTH_PATH,
@@ -845,7 +833,6 @@ class ArloBackEnd(object):
                     "EnvSource": "prod",
                 },
                 headers,
-                # cookies=self._cookies,
             )
             if code == 200 or code == 401:
                 break
@@ -873,7 +860,6 @@ class ArloBackEnd(object):
             self.debug("getting tfa choices")
 
             self._options = self.auth_options(AUTH_GET_FACTORID, headers)
-            # self._cookies = self._load_cookies()
 
             # look for code source choice
             self.debug(f"looking for {self._arlo.cfg.tfa_type}/{self._arlo.cfg.tfa_nickname}")

@@ -1,5 +1,6 @@
 0.8.0.15
   Rewrite the authentication code to support the "trusted browser" mechanism
+  Catch remote closing of sse client better
 0.8.0.14
   Update user agents
 0.8.0.13
