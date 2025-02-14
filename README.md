@@ -5,7 +5,7 @@
 #### Trusted Browser Support
 
 _Arlo_ recently changed their back end and reduced the lifetime of the
-authentication token from 2 weeks to 2 hours. The code relied on that 2 weeks
+authentication token from 2 weeks to 2 hours. This code relied on that 2 weeks
 to reduce the number of 2fa requests we made. The code now acts more like the
 official website by using the "trusted browser" setting. With this we can
 request more authentication tokens for up to 2 weeks without using 2fa again.
