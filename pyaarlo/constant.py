@@ -43,6 +43,7 @@ AUTH_FINISH_PATH = "/api/finishAuth"
 AUTH_GET_FACTORS = "/api/getFactors"
 AUTH_GET_FACTORID = "/api/getFactorId"
 AUTH_VALIDATE_PATH = "/api/validateAccessToken"
+AUTH_START_PAIRING = "/api/startPairingFactor"
 
 TFA_CONSOLE_SOURCE = "console"
 TFA_IMAP_SOURCE = "imap"
