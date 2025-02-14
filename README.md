@@ -1,20 +1,17 @@
 # Pyaarlo
 
-## Alpha Build
-
-Welcome to the Pyaarlo alpha build. I'm using the 0.8.x stream to split
-`pyaarlo` out from `hass-aarlo`. This is partly motivated by thinking about
-getting `hass-aarlo` back into Home Assistant and partly motivated by my
-desire to stop having to commit bug fixes in 2 places.
-
 ### Breaking Changes
 
-#### Cached Session
-The code will now save the session details and reuse the authentication token
-when possible. This can drastically reduce the number of authentication
-requests the code will make (and 2FA requests if needed). If this doesn't work
-for you pass `save_session=False` as a parameter to `PyArlo()`.
+#### Trusted Browser Support
 
+_Arlo_ recently changed their back end and reduced the lifetime of the
+authentication token from 2 weeks to 2 hours. The code relied on that 2 weeks
+to reduce the number of 2fa requests we made. The code now acts more like the
+official website by using the "trusted browser" setting. With this we can
+request more authentication tokens for up to 2 weeks without using 2fa again.
+
+If this breaks the module for you please drop back to version `0.8.0.14` and
+create an issue.
 
 ## Table of Contents
 - [Introduction](#introduction)
