@@ -982,8 +982,10 @@ class ArloBackEnd(object):
                     # finish authentication
                     self.debug("finishing auth")
                     code, body = self.auth_post(
-                        AUTH_FINISH_PATH,
-                        {"factorAuthCode": factor_auth_code},
+                        AUTH_FINISH_PATH, {
+                            "factorAuthCode": factor_auth_code,
+                            "isBrowserTrusted": True
+                        },
                         headers,
                     )
                     if code != 200:
