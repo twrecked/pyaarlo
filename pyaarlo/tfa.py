@@ -30,6 +30,30 @@ class Arlo2FAConsole:
         self._arlo.debug(f"2fa-console: {msg}")
 
 
+class Arlo2FAPush:
+    """2FA authentication via console.
+
+    Dummy for PUSH support. Always returns an empty code.
+    """
+
+    def __init__(self, arlo):
+        self._arlo = arlo
+
+    def start(self):
+        self.debug("starting")
+        return True
+
+    def get(self):
+        self.debug("checking")
+        return ""
+
+    def stop(self):
+        self.debug("stopping")
+
+    def debug(self, msg):
+        self._arlo.debug(f"2fa-push: {msg}")
+
+
 class Arlo2FAImap:
     """2FA authentication via IMAP
     Connects to IMAP server and waits for email from Arlo with 2FA code in it.
