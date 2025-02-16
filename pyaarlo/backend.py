@@ -66,8 +66,11 @@ class ArloBackEnd(object):
     _saved_session_lock = threading.Lock()
     _saved_session_info = {}
 
+    # These affect how we talk to the backend.
     _multi_location: bool = False
+    _use_mqtt: bool = False
 
+    # These describe the connection state.
     _user_device_id = None
     _user_id: str | None = None
     _web_id: str | None = None
@@ -76,6 +79,7 @@ class ArloBackEnd(object):
     _token64: str | None = None
     _token_expires_in: int | None = None
 
+    # These describe the authentication state.
     _auth_state: AuthState = AuthState.STARTING
     _auth_headers: dict[str, str] | None = None
     _auth_browser_code = None
@@ -84,7 +88,9 @@ class ArloBackEnd(object):
     _auth_needs_pairing: bool = False
     _auth_tfa_type: str | None = None
     _auth_tfa_handler: Arlo2FAConsole | Arlo2FAPush | Arlo2FAImap | Arlo2FARestAPI | None = None
-    
+
+    # This is how we talk to the backend. It is used in both authentication and
+    # post-authentication phases.
     _connection: cloudscraper.CloudScraper | None = None
 
     def __init__(self, arlo):
@@ -196,6 +202,83 @@ class ArloBackEnd(object):
         sep = "&" if "?" in url else "?"
         now = time_to_arlotime()
         return f"{url}{sep}eventId={tid}&time={now}"
+
+    def _build_auth_headers(self):
+        """Build headers needed for authentication phase.
+
+        This list was determined by packet inspection when logging onto the
+        my.arlo.com website. We need to keep it as close as possible. The
+        commented out code is still being passed by the web browser we just
+        don't seem to need it, I left it in to make adding it back easier.
+
+        Note, we add and update an 'Authentication' field as the login process
+        progresses.
+        """
+        headers = {
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Encoding": "gzip, deflate, br, zstd",
+            "Accept-Language": "en-GB,en;q=0.9,en-US;q=0.8",
+            "Cache-Control": "no-cache",
+            "Content-Type": "application/json",
+            # "Dnt": "1",
+            "Origin": ORIGIN_HOST,
+            "Pragma": "no-cache",
+            "Priority": "u=1, i",
+            "Referer": REFERER_HOST,
+            # "Sec-Ch-Ua": '"Not.A/Brand";v="8", "Chromium";v="114", "Google Chrome";v="114"',
+            # "Sec-Ch-Ua-Mobile": "?0",
+            # "Sec-Ch-Ua-Platform": "Linux",
+            # "Sec-Fetch-Dest": "empty",
+            # "Sec-Fetch-Mode": "cors",
+            # "Sec-Fetch-Site": "same-site",
+            "User-Agent": self._user_agent,
+            "X-Service-Version": "3",
+            "X-User-Device-Automation-Name": "QlJPV1NFUg==",
+            "X-User-Device-Id": self._user_device_id,
+            "X-User-Device-Type": "BROWSER",
+        }
+
+        # Add Source if asked for.
+        if self._arlo.cfg.send_source:
+            headers.update({
+                "Source": "arloCamWeb",
+            })
+
+        return headers
+
+    def _build_connection_headers(self):
+        """Build headers needed for post-authentication phase.
+
+        This list was determined by packet inspection when logging onto the
+        my.arlo.com website. We need to keep it as close as possible. The
+        commented out code is still being passed by the web browser we just
+        don't seem to need it, I left it in to make adding it back easier.
+
+        This list is built immediately after a successful authentication and
+        doesn't change until we reauthenticate.
+        """
+        return {
+            "Accept": "application/json",
+            "Accept-Encoding": "gzip, deflate, br, zstd",
+            "Accept-Language": "en-GB,en;q=0.9,en-US;q=0.8",
+            "Auth-Version": "2",
+            "Authorization": self._token,
+            "Cache-Control": "no-cache",
+            "Content-Type": "application/json; charset=utf-8;",
+            # "Dnt": "1",
+            "Origin": ORIGIN_HOST,
+            "Pragma": "no-cache",
+            "Priority": "u=1, i",
+            "Referer": REFERER_HOST,
+            "SchemaVersion": "1",
+            # "Sec-Ch-Ua": '"Not.A/Brand";v="8", "Chromium";v="114", "Google Chrome";v="114"',
+            # "Sec-Ch-Ua-Mobile": "?0",
+            # "Sec-Ch-Ua-Platform": "Linux",
+            # "Sec-Fetch-Dest": "empty",
+            # "Sec-Fetch-Mode": "cors",
+            # "Sec-Fetch-Site": "same-site",
+            "User-Agent": self._user_agent,
+        }
 
     def _request_tuple(
             self,
@@ -713,63 +796,6 @@ class ArloBackEnd(object):
         else:
             self.debug("user chose SSE backend")
             self._use_mqtt = False
-
-    def _build_auth_headers(self):
-        headers = {
-            "Accept": "application/json, text/plain, */*",
-            "Accept-Encoding": "gzip, deflate, br, zstd",
-            "Accept-Language": "en-GB,en;q=0.9,en-US;q=0.8",
-            "Cache-Control": "no-cache",
-            "Content-Type": "application/json",
-            # "Dnt": "1",
-            "Origin": ORIGIN_HOST,
-            "Pragma": "no-cache",
-            "Priority": "u=1, i",
-            "Referer": REFERER_HOST,
-            # "Sec-Ch-Ua": '"Not.A/Brand";v="8", "Chromium";v="114", "Google Chrome";v="114"',
-            # "Sec-Ch-Ua-Mobile": "?0",
-            # "Sec-Ch-Ua-Platform": "Linux",
-            # "Sec-Fetch-Dest": "empty",
-            # "Sec-Fetch-Mode": "cors",
-            # "Sec-Fetch-Site": "same-site",
-            "User-Agent": self._user_agent,
-            "X-Service-Version": "3",
-            "X-User-Device-Automation-Name": "QlJPV1NFUg==",
-            "X-User-Device-Id": self._user_device_id,
-            "X-User-Device-Type": "BROWSER",
-        }
-
-        # Add Source if asked for.
-        if self._arlo.cfg.send_source:
-            headers.update({
-                "Source": "arloCamWeb",
-            })
-
-        return headers
-
-    def _build_connection_headers(self):
-        return {
-            "Accept": "application/json",
-            "Accept-Encoding": "gzip, deflate, br, zstd",
-            "Accept-Language": "en-GB,en;q=0.9,en-US;q=0.8",
-            "Auth-Version": "2",
-            "Authorization": self._token,
-            "Cache-Control": "no-cache",
-            "Content-Type": "application/json; charset=utf-8;",
-            # "Dnt": "1",
-            "Origin": ORIGIN_HOST,
-            "Pragma": "no-cache",
-            "Priority": "u=1, i",
-            "Referer": REFERER_HOST,
-            "SchemaVersion": "1",
-            # "Sec-Ch-Ua": '"Not.A/Brand";v="8", "Chromium";v="114", "Google Chrome";v="114"',
-            # "Sec-Ch-Ua-Mobile": "?0",
-            # "Sec-Ch-Ua-Platform": "Linux",
-            # "Sec-Fetch-Dest": "empty",
-            # "Sec-Fetch-Mode": "cors",
-            # "Sec-Fetch-Site": "same-site",
-            "User-Agent": self._user_agent,
-        }
 
     def _new_tfa_start(self):
         """Determine which tfa mechanism to use and set up the handlers if needed.
