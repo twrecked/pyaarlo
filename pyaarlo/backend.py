@@ -651,7 +651,7 @@ class ArloBackEnd(object):
                 self._event_client = SSEClient(
                     self._arlo,
                     self._arlo.cfg.host + SUBSCRIBE_PATH,
-                    headers=self._headers(),
+                    headers=self._build_connection_headers(),
                     reconnect_cb=self._sse_reconnected,
                 )
             else:
@@ -663,7 +663,7 @@ class ArloBackEnd(object):
                 self._event_client = SSEClient(
                     self._arlo,
                     self._arlo.cfg.host + SUBSCRIBE_PATH,
-                    headers=self._headers(),
+                    headers=self._build_connection_headers(),
                     reconnect_cb=self._sse_reconnected,
                     timeout=self._arlo.cfg.stream_timeout,
                 )
@@ -787,7 +787,7 @@ class ArloBackEnd(object):
 
         return headers
 
-    def _headers(self):
+    def _build_connection_headers(self):
         return {
             "Accept": "application/json",
             "Accept-Encoding": "gzip, deflate, br, zstd",
@@ -1270,7 +1270,7 @@ class ArloBackEnd(object):
         #  - set up the connection headers for the non-authentication phase
         self._save_session()
         self._save_cookies(self._cookies)
-        # self._connection.headers.update(self._headers())
+        # self._connection.headers.update(self._build_connection_headers())
         return True
 
     def _new_session_connection(self) -> bool:
@@ -1278,7 +1278,7 @@ class ArloBackEnd(object):
         """
         self.debug("session: fixing connection")
 
-        self._connection.headers.update(self._headers())
+        self._connection.headers.update(self._build_connection_headers())
         return True
 
     def _new_session_v3_details(self) -> bool:
