@@ -44,13 +44,7 @@ from .constant import (
 )
 from .sseclient import SSEClient
 from .tfa import Arlo2FAConsole, Arlo2FAImap, Arlo2FARestAPI, Arlo2FAPush
-from .util import days_until, now_strftime, time_to_arlotime, to_b64
-
-
-class AuthResult(IntEnum):
-    CAN_RETRY = -1,
-    SUCCESS = 0,
-    FAILED = 1
+from .util import now_strftime, time_to_arlotime, to_b64
 
 
 class AuthState(IntEnum):
@@ -72,8 +66,7 @@ class ArloBackEnd(object):
     _saved_session_lock = threading.Lock()
     _saved_session_info = {}
 
-    _multi_location = False
-    _auth_needs_pairing: bool = False
+    _multi_location: bool = False
 
     _user_device_id = None
     _user_id: str | None = None
@@ -88,6 +81,7 @@ class ArloBackEnd(object):
     _auth_browser_code = None
     _auth_factor_id: str | None = None
     _auth_factor_type: str | None = None
+    _auth_needs_pairing: bool = False
     _auth_tfa_type: str | None = None
     _auth_tfa_handler: Arlo2FAConsole | Arlo2FAPush | Arlo2FAImap | Arlo2FARestAPI | None = None
     
@@ -321,9 +315,6 @@ class ArloBackEnd(object):
         code, body = self._request_tuple(path=path, method=method, params=params, headers=headers,
                                          stream=stream, raw=raw, timeout=timeout, host=host, authpost=authpost, cookies=cookies)
         return body
-
-    def gen_trans_id(self, trans_type=TRANSID_PREFIX):
-        return trans_type + "!" + str(uuid.uuid4())
 
     def _event_dispatcher(self, response):
 
@@ -723,32 +714,6 @@ class ArloBackEnd(object):
             self.debug("user chose SSE backend")
             self._use_mqtt = False
 
-    def start_monitoring(self):
-        self._select_backend()
-        self._event_client = None
-        self._event_connected = False
-        self._event_thread = threading.Thread(
-            name="ArloEventStream", target=self._event_main, args=()
-        )
-        self._event_thread.daemon = True
-
-        with self._lock:
-            self._event_thread.start()
-            count = 0
-            while not self._event_connected and count < 30:
-                self.debug("waiting for stream up")
-                self._lock.wait(1)
-                count += 1
-
-        # start logout daemon for sse clients
-        if not self._use_mqtt:
-            if self._arlo.cfg.reconnect_every != 0:
-                self.debug("automatically reconnecting")
-                self._arlo.bg.run_every(self._sse_reconnect, self._arlo.cfg.reconnect_every)
-
-        self.debug("stream up")
-        return True
-    
     def _build_auth_headers(self):
         headers = {
             "Accept": "application/json, text/plain, */*",
@@ -1143,39 +1108,35 @@ class ArloBackEnd(object):
         """
         self.debug("auth: logging in")
 
-        # Try to authenticate using each curve in turn. If we get some kind of
-        # http return code - a 200 or 400 etc - we know we're through the
-        # cloudflare. The old code would do all the authentication steps inside
-        # the for loop and that felt wrong. Everything else can be done outside
-        # of it.
-        for curve in self._arlo.cfg.ecdh_curves:
+        # We make 3 attempts to login. Each attempt will try a different
+        # CloudFlare curve. Once we login we use the working connection
+        # for the next stage of the login.
+        # XXX these `for` loops can be flipped if needed
+        for attempt in range(1, 4):
+            self.debug(f"auth: login attempt #{attempt}")
 
-            # Create the connection.
-            self.debug(f"CloudFlare curve set to: {curve}")
-            self._connection = cloudscraper.create_scraper(
-                # browser={
-                #     'browser': 'chrome',
-                #     'platform': 'darwin',
-                #     'desktop': True,
-                #     'mobile': False,
-                # },
-                disableCloudflareV1=True,
-                ecdhCurve=curve,
-                debug=False,
-            )
-            self._connection.cookies = self._cookies
+            # Try each curve in each attempt.
+            for curve in self._arlo.cfg.ecdh_curves:
+                self.debug(f"auth: CloudFlare curve set to: {curve}")
 
-            # Reset the authentication headers.
-            self._auth_headers = self._build_auth_headers()
-    
-            # Handle 1015 error
-            attempt = 0
-            code = 0
-            body = None
-            while attempt < 3:
-                attempt += 1
-                self.debug("login attempt #{}".format(attempt))
+                # Create the connection.
+                self._connection = cloudscraper.create_scraper(
+                    # browser={
+                    #     'browser': 'chrome',
+                    #     'platform': 'darwin',
+                    #     'desktop': True,
+                    #     'mobile': False,
+                    # },
+                    disableCloudflareV1=True,
+                    ecdhCurve=curve,
+                    debug=False,
+                )
+                self._connection.cookies = self._cookies
 
+                # Set the authentication headers.
+                self._auth_headers = self._build_auth_headers()
+
+                # Attempt the auth.
                 self.auth_options(AUTH_PATH, self._auth_headers)
                 code, body = self.auth_post(
                     AUTH_PATH, {
@@ -1186,32 +1147,31 @@ class ArloBackEnd(object):
                     },
                     self._auth_headers,
                 )
-                if code == 200 or code == 401:
-                    break
-                    
-                # Wait before trying again.
-                time.sleep(3)
 
-            # Check for failure conditions. For no body we assume cloudlfare
-            # has failed and try again.
-            if body is None:
+                # Username/password mismatch.
+                if code == 401:
+                    self._arlo.error(f"login failed: {code} - {body}")
+                    return AuthState.FAILED
+
+                # We've succeeded.
+                if code == 200:
+                    # Update our user info and add the Authorization field to the
+                    # auth headers.
+                    self._new_update_user_info(body)
+                    self._auth_headers["Authorization"] = self._token64
+
+                    # See what state to move to next.
+                    if not body["authCompleted"]:
+                        return AuthState.CURRENT_FACTOR_ID
+                    else:
+                        return AuthState.VALIDATE_TOKEN
+
+                # Flag the failure.
                 self._arlo.error(f"login failed: {code} - possible cloudflare issue")
-                continue
-            if code != 200:
-                self._arlo.error(f"login failed: {code} - {body}")
-                return AuthState.FAILED
 
-            # Update any auth state returned from the server. Check to see if we
-            # need to move onto the next step.
-            self.debug(f"dumping-cookies={self._cookies}")
-            self._new_update_user_info(body)
-            self._auth_headers["Authorization"] = self._token64
-
-            # See what state to move to next.
-            if not body["authCompleted"]:
-                return AuthState.CURRENT_FACTOR_ID
-            else:
-                return AuthState.VALIDATE_TOKEN
+            # Wait before the next attempt.
+            # XXX this can be indented to wait after every curve
+            time.sleep(3)
 
         # Here means we're out of retries so stop now.
         self._arlo.error(f"login failed: no more curves - possible cloudflare issue")
@@ -1349,6 +1309,35 @@ class ArloBackEnd(object):
                 response = None
         self.vdebug("finished transaction-->{}".format(tid))
         return response
+
+    def gen_trans_id(self, trans_type=TRANSID_PREFIX):
+        return trans_type + "!" + str(uuid.uuid4())
+
+    def start_monitoring(self):
+        self._select_backend()
+        self._event_client = None
+        self._event_connected = False
+        self._event_thread = threading.Thread(
+            name="ArloEventStream", target=self._event_main, args=()
+        )
+        self._event_thread.daemon = True
+
+        with self._lock:
+            self._event_thread.start()
+            count = 0
+            while not self._event_connected and count < 30:
+                self.debug("waiting for stream up")
+                self._lock.wait(1)
+                count += 1
+
+        # start logout daemon for sse clients
+        if not self._use_mqtt:
+            if self._arlo.cfg.reconnect_every != 0:
+                self.debug("automatically reconnecting")
+                self._arlo.bg.run_every(self._sse_reconnect, self._arlo.cfg.reconnect_every)
+
+        self.debug("stream up")
+        return True
 
     @property
     def is_connected(self):
