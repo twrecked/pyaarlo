@@ -65,7 +65,7 @@ class AuthState(IntEnum):
     NEW_AUTH = 7,
     FINISH_NEW_AUTH = 8,
     VALIDATE_TOKEN = 9,
-    TRUST_BROWSER = 10
+    TRUST_BROWSER = 10,
 
 
 # include token and session details
@@ -121,19 +121,18 @@ class ArloBackEnd(object):
             self._user_device_id = str(uuid.uuid4())
 
         # Start the login
-        self._new_login()
+        self._logged_in = self._new_login() and self._new_session_finalize()
         if not self._logged_in:
             self.debug("failed to log in")
-            return
         return
         
         # Start the login.
-        self._connection = None
-        self._load_cookies()
-        self._logged_in = self._login()
-        if not self._logged_in:
-            self.debug("failed to log in")
-            return
+        # self._connection = None
+        # self._load_cookies()
+        # self._logged_in = self._login()
+        # if not self._logged_in:
+        #     self.debug("failed to log in")
+        #     return
 
     def _load_session(self):
         self._user_id = None
@@ -531,7 +530,8 @@ class ArloBackEnd(object):
                 with self._lock:
                     self._lock.wait(5)
                 self.debug("re-logging in")
-                self._logged_in = self._login()
+                self._logged_in = self._new_login() and self._new_session_finalize()
+                # self._logged_in = self._login()
 
             if self._use_mqtt:
                 self._mqtt_main()
@@ -1179,7 +1179,18 @@ class ArloBackEnd(object):
         return None
 
     def _new_auth_update_info(self, body):
-        """SUpdate session details from the packet body passed.
+        """Update session details from the packet body passed.
+
+        What we grab is:
+         - token
+         - our usedID
+         - when the token expires
+         - our browser auth code
+
+        What we create is:
+         - token converted to base64
+         - our web id
+         - our subscription id
         """
 
         # If we have this we have to drop down a level.
@@ -1187,17 +1198,17 @@ class ArloBackEnd(object):
             body = body["accessToken"]
 
         self._token = body["token"]
-        self._token64 = to_b64(self._token)
         self._user_id = body["userId"]
-        self._web_id = self._user_id + "_web"
-        self._sub_id = "subscriptions/" + self._web_id
         self._token_expires_in = body["expiresIn"]
-
         if "browserAuthCode" in body:
             self.debug("browser auth code: {}".format(body["browserAuthCode"]))
             self._browser_auth_code = body["browserAuthCode"]
 
-        # # Update the auth headers.
+        self._token64 = to_b64(self._token)
+        self._web_id = self._user_id + "_web"
+        self._sub_id = "subscriptions/" + self._web_id
+
+        # Update the auth headers.
         # self._auth_headers["Authorization"] = self._token64
 
     def _new_auth_trust_browser(self) -> AuthState:
@@ -1212,7 +1223,6 @@ class ArloBackEnd(object):
         # If we have already paired we don't do it again.
         if not self._auth_needs_pairing:
             self.debug("no pairing required")
-            self._save_cookies(self._cookies)
             return AuthState.SUCCESS
 
         # If we have no browser code there is nothing to pair.
@@ -1235,7 +1245,6 @@ class ArloBackEnd(object):
 
         # We did it.
         self.debug("pairing succeeded")
-        self._save_cookies(self._cookies)
         return AuthState.SUCCESS
 
     def _new_auth_validate(self) -> AuthState:
@@ -1391,6 +1400,8 @@ class ArloBackEnd(object):
         If we have paired this "device" with Arlo before it will return an ID
         indicating we can skip the 2fa to get our session token. Otherwise
         it returns untrusted and we have to perform some 2fa operations.
+
+        If we are already trusted we can skip pairing.
         """
         self.debug("auth: current factor id")
 
@@ -1414,7 +1425,6 @@ class ArloBackEnd(object):
             return AuthState.TRUSTED_AUTH
 
         # Look for a way to authenticate.
-        self.debug(f"dumping-cookies={self._cookies}")
         return AuthState.NEW_AUTH
     
     def _new_auth_login(self) -> AuthState:
@@ -1532,12 +1542,57 @@ class ArloBackEnd(object):
             if self._auth_state == AuthState.TRUST_BROWSER:
                 self._auth_state = self._new_auth_trust_browser()
 
-        # Save session details and update connection headers.
-        if self._auth_state == AuthState.SUCCESS:
-            self._save_session()
-            self._connection.headers.update(self._headers())
-
         self.debug(f"auth: login exit state: {self._auth_state}")
+        if self._auth_state != AuthState.SUCCESS:
+            return False
+
+        # We are in a successful state so:
+        #  - save the session for reloading
+        #  - save the cookies for reloading
+        #  - set up the connection headers for the non-authentication phase
+        self._save_session()
+        self._save_cookies(self._cookies)
+        # self._connection.headers.update(self._headers())
+        return True
+
+    def _new_session_connection(self) -> bool:
+        """Make sure the headers are set up for the non-auth phase.
+        """
+        self.debug("session: fixing connection")
+
+        self._connection.headers.update(self._headers())
+        return True
+
+    def _new_session_v3_details(self) -> bool:
+        """Read in the v3 session details.
+
+        This provides us with the following information:
+         - is multilocation on
+         - the backend we are using
+        """
+        self.debug("session: getting v3 details")
+
+        v3_session = self.get(SESSION_PATH)
+        if v3_session is None:
+            self._arlo.error("v3 session failed")
+            return False
+
+        # Multi-location is on?
+        self._multi_location = v3_session.get('supportsMultiLocation', False)
+        self._arlo.debug(f"multilocation is {self._multi_location}")
+
+        # If Arlo provides an MQTT URL key use it to set the backend.
+        if MQTT_URL_KEY in v3_session:
+            self._arlo.cfg.update_mqtt_from_url(v3_session[MQTT_URL_KEY])
+            self._arlo.debug(f"back={self._arlo.cfg.event_backend};url={self._arlo.cfg.mqtt_host}:{self._arlo.cfg.mqtt_port}")
+
+        # Always good if the v3 read works.
+        return True
+
+    def _new_session_finalize(self) -> bool:
+        """Set up for the post authentication phase.
+        """
+        return self._new_session_connection() and self._new_session_v3_details()
 
     def _login(self):
 
