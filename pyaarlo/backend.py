@@ -60,6 +60,34 @@ class AuthState(IntEnum):
     TRUST_BROWSER = 10,
 
 
+class AuthDetails(object):
+    """This hold the authentication state.
+    """
+    state: AuthState = AuthState.STARTING
+    headers: dict[str, str] | None = None
+    browser_code = None
+    factor_id: str | None = None
+    factor_type: str | None = None
+    needs_pairing: bool = False
+    tfa_type: str | None = None
+    tfa_handler: Arlo2FAConsole | Arlo2FAPush | Arlo2FAImap | Arlo2FARestAPI | None = None
+
+
+class RequestDetails(object):
+    """This holds the information we need to provide in get/post requests.
+
+    It is built up during the authentication phase and remains constistent
+    during the non-authetication phase.
+    """
+    device_id: str | None = None
+    user_id: str | None = None
+    web_id: str | None = None
+    sub_id: str | None = None
+    token: str | None = None
+    token64: str | None = None
+    token_expires_in: int | None = None
+
+
 # include token and session details
 class ArloBackEnd(object):
 
@@ -70,24 +98,11 @@ class ArloBackEnd(object):
     _multi_location: bool = False
     _use_mqtt: bool = False
 
-    # These describe the connection state.
-    _user_device_id = None
-    _user_id: str | None = None
-    _web_id: str | None = None
-    _sub_id: str | None = None
-    _token: str | None = None
-    _token64: str | None = None
-    _token_expires_in: int | None = None
+    # This holds the request state.
+    _req: RequestDetails = RequestDetails()
 
-    # These describe the authentication state.
-    _auth_state: AuthState = AuthState.STARTING
-    _auth_headers: dict[str, str] | None = None
-    _auth_browser_code = None
-    _auth_factor_id: str | None = None
-    _auth_factor_type: str | None = None
-    _auth_needs_pairing: bool = False
-    _auth_tfa_type: str | None = None
-    _auth_tfa_handler: Arlo2FAConsole | Arlo2FAPush | Arlo2FAImap | Arlo2FARestAPI | None = None
+    # This holds the auth details and state.
+    _auth: AuthDetails = AuthDetails()
 
     # This is how we talk to the backend. It is used in both authentication and
     # post-authentication phases.
@@ -114,9 +129,9 @@ class ArloBackEnd(object):
 
         # Restore the persistent session information.
         self._load_session()
-        if self._user_device_id is None:
+        if self._req.device_id is None:
             self._arlo.debug("created new user ID")
-            self._user_device_id = str(uuid.uuid4())
+            self._req.device_id = str(uuid.uuid4())
 
         # Start the login
         self._logged_in = self._new_login() and self._new_session_finalize()
@@ -125,12 +140,12 @@ class ArloBackEnd(object):
         return
 
     def _load_session(self):
-        self._user_id = None
-        self._web_id = None
-        self._sub_id = None
-        self._token = None
-        self._token_expires_in = 0
-        self._user_device_id = None
+        self._req.user_id = None
+        self._req.web_id = None
+        self._req.sub_id = None
+        self._req.token = None
+        self._req.token_expires_in = 0
+        self._req.device_id = None
         if not self._arlo.cfg.save_session:
             return
         try:
@@ -147,13 +162,13 @@ class ArloBackEnd(object):
                             self._arlo.cfg.username: session_info,
                         }
                     if session_info is not None:
-                        self._user_id = session_info["user_id"]
-                        self._web_id = session_info["web_id"]
-                        self._sub_id = session_info["sub_id"]
-                        self._token = session_info["token"]
-                        self._token_expires_in = session_info["expires_in"]
+                        self._req.user_id = session_info["user_id"]
+                        self._req.web_id = session_info["web_id"]
+                        self._req.sub_id = session_info["sub_id"]
+                        self._req.token = session_info["token"]
+                        self._req.token_expires_in = session_info["expires_in"]
                         if "device_id" in session_info:
-                            self._user_device_id = session_info["device_id"]
+                            self._req.device_id = session_info["device_id"]
                         self.debug(f"loadv{version}:session_info={ArloBackEnd._saved_session_info}")
                     else:
                         self.debug(f"loadv{version}:failed")
@@ -170,12 +185,12 @@ class ArloBackEnd(object):
             with ArloBackEnd._saved_session_lock:
                 with open(self._arlo.cfg.session_file, "wb") as dump:
                     ArloBackEnd._saved_session_info[self._arlo.cfg.username] = {
-                        "user_id": self._user_id,
-                        "web_id": self._web_id,
-                        "sub_id": self._sub_id,
-                        "token": self._token,
-                        "expires_in": self._token_expires_in,
-                        "device_id": self._user_device_id,
+                        "user_id": self._req.user_id,
+                        "web_id": self._req.web_id,
+                        "sub_id": self._req.sub_id,
+                        "token": self._req.token,
+                        "expires_in": self._req.token_expires_in,
+                        "device_id": self._req.device_id,
                     }
                     pickle.dump(ArloBackEnd._saved_session_info, dump)
                     self.debug(f"savev2:session_info={ArloBackEnd._saved_session_info}")
@@ -234,7 +249,7 @@ class ArloBackEnd(object):
             "User-Agent": self._user_agent,
             "X-Service-Version": "3",
             "X-User-Device-Automation-Name": "QlJPV1NFUg==",
-            "X-User-Device-Id": self._user_device_id,
+            "X-User-Device-Id": self._req.device_id,
             "X-User-Device-Type": "BROWSER",
         }
 
@@ -262,7 +277,7 @@ class ArloBackEnd(object):
             "Accept-Encoding": "gzip, deflate, br, zstd",
             "Accept-Language": "en-GB,en;q=0.9,en-US;q=0.8",
             "Auth-Version": "2",
-            "Authorization": self._token,
+            "Authorization": self._req.token,
             "Cache-Control": "no-cache",
             "Content-Type": "application/json; charset=utf-8;",
             # "Dnt": "1",
@@ -619,11 +634,11 @@ class ArloBackEnd(object):
         # Make sure we are listening to library events and individual base
         # station events. This seems sufficient for now.
         self._event_client.subscribe([
-            (f"u/{self._user_id}/in/userSession/connect", 0),
-            (f"u/{self._user_id}/in/userSession/disconnect", 0),
-            (f"u/{self._user_id}/in/library/add", 0),
-            (f"u/{self._user_id}/in/library/update", 0),
-            (f"u/{self._user_id}/in/library/remove", 0)
+            (f"u/{self._req.user_id}/in/userSession/connect", 0),
+            (f"u/{self._req.user_id}/in/userSession/disconnect", 0),
+            (f"u/{self._req.user_id}/in/library/add", 0),
+            (f"u/{self._req.user_id}/in/library/update", 0),
+            (f"u/{self._req.user_id}/in/library/remove", 0)
         ])
 
         topics = self._mqtt_topics()
@@ -669,7 +684,7 @@ class ArloBackEnd(object):
             }
 
             # Build a new client_id per login. The last 10 numbers seem to need to be random.
-            self._event_client_id = f"user_{self._user_id}_" + "".join(
+            self._event_client_id = f"user_{self._req.user_id}_" + "".join(
                 str(random.randint(0, 9)) for _ in range(10)
             )
             self.debug(f"mqtt: client_id={self._event_client_id}")
@@ -684,7 +699,7 @@ class ArloBackEnd(object):
             ssl_context = ssl.create_default_context()
             ssl_context.check_hostname = self._arlo.cfg.mqtt_hostname_check
             self._event_client.tls_set_context(ssl_context)
-            self._event_client.username_pw_set(f"{self._user_id}", self._token)
+            self._event_client.username_pw_set(f"{self._req.user_id}", self._req.token)
             self._event_client.ws_set_options(path=MQTT_PATH, headers=headers)
             self.debug(f"mqtt: host={self._arlo.cfg.mqtt_host}, "
                        f"check={self._arlo.cfg.mqtt_hostname_check}, "
@@ -812,22 +827,22 @@ class ArloBackEnd(object):
         """
 
         # Set some sane defaults.
-        self._auth_tfa_type = self._arlo.cfg.tfa_source
-        self._auth_factor_type = "BROWSER"
+        self._auth.tfa_type = self._arlo.cfg.tfa_source
+        self._auth.factor_type = "BROWSER"
 
         # Pick the correct handler.
-        if self._auth_tfa_type == TFA_CONSOLE_SOURCE:
-            self._auth_tfa_handler = Arlo2FAConsole(self._arlo)
-        elif self._auth_tfa_type == TFA_IMAP_SOURCE:
-            self._auth_tfa_handler = Arlo2FAImap(self._arlo)
-        elif self._auth_tfa_type == TFA_REST_API_SOURCE:
-            self._auth_tfa_handler = Arlo2FARestAPI(self._arlo)
+        if self._auth.tfa_type == TFA_CONSOLE_SOURCE:
+            self._auth.tfa_handler = Arlo2FAConsole(self._arlo)
+        elif self._auth.tfa_type == TFA_IMAP_SOURCE:
+            self._auth.tfa_handler = Arlo2FAImap(self._arlo)
+        elif self._auth.tfa_type == TFA_REST_API_SOURCE:
+            self._auth.tfa_handler = Arlo2FARestAPI(self._arlo)
         else:
-            self._auth_tfa_handler = Arlo2FAPush(self._arlo)
-            self._auth_factor_type = ""
+            self._auth.tfa_handler = Arlo2FAPush(self._arlo)
+            self._auth.factor_type = ""
 
         # Make sure it's ready.
-        self._auth_tfa_handler.start()
+        self._auth.tfa_handler.start()
 
     def _new_tfa_get_code(self) -> str | None:
         """Get the "otp" from the tfa source.
@@ -837,13 +852,13 @@ class ArloBackEnd(object):
          - None; meaning the tfa failed
          - an empty string which indicates "finishAuth" does the waiting
         """
-        return self._auth_tfa_handler.get()
+        return self._auth.tfa_handler.get()
 
     def _new_tfa_stop(self):
         """Call any stop functionality need by the handler.
         """
-        self._auth_tfa_handler.stop()
-        self._auth_tfa_handler = None
+        self._auth.tfa_handler.stop()
+        self._auth.tfa_handler = None
 
     def _new_update_user_info(self, body):
         """Update session details from the packet body passed.
@@ -863,13 +878,13 @@ class ArloBackEnd(object):
         if "accessToken" in body:
             body = body["accessToken"]
 
-        self._token = body["token"]
-        self._user_id = body["userId"]
-        self._token_expires_in = body["expiresIn"]
+        self._req.token = body["token"]
+        self._req.user_id = body["userId"]
+        self._req.token_expires_in = body["expiresIn"]
 
-        self._token64 = to_b64(self._token)
-        self._web_id = self._user_id + "_web"
-        self._sub_id = "subscriptions/" + self._web_id
+        self._req.token64 = to_b64(self._req.token)
+        self._req.web_id = self._req.user_id + "_web"
+        self._req.sub_id = "subscriptions/" + self._req.web_id
 
     def _new_find_factor_id(self) -> str | None:
         """Get list of suitable 2fa options.
@@ -883,7 +898,7 @@ class ArloBackEnd(object):
         factors = self.auth_get(
             f"{AUTH_GET_FACTORS}?data = {int(time.time())}", {
             },
-            self._auth_headers
+            self._auth.headers
         )
         if factors is None:
             self._arlo.error("login failed: 2fa: no secondary choices available")
@@ -918,23 +933,23 @@ class ArloBackEnd(object):
         self.debug("auth: trusting")
 
         # If we have already paired we don't do it again.
-        if not self._auth_needs_pairing:
+        if not self._auth.needs_pairing:
             self.debug("no pairing required")
             return AuthState.SUCCESS
 
         # If we have no browser code there is nothing to pair.
-        if self._auth_browser_code is None:
+        if self._auth.browser_code is None:
             self.debug("pairing postponed")
             return AuthState.SUCCESS
 
         # Start the pairing.
         code, body = self.auth_post(
             AUTH_START_PAIRING, {
-                "factorAuthCode": self._auth_browser_code,
+                "factorAuthCode": self._auth.browser_code,
                 "factorData": "",
                 "factorType": "BROWSER"
             },
-            self._auth_headers
+            self._auth.headers
         )
         if code != 200:
             self._arlo.error(f"pairing: failed: {code} - {body}")
@@ -952,12 +967,12 @@ class ArloBackEnd(object):
         self.debug("auth: validating")
 
         # Update the token in the header to the new token.
-        self._auth_headers["Authorization"] = self._token64
+        self._auth.headers["Authorization"] = self._req.token64
 
         validated = self.auth_get(
             f"{AUTH_VALIDATE_PATH}?data = {int(time.time())}", {
             },
-            self._auth_headers
+            self._auth.headers
         )
         if validated is None:
             self._arlo.error("token validation failed")
@@ -980,10 +995,10 @@ class ArloBackEnd(object):
         self.debug("auth: start new auth")
 
         # Find a factor ID to use
-        self._auth_factor_id = self._new_find_factor_id()
-        if self._auth_factor_id is None:
+        self._auth.factor_id = self._new_find_factor_id()
+        if self._auth.factor_id is None:
             return AuthState.FAILED
-        self.debug(f"using factor id {self._auth_factor_id}")
+        self.debug(f"using factor id {self._auth.factor_id}")
 
         # Set up tfa. Call it now so it can capture state before we start
         # the authentication proper. For example, capture the current state
@@ -991,14 +1006,14 @@ class ArloBackEnd(object):
         self._new_tfa_start()
         
         # Start authentication to send out code. Stop if this fails.
-        self.auth_options(AUTH_START_PATH, self._auth_headers)
+        self.auth_options(AUTH_START_PATH, self._auth.headers)
         code, body = self.auth_post(
             AUTH_START_PATH, {
-                "factorId": self._auth_factor_id,
-                "factorType": self._auth_factor_type,
-                "userId": self._user_id
+                "factorId": self._auth.factor_id,
+                "factorType": self._auth.factor_type,
+                "userId": self._req.user_id
             },
-            self._auth_headers
+            self._auth.headers
         )
         if code != 200:
             self._new_tfa_stop()
@@ -1033,14 +1048,14 @@ class ArloBackEnd(object):
             code, body = self.auth_post(
                 AUTH_FINISH_PATH,
                 payload,
-                self._auth_headers
+                self._auth.headers
             )
 
             # We're authenticated. Do two things then validate:
             #  - save the browser auth code
             #  - update the user info
             if code == 200:
-                self._auth_browser_code = body.get("browserAuthCode", None)
+                self._auth.browser_code = body.get("browserAuthCode", None)
                 self._new_update_user_info(body)
                 return AuthState.VALIDATE_TOKEN
 
@@ -1068,14 +1083,14 @@ class ArloBackEnd(object):
         """
         self.debug("auth: start trusted auth")
 
-        self.auth_options(AUTH_START_PATH, self._auth_headers)
+        self.auth_options(AUTH_START_PATH, self._auth.headers)
         code, body = self.auth_post(
             AUTH_START_PATH, {
-                "factorId": self._auth_factor_id,
+                "factorId": self._auth.factor_id,
                 "factorType": "BROWSER",
-                "userId": self._user_id
+                "userId": self._req.user_id
             },
-            self._auth_headers
+            self._auth.headers
         )
 
         # We failed at this stage. Stop trying for now.
@@ -1106,21 +1121,21 @@ class ArloBackEnd(object):
 
         # Retrieve current factor ID. If we have previously trusted this
         # "browser" we will be able to skip the 2fa section.
-        self.auth_options(AUTH_GET_FACTORID, self._auth_headers)
+        self.auth_options(AUTH_GET_FACTORID, self._auth.headers)
         code, body = self.auth_post(
             AUTH_GET_FACTORID, {
                 "factorType": "BROWSER",
                 "factorData": "",
-                "userId": self._user_id
+                "userId": self._req.user_id
             },
-            self._auth_headers,
+            self._auth.headers,
             cookies=self._cookies
         )
 
         # This means we are trusted. Save factor ID and move on to validation.
         if code == 200:
-            self._auth_needs_pairing = False
-            self._auth_factor_id = body["factorId"]
+            self._auth.needs_pairing = False
+            self._auth.factor_id = body["factorId"]
             return AuthState.TRUSTED_AUTH
 
         # Look for a way to authenticate.
@@ -1160,10 +1175,10 @@ class ArloBackEnd(object):
                 self._connection.cookies = self._cookies
 
                 # Set the authentication headers.
-                self._auth_headers = self._build_auth_headers()
+                self._auth.headers = self._build_auth_headers()
 
                 # Attempt the auth.
-                self.auth_options(AUTH_PATH, self._auth_headers)
+                self.auth_options(AUTH_PATH, self._auth.headers)
                 code, body = self.auth_post(
                     AUTH_PATH, {
                         "email": self._arlo.cfg.username,
@@ -1171,7 +1186,7 @@ class ArloBackEnd(object):
                         "language": "en",
                         "EnvSource": "prod",
                     },
-                    self._auth_headers,
+                    self._auth.headers,
                 )
 
                 # Username/password mismatch.
@@ -1184,7 +1199,7 @@ class ArloBackEnd(object):
                     # Update our user info and add the Authorization field to the
                     # auth headers.
                     self._new_update_user_info(body)
-                    self._auth_headers["Authorization"] = self._token64
+                    self._auth.headers["Authorization"] = self._req.token64
 
                     # See what state to move to next.
                     if not body["authCompleted"]:
@@ -1211,8 +1226,8 @@ class ArloBackEnd(object):
         self._load_cookies()
         self._user_agent = self.user_agent(self._arlo.cfg.user_agent)
         self._connection = None
-        self._auth_factor_id = None
-        self._auth_needs_pairing = True
+        self._auth.factor_id = None
+        self._auth.needs_pairing = True
 
         return AuthState.LOGIN
 
@@ -1220,24 +1235,24 @@ class ArloBackEnd(object):
         """Perform all the steps to authenticate against the Arlo servers.
         """
 
-        while self._auth_state != AuthState.SUCCESS and self._auth_state != AuthState.FAILED:            
-            if self._auth_state == AuthState.STARTING:
-                self._auth_state = self._new_auth_starting()
-            if self._auth_state == AuthState.LOGIN:
-                self._auth_state = self._new_auth_login()
-            if self._auth_state == AuthState.CURRENT_FACTOR_ID:
-                self._auth_state = self._new_auth_current_factor_id()
-            if self._auth_state == AuthState.TRUSTED_AUTH:
-                self._auth_state = self._new_auth_trusted_auth()
-            if self._auth_state == AuthState.NEW_AUTH:
-                self._auth_state = self._new_auth_new_auth()
-            if self._auth_state == AuthState.VALIDATE_TOKEN:
-                self._auth_state = self._new_auth_validate()
-            if self._auth_state == AuthState.TRUST_BROWSER:
-                self._auth_state = self._new_auth_trust_browser()
+        while self._auth.state != AuthState.SUCCESS and self._auth.state != AuthState.FAILED:            
+            if self._auth.state == AuthState.STARTING:
+                self._auth.state = self._new_auth_starting()
+            if self._auth.state == AuthState.LOGIN:
+                self._auth.state = self._new_auth_login()
+            if self._auth.state == AuthState.CURRENT_FACTOR_ID:
+                self._auth.state = self._new_auth_current_factor_id()
+            if self._auth.state == AuthState.TRUSTED_AUTH:
+                self._auth.state = self._new_auth_trusted_auth()
+            if self._auth.state == AuthState.NEW_AUTH:
+                self._auth.state = self._new_auth_new_auth()
+            if self._auth.state == AuthState.VALIDATE_TOKEN:
+                self._auth.state = self._new_auth_validate()
+            if self._auth.state == AuthState.TRUST_BROWSER:
+                self._auth.state = self._new_auth_trust_browser()
 
-        self.debug(f"auth: login exit state: {self._auth_state}")
-        if self._auth_state != AuthState.SUCCESS:
+        self.debug(f"auth: login exit state: {self._auth.state}")
+        if self._auth.state != AuthState.SUCCESS:
             return False
 
         # We are in a successful state so:
@@ -1297,7 +1312,7 @@ class ArloBackEnd(object):
 
         body["to"] = base.device_id
         if "from" not in body:
-            body["from"] = self._web_id
+            body["from"] = self._req.web_id
         body["transId"] = trans_id
 
         response = self.post(
@@ -1524,11 +1539,11 @@ class ArloBackEnd(object):
 
     @property
     def sub_id(self):
-        return self._sub_id
+        return self._req.sub_id
 
     @property
     def user_id(self):
-        return self._user_id
+        return self._req.user_id
 
     @property
     def multi_location(self):
