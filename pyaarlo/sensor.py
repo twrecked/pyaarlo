@@ -9,7 +9,7 @@ from .constant import (
     TEMPERATURE_KEY,
     WATER_STATE_KEY,
 )
-from .device import ArloChildDevice
+from .child_device import ArloChildDevice
 
 
 class ArloSensor(ArloChildDevice):

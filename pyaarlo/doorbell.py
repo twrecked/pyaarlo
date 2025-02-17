@@ -14,7 +14,7 @@ from .constant import (
     SILENT_MODE_KEY,
     SIREN_STATE_KEY,
 )
-from .device import ArloChildDevice
+from .child_device import ArloChildDevice
 
 
 class ArloDoorBell(ArloChildDevice):

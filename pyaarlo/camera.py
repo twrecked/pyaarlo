@@ -81,7 +81,7 @@ from .constant import (
     STREAM_START_PATH,
     TEMPERATURE_KEY,
 )
-from .device import ArloChildDevice
+from .child_device import ArloChildDevice
 from .util import http_get, http_get_img, the_epoch
 
 

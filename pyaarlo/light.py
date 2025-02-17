@@ -1,7 +1,7 @@
 import pprint
 
 from .constant import BATTERY_KEY, BRIGHTNESS_KEY, LAMP_STATE_KEY, MOTION_DETECTED_KEY
-from .device import ArloChildDevice
+from .child_device import ArloChildDevice
 
 
 class ArloLight(ArloChildDevice):
