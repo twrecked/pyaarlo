@@ -154,6 +154,32 @@ class RequestDetails(object):
         except Exception as e:
             self.debug(f"session file not written {str(e)}")
 
+    def update(self, body):
+        """Update session details from the packet body passed.
+
+        What we grab is:
+         - token
+         - our usedID
+         - when the token expires
+
+        What we create is:
+         - token converted to base64
+         - our web id
+         - our subscription id
+        """
+
+        # If we have this we have to drop down a level.
+        if "accessToken" in body:
+            body = body["accessToken"]
+
+        self.token = body["token"]
+        self.user_id = body["userId"]
+        self.token_expires_in = body["expiresIn"]
+
+        self.token64 = to_b64(self.token)
+        self.web_id = self.user_id + "_web"
+        self.sub_id = "subscriptions/" + self.web_id
+
     def debug(self, msg: str):
         self._log.debug(f"request: {msg}")
 
@@ -1075,7 +1101,7 @@ class ArloBackEnd(object):
             #  - update the user info
             if code == 200:
                 self._auth.browser_code = body.get("browserAuthCode", None)
-                self._new_update_user_info(body)
+                self._req.update(body)
                 return AuthState.VALIDATE_TOKEN
 
             # We have a code and we only have one attempt, so fail.
@@ -1118,7 +1144,7 @@ class ArloBackEnd(object):
             return AuthState.FAILED
 
         # Save auth info.
-        self._new_update_user_info(body)
+        self._req.update(body)
 
         # Check if we are done.
         if not body["authCompleted"]:
@@ -1217,7 +1243,7 @@ class ArloBackEnd(object):
                 if code == 200:
                     # Update our user info and add the Authorization field to the
                     # auth headers.
-                    self._new_update_user_info(body)
+                    self._req.update(body)
                     self._auth.headers["Authorization"] = self._req.token64
 
                     # See what state to move to next.
