@@ -8,6 +8,7 @@ import time
 import traceback
 import uuid
 import random
+from typing import Any
 
 import cloudscraper
 import paho.mqtt.client as mqtt
@@ -87,19 +88,78 @@ class RequestDetails(object):
     token64: str | None = None
     token_expires_in: int | None = None
 
+    # Internal state/fields for the object.
+    _save_lock = threading.Lock()
+    _save_info: dict[str, {str, str}] | None = {}
+    _save_enabled: bool = True
+    _save_filename: str | None = None
+    _save_username: str | None = None
+    _debug: Any | None = None
+
+    def __init__(self, enabled:  bool, filename: str, username: str, debug):
+        self._save_enabled = enabled
+        self._save_filename = filename
+        self._save_username = username
+        self._debug = debug
+
+    def load(self):
+
+        # Clear out what we have.
+        self.device_id = None
+        self.user_id = None
+        self.web_id = None
+        self.sub_id = None
+        self.token = None
+        self.token_expires_in = 0
+
+        try:
+            with RequestDetails._save_lock:
+                with open(self._save_filename, "rb") as dump:
+                    RequestDetails._save_info = pickle.load(dump)
+                    session_info: dict[str, {str, str}] | None = RequestDetails._save_info.get(self._save_username, None)
+                    if session_info is not None:
+                        self.device_id = session_info["device_id"]
+                        self.user_id = session_info["user_id"]
+                        self.web_id = session_info["web_id"]
+                        self.sub_id = session_info["sub_id"]
+                        self.token = session_info["token"]
+                        self.token_expires_in = int(session_info["expires_in"])
+                        self._debug(f"request: load session_info={RequestDetails._save_info}")
+                    else:
+                        self._debug(f"request: load failed")
+        except Exception:
+            self._debug("request: session file not read")
+            RequestDetails._save_info = {
+                "version": "2",
+            }
+
+    def save(self):
+        try:
+            with RequestDetails._save_lock:
+                with open(self._save_filename, "wb") as dump:
+                    RequestDetails._save_info[self._save_username] = {
+                        "device_id": self.device_id,
+                        "user_id": self.user_id,
+                        "web_id": self.web_id,
+                        "sub_id": self.sub_id,
+                        "token": self.token,
+                        "expires_in": str(self.token_expires_in),
+                    }
+                    pickle.dump(RequestDetails._save_info, dump)
+                    self._debug(f"request: save session_info={RequestDetails._save_info}")
+        except Exception as e:
+            self._debug(f"request: session file not written {str(e)}")
+
 
 # include token and session details
 class ArloBackEnd(object):
-
-    _saved_session_lock = threading.Lock()
-    _saved_session_info = {}
 
     # These affect how we talk to the backend.
     _multi_location: bool = False
     _use_mqtt: bool = False
 
     # This holds the request state.
-    _req: RequestDetails = RequestDetails()
+    _req: RequestDetails | None = None
 
     # This holds the auth details and state.
     _auth: AuthDetails = AuthDetails()
@@ -127,8 +187,11 @@ class ArloBackEnd(object):
         self._event_connected = False
         self._stop_thread = False
 
+        # Create state..
+        self._req = RequestDetails(self._arlo.cfg.save_session, "aarlo/request.pickle", self._arlo.cfg.username, self.debug)
+
         # Restore the persistent session information.
-        self._load_session()
+        self._req.load()
         if self._req.device_id is None:
             self._arlo.debug("created new user ID")
             self._req.device_id = str(uuid.uuid4())
@@ -138,64 +201,6 @@ class ArloBackEnd(object):
         if not self._logged_in:
             self.debug("failed to log in")
         return
-
-    def _load_session(self):
-        self._req.user_id = None
-        self._req.web_id = None
-        self._req.sub_id = None
-        self._req.token = None
-        self._req.token_expires_in = 0
-        self._req.device_id = None
-        if not self._arlo.cfg.save_session:
-            return
-        try:
-            with ArloBackEnd._saved_session_lock:
-                with open(self._arlo.cfg.session_file, "rb") as dump:
-                    ArloBackEnd._saved_session_info = pickle.load(dump)
-                    version = ArloBackEnd._saved_session_info.get("version", 1)
-                    if version == "2":
-                        session_info = ArloBackEnd._saved_session_info.get(self._arlo.cfg.username, None)
-                    else:
-                        session_info = ArloBackEnd._saved_session_info
-                        ArloBackEnd._saved_session_info = {
-                            "version": "2",
-                            self._arlo.cfg.username: session_info,
-                        }
-                    if session_info is not None:
-                        self._req.user_id = session_info["user_id"]
-                        self._req.web_id = session_info["web_id"]
-                        self._req.sub_id = session_info["sub_id"]
-                        self._req.token = session_info["token"]
-                        self._req.token_expires_in = session_info["expires_in"]
-                        if "device_id" in session_info:
-                            self._req.device_id = session_info["device_id"]
-                        self.debug(f"loadv{version}:session_info={ArloBackEnd._saved_session_info}")
-                    else:
-                        self.debug(f"loadv{version}:failed")
-        except Exception:
-            self.debug("session file not read")
-            ArloBackEnd._saved_session_info = {
-                "version": "2",
-            }
-
-    def _save_session(self):
-        if not self._arlo.cfg.save_session:
-            return
-        try:
-            with ArloBackEnd._saved_session_lock:
-                with open(self._arlo.cfg.session_file, "wb") as dump:
-                    ArloBackEnd._saved_session_info[self._arlo.cfg.username] = {
-                        "user_id": self._req.user_id,
-                        "web_id": self._req.web_id,
-                        "sub_id": self._req.sub_id,
-                        "token": self._req.token,
-                        "expires_in": self._req.token_expires_in,
-                        "device_id": self._req.device_id,
-                    }
-                    pickle.dump(ArloBackEnd._saved_session_info, dump)
-                    self.debug(f"savev2:session_info={ArloBackEnd._saved_session_info}")
-        except Exception as e:
-            self._arlo.warning("session file not written" + str(e))
 
     def _save_cookies(self, requests_cookiejar):
         if self._cookies is not None:
@@ -1259,7 +1264,7 @@ class ArloBackEnd(object):
         #  - save the session for reloading
         #  - save the cookies for reloading
         #  - set up the connection headers for the non-authentication phase
-        self._save_session()
+        self._req.save()
         self._save_cookies(self._cookies)
         # self._connection.headers.update(self._build_connection_headers())
         return True
