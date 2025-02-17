@@ -185,7 +185,6 @@ class ArloBackEnd(object):
         self._log = log
         self._bg = bg
         
-        # self._arlo = arlo
         self._lock = threading.Condition()
         self._req_lock = threading.Lock()
 
