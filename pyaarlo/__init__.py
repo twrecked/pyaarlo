@@ -48,9 +48,9 @@ from .media import ArloMediaLibrary
 from .storage import ArloStorage
 from .location import ArloLocation
 from .sensor import ArloSensor
+from .logger import ArloLogger
 from .util import time_to_arlotime
 
-_LOGGER = logging.getLogger("pyaarlo")
 
 __version__ = "0.8.0.17"
 
@@ -151,19 +151,24 @@ class PyArlo(object):
     * **more to come...** - I will flesh this out, but look in const.h for a good idea
 
     You can use the attribute `*` to register for all events.
-
     """
 
+    _log: ArloLogger
+    _bg: ArloBackground
+    _st: ArloStorage
+
     def __init__(self, **kwargs):
-        """Constructor for the PyArlo object."""
-        # get this out quick
-        self.info(f"pyarlo {__version__} starting...")
+        """Constructor for the PyArlo object.
+        """
 
-        # core values
-        self._last_error = None
+        # Get logger initialised.
+        self._log = ArloLogger(kwargs.get("verbose_debug", False))
 
-        # Set up the config first.
-        self._cfg = ArloCfg(self, **kwargs)
+        # Get version out early.
+        self._log.info(f"pyarlo {__version__} starting...")
+
+        # Now load the config.
+        self._cfg = ArloCfg(self._log, **kwargs)
 
         # Create storage/scratch directory.
         if self._cfg.save_state or self._cfg.dump or self._cfg.save_session:
@@ -174,9 +179,9 @@ class PyArlo(object):
                 self.warning(f"Problem creating {self._cfg.storage_dir}")
 
         # Create remaining components.
-        self._bg = ArloBackground(self)
-        self._st = ArloStorage(self)
-        self._be = ArloBackEnd(self)
+        self._bg = ArloBackground(self._log)
+        self._st = ArloStorage(self._cfg, self._log)
+        self._be = ArloBackEnd(self._cfg, self._log, self._bg)
         self._ml = ArloMediaLibrary(self)
 
         # Make sure they are empty.
@@ -740,23 +745,21 @@ class PyArlo(object):
         pass
 
     def error(self, msg):
-        self._last_error = msg
-        _LOGGER.error(msg)
+        self._log.error(msg)
 
     @property
     def last_error(self):
         """Return the last reported error."""
-        return self._last_error
+        return self._log.last_error
 
     def warning(self, msg):
-        _LOGGER.warning(msg)
+        self._log.warning(msg)
 
     def info(self, msg):
-        _LOGGER.info(msg)
+        self._log.info(msg)
 
     def debug(self, msg):
-        _LOGGER.debug(msg)
+        self._log.debug(msg)
 
     def vdebug(self, msg):
-        if self._cfg.verbose:
-            _LOGGER.debug(msg)
+        self._log.vdebug(msg)

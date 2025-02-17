@@ -1,8 +1,12 @@
 import platform
 import tempfile
 import os
+import re
+
+from typing import Any
 from urllib.parse import urlparse
 
+from .logger import ArloLogger
 from .constant import (
     DEFAULT_AUTH_HOST,
     DEFAULT_HOST,
@@ -23,20 +27,24 @@ class ArloCfg(object):
 
     I got sick of adding in variables each time the config changed so I moved it all here. Config
     is passed in a kwarg and parsed out by the property methods.
-
     """
 
-    def __init__(self, arlo, **kwargs):
+    _log: ArloLogger
+    _kw: dict[str, Any]
+    _update_backend: bool = False
+    _storage_dir: str
+
+    def __init__(self, log: ArloLogger, **kwargs):
         """The constructor.
 
         Args:
             kwargs (kwargs): Configuration options.
-
         """
-        self._arlo = arlo
+        self._log = log
         self._kw = kwargs
-        self._arlo.debug("config: loaded")
-        self._update_backend = False
+        self._log.debug("config: loaded")
+
+        # Determine storage location, this is platform specific.
         strplatform = platform.system()
         termux_dir = "/data/data/com.termux/files/home"
         if strplatform == "Windows":
@@ -56,6 +64,12 @@ class ArloCfg(object):
         if "://" in host:
             return host
         return f"{scheme}://{host}"
+
+    def _email_to_dir(self, email: str) -> str:
+        return re.sub(r'[^0-9a-zA-Z]+', '_', email)
+
+    def _user_storage_file(self, suffix: str) -> str:
+        return f"{self.storage_dir}/{self._email_to_dir(self.username)}.{suffix}"
 
     @property
     def storage_dir(self):
@@ -257,16 +271,16 @@ class ArloCfg(object):
         return None
 
     @property
-    def session_file(self):
-        return self.storage_dir + "/session.pickle"
+    def session_file(self) -> str:
+        return self._user_storage_file('session')
 
     @property
     def save_session(self):
         return self._kw.get("save_session", True)
 
     @property
-    def cookies_file(self):
-        return self.storage_dir + "/cookies.txt"
+    def cookies_file(self) -> str:
+        return self._user_storage_file('cookies')
 
     @property
     def dump_file(self):

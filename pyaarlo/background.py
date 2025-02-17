@@ -2,15 +2,22 @@ import threading
 import time
 import traceback
 
+from .logger import ArloLogger
+
 
 class ArloBackgroundWorker(threading.Thread):
-    def __init__(self, arlo):
+    
+    _log: ArloLogger
+    _id: int = 0
+    _stop_thread: bool = False
+    
+    def __init__(self, log: ArloLogger):
         super().__init__()
-        self._arlo = arlo
-        self._id = 0
+        
+        self._log = log
         self._lock = threading.Condition()
         self._queue = {}
-        self._stopThread = False
+        self._log.debug("background: worker started")
 
     def _next_id(self):
         self._id += 1
@@ -34,10 +41,8 @@ class ArloBackgroundWorker(threading.Thread):
                     try:
                         job["callback"](**job["args"])
                     except Exception as e:
-                        self._arlo.error(
-                            "job-error={}\n{}".format(
-                                type(e).__name__, traceback.format_exc()
-                            )
+                        self._log.error(
+                            f"background: job-error={type(e).__name__}\n{traceback.format_exc()}"
                         )
 
                     # reschedule?
@@ -59,7 +64,7 @@ class ArloBackgroundWorker(threading.Thread):
     def run(self):
 
         with self._lock:
-            while not self._stopThread:
+            while not self._stop_thread:
 
                 # loop till done
                 timeout = None
@@ -72,6 +77,7 @@ class ArloBackgroundWorker(threading.Thread):
                     self._lock.wait(timeout - now)
 
     def queue_job(self, run_at, prio, job):
+        self._log.debug(f"background: queue-job={job}")
         run_at = int(run_at)
         with self._lock:
             job_id = self._next_id()
@@ -93,18 +99,21 @@ class ArloBackgroundWorker(threading.Thread):
     
     def stop(self):
         with self._lock:
-            self._stopThread = True
+            self._stop_thread = True
             self._lock.notify()
         self.join(10)
 
 
 class ArloBackground:
-    def __init__(self, arlo):
-        self._worker = ArloBackgroundWorker(arlo)
+
+    _worker: ArloBackgroundWorker
+
+    def __init__(self, log: ArloLogger):
+        self._worker = ArloBackgroundWorker(log)
         self._worker.name = "ArloBackgroundWorker"
         self._worker.daemon = True
         self._worker.start()
-        arlo.debug("background: starting")
+        log.debug("background: created")
 
     def _run(self, bg_cb, prio, **kwargs):
         job = {"callback": bg_cb, "args": kwargs}

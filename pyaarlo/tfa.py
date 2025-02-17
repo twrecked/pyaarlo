@@ -3,17 +3,36 @@ import imaplib
 import re
 import time
 import ssl
-
 import requests
 
+from .cfg import ArloCfg
+from .logger import ArloLogger
 
-class Arlo2FAConsole:
+
+class Arlo2FABase:
+    """Base  class for 2fa components.
+    """
+
+    _cfg: ArloCfg
+    _log: ArloLogger
+    _prefix: str = ""
+
+    def __init__(self, cfg: ArloCfg, log: ArloLogger, prefix: str):
+        self._cfg = cfg
+        self._log = log
+        self._prefix = prefix
+
+    def debug(self, msg):
+        self._log.debug(f"{self._prefix}: {msg}")
+
+
+class Arlo2FAConsole(Arlo2FABase):
     """2FA authentication via console.
     Accepts input from console and returns that for 2FA.
     """
 
-    def __init__(self, arlo):
-        self._arlo = arlo
+    def __init__(self, cfg: ArloCfg, log: ArloLogger):
+        super().__init__(cfg, log, "2fa-console")
 
     def start(self):
         self.debug("starting")
@@ -26,18 +45,14 @@ class Arlo2FAConsole:
     def stop(self):
         self.debug("stopping")
 
-    def debug(self, msg):
-        self._arlo.debug(f"2fa-console: {msg}")
 
-
-class Arlo2FAPush:
+class Arlo2FAPush(Arlo2FABase):
     """2FA authentication via console.
-
     Dummy for PUSH support. Always returns an empty code.
     """
 
-    def __init__(self, arlo):
-        self._arlo = arlo
+    def __init__(self, cfg: ArloCfg, log: ArloLogger):
+        super().__init__(cfg, log, "2fa-push")
 
     def start(self):
         self.debug("starting")
@@ -50,19 +65,17 @@ class Arlo2FAPush:
     def stop(self):
         self.debug("stopping")
 
-    def debug(self, msg):
-        self._arlo.debug(f"2fa-push: {msg}")
 
-
-class Arlo2FAImap:
+class Arlo2FAImap(Arlo2FABase):
     """2FA authentication via IMAP
     Connects to IMAP server and waits for email from Arlo with 2FA code in it.
 
     Note: will probably need tweaking for other IMAP setups...
     """
 
-    def __init__(self, arlo):
-        self._arlo = arlo
+    def __init__(self, cfg: ArloCfg, log: ArloLogger):
+        super().__init__(cfg, log, "2fa-imap")
+
         self._imap = None
         self._old_ids = None
         self._new_ids = None
@@ -76,7 +89,7 @@ class Arlo2FAImap:
 
         try:
             # allow default ciphers to be specified
-            cipher_list = self._arlo.cfg.cipher_list
+            cipher_list = self._cfg.cipher_list
             if cipher_list != "":
                 ctx = ssl.create_default_context()
                 ctx.set_ciphers(cipher_list)
@@ -84,11 +97,11 @@ class Arlo2FAImap:
             else:
                 ctx = None
 
-            self._imap = imaplib.IMAP4_SSL(self._arlo.cfg.tfa_host, port=self._arlo.cfg.tfa_port, ssl_context=ctx)
-            if self._arlo.cfg.verbose:
+            self._imap = imaplib.IMAP4_SSL(self._cfg.tfa_host, port=self._cfg.tfa_port, ssl_context=ctx)
+            if self._cfg.verbose:
                 self._imap.debug = 4
             res, status = self._imap.login(
-                self._arlo.cfg.tfa_username, self._arlo.cfg.tfa_password
+                self._cfg.tfa_username, self._cfg.tfa_password
             )
             if res.lower() != "ok":
                 self.debug("imap login failed")
@@ -104,7 +117,7 @@ class Arlo2FAImap:
                 self.debug("imap search failed")
                 return False
         except Exception as e:
-            self._arlo.error(f"imap connection failed{str(e)}")
+            self._log.error(f"imap connection failed{str(e)}")
             return False
 
         self._new_ids = self._old_ids
@@ -122,9 +135,9 @@ class Arlo2FAImap:
         while True:
 
             # wait a short while, stop after a total timeout
-            # ok to do on first run gives email time to arrive
-            time.sleep(self._arlo.cfg.tfa_timeout)
-            if time.time() > (start + self._arlo.cfg.tfa_total_timeout):
+            # OK to do on first run gives email time to arrive
+            time.sleep(self._cfg.tfa_timeout)
+            if time.time() > (start + self._cfg.tfa_total_timeout):
                 return None
 
             try:
@@ -175,7 +188,7 @@ class Arlo2FAImap:
 
             # problem parsing the message, force a fail
             except Exception as e:
-                self._arlo.error(f"imap message read failed{str(e)}")
+                self._log.error(f"imap message read failed{str(e)}")
                 return None
 
         return None
@@ -189,30 +202,27 @@ class Arlo2FAImap:
         self._old_ids = None
         self._new_ids = None
 
-    def debug(self, msg):
-        self._arlo.debug(f"2fa-imap: {msg}")
 
-
-class Arlo2FARestAPI:
+class Arlo2FARestAPI(Arlo2FABase):
     """2FA authentication via rest API.
     Queries web site until code appears
     """
 
-    def __init__(self, arlo):
-        self._arlo = arlo
+    def __init__(self, cfg: ArloCfg, log: ArloLogger):
+        super().__init__(cfg, log, "2fa-rest-api")
 
     def start(self):
         self.debug("starting")
-        if self._arlo.cfg.tfa_host is None or self._arlo.cfg.tfa_password is None:
+        if self._cfg.tfa_host is None or self._cfg.tfa_password is None:
             self.debug("invalid config")
             return False
 
         self.debug("clearing")
         response = requests.get(
             "{}/clear?email={}&token={}".format(
-                self._arlo.cfg.tfa_host_with_scheme("https"),
-                self._arlo.cfg.tfa_username,
-                self._arlo.cfg.tfa_password,
+                self._cfg.tfa_host_with_scheme("https"),
+                self._cfg.tfa_username,
+                self._cfg.tfa_password,
             ),
             timeout=10,
         )
@@ -229,18 +239,18 @@ class Arlo2FARestAPI:
         while True:
 
             # wait a short while, stop after a total timeout
-            # ok to do on first run gives email time to arrive
-            time.sleep(self._arlo.cfg.tfa_timeout)
-            if time.time() > (start + self._arlo.cfg.tfa_total_timeout):
+            # OK to do on first run gives email time to arrive
+            time.sleep(self._cfg.tfa_timeout)
+            if time.time() > (start + self._cfg.tfa_total_timeout):
                 return None
 
             # Try for the token.
             self.debug("checking")
             response = requests.get(
                 "{}/get?email={}&token={}".format(
-                    self._arlo.cfg.tfa_host_with_scheme("https"),
-                    self._arlo.cfg.tfa_username,
-                    self._arlo.cfg.tfa_password,
+                    self._cfg.tfa_host_with_scheme("https"),
+                    self._cfg.tfa_username,
+                    self._cfg.tfa_password,
                 ),
                 timeout=10,
             )
@@ -254,6 +264,3 @@ class Arlo2FARestAPI:
 
     def stop(self):
         self.debug("stopping")
-
-    def debug(self, msg):
-        self._arlo.debug(f"2fa-rest-api: {msg}")
