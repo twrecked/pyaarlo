@@ -111,6 +111,7 @@ class PyArlo(object):
     * **cipher_list** - Set if your IMAP server is using less secure ciphers.
     * **tfa_grab_all** - When using `imap`, grab all emails from inbox, solves issue with slow indexing mail servers. Defaults to `False`.
     * **tfa_delete_after** - When using `imap`, delete tfa-email after reading the code. Defaults to `False`.
+
     **Infrequently used `kwargs` parameters:**
 
     These parameters are very rarely changed.
