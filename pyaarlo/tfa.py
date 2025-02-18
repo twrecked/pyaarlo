@@ -106,9 +106,22 @@ class Arlo2FAImap:
             try:
                 # grab new email ids
                 self._imap.check()
-                res, self._new_ids = self._imap.search(
-                    None, "FROM", "do_not_reply@arlo.com"
-                )
+
+                if self._arlo.cfg.tfa_grab_all:
+                    # Grab all to avoid indexing issues
+                    new_ids = []
+                    _, message_ids = self._imap.search(None, 'ALL')
+                    for msg_id in message_ids[0].split():
+                        _, data = self._imap.fetch(msg_id, '(BODY[HEADER.FIELDS (FROM)])')
+                        if b'do_not_reply@arlo.com' in data[0][1]:
+                            new_ids.append(msg_id)
+
+                    self._new_ids = [b' '.join(new_ids)]
+                else:
+                    res, self._new_ids = self._imap.search(
+                        None, "FROM", "do_not_reply@arlo.com"
+                    )
+
                 self.debug("new-ids={}".format(self._new_ids))
                 if self._new_ids == self._old_ids:
                     self.debug("no change in emails")

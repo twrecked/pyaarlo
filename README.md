@@ -292,7 +292,11 @@ ar = pyaarlo.PyArlo(username=USERNAME, password=PASSWORD,
                     tfa_username='your-user-name',
                     tfa_password='your-imap-password' )
 ```
-
+Some email providers are slow to index new mails, set:
+```python
+tfa_grab_all=True
+```
+to grab all emails in inbox and apply sender filter locally.
 
 <a name="executable"></a>
 ## Pyaarlo Executable

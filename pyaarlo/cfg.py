@@ -245,6 +245,10 @@ class ArloCfg(object):
     @property
     def wait_for_initial_setup(self):
         return self._kw.get("wait_for_initial_setup", True)
+    
+    @property
+    def tfa_grab_all(self):
+        return self._kw.get("tfa_grab_all", False)
 
     @property
     def save_state(self):
