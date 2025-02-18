@@ -298,6 +298,12 @@ tfa_grab_all=True
 ```
 to grab all emails in inbox and apply sender filter locally.
 
+
+To delete tfa mails after use, set:
+```python
+tfa_delete_after=True
+```
+
 <a name="executable"></a>
 ## Pyaarlo Executable
 

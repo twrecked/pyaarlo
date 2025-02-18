@@ -69,7 +69,9 @@ class Arlo2FAImap:
             if res.lower() != "ok":
                 self.debug("imap login failed")
                 return False
-            res, status = self._imap.select(mailbox='INBOX', readonly=True)
+            res, status = self._imap.select(
+                mailbox='INBOX', readonly=(not self._arlo.cfg.tfa_delete_after)
+                )
             if res.lower() != "ok":
                 self.debug("imap select failed")
                 return False
@@ -154,6 +156,9 @@ class Arlo2FAImap:
                                         code = re.match(r"^\W+(\d{6})\W*$", line.decode())
                                         if code is not None:
                                             self.debug(f"code={code.group(1)}")
+                                            # If tfa_delete_after is set to True, delete the email
+                                            if self._arlo.cfg.tfa_delete_after:
+                                                self.delete_email(msg_id)
                                             return code.group(1)
                         except Exception as e:
                             self.debug(f"trying next part {str(e)}")
@@ -168,6 +173,15 @@ class Arlo2FAImap:
                 return None
 
         return None
+
+    def delete_email(self, msg_id):
+        """Delete the specified email by ID"""
+        try:
+            self._imap.store(msg_id, '+FLAGS', '\\Deleted')
+            self._imap.expunge()
+            self.debug(f"Email {msg_id} deleted successfully.")
+        except Exception as e:
+            self._arlo.error(f"Failed to delete email {msg_id}: {str(e)}")
 
     def stop(self):
         self.debug("stopping")
