@@ -347,7 +347,9 @@ class ArloBaseStationMediaLibrary(ArloMediaLibrary):
         list = []
 
         # Fetch each page individually, since the base station still only return results for one date at a time
-        for date in range(int(date_from), int(date_to) + 1):
+        days = self._arlo.cfg.library_days
+        for i in range(0, days + 1):
+            date = (datetime.strptime(date_to, "%Y%m%d") - timedelta(days=days - i)).strftime("%Y%m%d")
             for camera in self._arlo.cameras:
                 if camera.parent_id == self._base.device_id:
                     # This URL is mysterious -- it won't return multiple days of videos
