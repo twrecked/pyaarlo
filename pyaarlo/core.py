@@ -1,4 +1,6 @@
+from __future__ import annotations
 
+# XXX remove this?
 from .backend import ArloBackEnd
 from .background import ArloBackground
 from .cfg import ArloCfg
