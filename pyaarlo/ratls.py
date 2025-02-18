@@ -11,7 +11,7 @@ from .constant import (
 )
 
 
-class ArloRatls(object):
+class ArloRatls:
     def __init__(self, arlo, base, public=False):
         self._base_connection_details = None
         self._base_station_token = None

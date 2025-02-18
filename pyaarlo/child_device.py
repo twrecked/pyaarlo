@@ -11,6 +11,9 @@ class ArloChildDevice(ArloDevice):
     def __init__(self, name, arlo, attrs):
         super().__init__(name, arlo, attrs)
 
+        # XXX temporary
+        self._arlo = arlo
+
         self.debug("parent is {}".format(self._parent_id))
         self.vdebug("resource is {}".format(self.resource_id))
 
@@ -18,7 +21,7 @@ class ArloChildDevice(ArloDevice):
         self.vdebug("{}: child got {} event **".format(self.name, resource))
 
         if resource.endswith("/states"):
-            self._arlo.bg.run(self.base_station.update_mode)
+            self._core.bg.run(self.base_station.update_mode)
             return
 
         # Pass event to lower level.
@@ -83,7 +86,7 @@ class ArloChildDevice(ArloDevice):
         if len(self._arlo.base_stations) > 0:
             return self._arlo.base_stations[0]
 
-        self._arlo.error("Could not find any base stations for device " + self._name)
+        self._core.log.error("Could not find any base stations for device " + self._name)
         return None
 
     @property

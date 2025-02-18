@@ -57,6 +57,9 @@ class ArloBase(ArloDevice):
         self._last_update = 0
         self._ratls = None
 
+        # XXX temporary
+        self._arlo = arlo
+
     def _id_to_name(self, mode_id):
         return self._load([MODE_ID_TO_NAME_KEY, mode_id], None)
 
@@ -189,17 +192,17 @@ class ArloBase(ArloDevice):
 
     @property
     def _modes_version(self):
-        if self._arlo.cfg.mode_api.lower() == "v1":
+        if self._core.cfg.mode_api.lower() == "v1":
             self.vdebug("forced v1 api")
             return 1
-        if self._arlo.cfg.mode_api.lower() == "v2":
+        if self._core.cfg.mode_api.lower() == "v2":
             self.vdebug("forced v2 api")
             return 2
-        if self._arlo.cfg.mode_api.lower() == "v3":
-            self._arlo.vdebug("forced v3 api")
+        if self._core.cfg.mode_api.lower() == "v3":
+            self.vdebug("forced v3 api")
             return 3
-        if self._arlo.be.multi_location:
-            self._arlo.vdebug("multilocation, deduced v3 api")
+        if self._core.be.multi_location:
+            self.vdebug("multilocation, deduced v3 api")
             return 3
         if (
             self.model_id == MODEL_BABY
@@ -209,7 +212,7 @@ class ArloBase(ArloDevice):
         ):
             self.vdebug("deduced v1 api")
             return True
-        self._arlo.vdebug("deduced v2 api")
+        self.vdebug("deduced v2 api")
         return 2
 
     @property
@@ -260,7 +263,7 @@ class ArloBase(ArloDevice):
         :param mode_name: mode to use, as returned by available_modes:
         """
         if self._v3_modes:
-            self._arlo.debug(f"BaseStations don't have modes in v3")
+            self.debug(f"BaseStations don't have modes in v3")
             return
 
         # Actually passed a mode?
@@ -299,7 +302,7 @@ class ArloBase(ArloDevice):
             # Post change.
             self.debug(self.name + ":new-mode=" + mode_name + ",id=" + mode_id)
             if self._v1_modes:
-                self._arlo.be.notify(
+                self._core.be.notify(
                     base=self,
                     body={
                         "action": "set",
@@ -327,7 +330,7 @@ class ArloBase(ArloDevice):
                     }
                     if attempt < 4:
                         tid = "(modes:{}|activeAutomations)".format(self.device_id)
-                        body = self._arlo.be.post(
+                        body = self._core.be.post(
                             AUTOMATION_PATH,
                             params=params,
                             raw=True,
@@ -341,7 +344,7 @@ class ArloBase(ArloDevice):
                                 or body.get("resource", "") == "activeAutomations"
                             ):
                                 return
-                        self._arlo.warning(
+                        self._core.log.warning(
                             "attempt {0}: error in response when setting mode=\n{1}".format(
                                 attempt, pprint.pformat(body)
                             )
@@ -349,29 +352,29 @@ class ArloBase(ArloDevice):
                         self.debug(
                             "Fetching device list (hoping this will fix arming/disarming)"
                         )
-                        self._arlo.be.devices()
-                        if self._arlo.cfg.synchronous_mode:
+                        self._core.be.devices()
+                        if self._core.cfg.synchronous_mode:
                             self.debug("trying again, but synchronous")
                             _set_mode_v2_cb(attempt=attempt + 1)
                         else:
-                            self._arlo.bg.run(_set_mode_v2_cb, attempt=attempt + 1)
+                            self._core.bg.run(_set_mode_v2_cb, attempt=attempt + 1)
                         return
 
-                    self._arlo.error("Failed to set mode.")
+                    self._core.log.error("Failed to set mode.")
                     self.debug(
                         "Giving up on setting mode! Session headers=\n{}".format(
-                            pprint.pformat(self._arlo.be.session.headers)
+                            pprint.pformat(self._core.be.session.headers)
                         )
                     )
                     self.debug(
                         "Giving up on setting mode! Session cookies=\n{}".format(
-                            pprint.pprint(self._arlo.be.session.cookies)
+                            pprint.pprint(self._core.be.session.cookies)
                         )
                     )
 
                 _set_mode_v2_cb(1)
             else:
-                self._arlo.be.put(
+                self._core.be.notify(
                     base=self,
                     body={
                         "action": "set",
@@ -381,7 +384,7 @@ class ArloBase(ArloDevice):
                     })
 
         else:
-            self._arlo.warning(
+            self._core.log.warning(
                 "{0}: mode {1} is unrecognised".format(self.name, mode_name)
             )
 
@@ -395,7 +398,7 @@ class ArloBase(ArloDevice):
             self._last_update = now
 
         if not self._v3_modes:
-            data = self._arlo.be.get(AUTOMATION_PATH)
+            data = self._core.be.get(AUTOMATION_PATH)
             for mode in data:
                 if mode.get("uniqueId", "") == self.unique_id:
                     self._set_mode_or_schedule(mode)
@@ -404,9 +407,9 @@ class ArloBase(ArloDevice):
         """Get and update the available modes for the base."""
         if self._v1_modes:
             # Work around slow arlo connections.
-            if initial and self._arlo.cfg.synchronous_mode:
+            if initial and self._core.cfg.synchronous_mode:
                 time.sleep(5)
-            resp = self._arlo.be.notify(
+            resp = self._core.be.notify(
                 base=self,
                 body={"action": "get", "resource": "modes", "publishResponse": False},
                 wait_for="event",
@@ -415,9 +418,9 @@ class ArloBase(ArloDevice):
                 props = resp.get("properties", {})
                 self._parse_modes(props.get("modes", []))
             else:
-                self._arlo.error("unable to read mode, try forcing v2")
+                self._core.log.error("unable to read mode, try forcing v2")
         elif self._v2_modes:
-            modes = self._arlo.be.get(
+            modes = self._core.be.get(
                 DEFINITIONS_PATH + "?uniqueIds={}".format(self.unique_id)
             )
             if modes is not None:
@@ -426,9 +429,9 @@ class ArloBase(ArloDevice):
                 self._parse_schedules(modes.get("schedules", []))
                 self._save(TIMEZONE_KEY, modes.get("olsonTimeZone", None))
             else:
-                self._arlo.error("failed to read modes (v2)")
+                self._core.log.error("failed to read modes (v2)")
         else:
-            self._arlo.debug("V3Modes - None on BaseStation")
+            self.debug("V3Modes - None on BaseStation")
             curr_location = None
             for location in self._arlo.locations:
                 for device_id in location.device_ids:
@@ -448,7 +451,7 @@ class ArloBase(ArloDevice):
         # Only do work on 'old' style base stations
         if self.device_type == 'basestation' or self.device_type == 'arlobridge':
             self.debug("updating state")
-            self._arlo.be.notify(
+            self._core.be.notify(
                 base=self,
                 body={
                     "action": "get",
@@ -502,7 +505,7 @@ class ArloBase(ArloDevice):
             },
         }
         self.debug(str(body))
-        self._arlo.be.notify(base=self, body=body)
+        self._core.be.notify(base=self, body=body)
 
     def siren_off(self):
         """Turn base siren off.
@@ -516,13 +519,13 @@ class ArloBase(ArloDevice):
             "properties": {"sirenState": "off"},
         }
         self.debug(str(body))
-        self._arlo.be.notify(base=self, body=body)
+        self._core.be.notify(base=self, body=body)
 
     def restart(self):
         params = {"deviceId": self.device_id}
         tid = "diagnostics:{}".format(self.device_id)
         if (
-            self._arlo.be.post(RESTART_PATH, params=params, tid=tid, wait_for=None)
+            self._core.be.post(RESTART_PATH, params=params, tid=tid, wait_for=None)
             is None
         ):
             self.debug("RESTART didnt send")
@@ -530,18 +533,18 @@ class ArloBase(ArloDevice):
     def _ping_and_check_reply(self):
         body = {
             "action": "set",
-            "resource": self._arlo.be.sub_id,
+            "resource": self._core.be.sub_id,
             "publishResponse": False,
             "properties": {"devices": [self.device_id]},
         }
         self.debug("pinging {}".format(self.name))
-        if self._arlo.be.notify(base=self, body=body, wait_for="response") is None:
+        if self._core.be.notify(base=self, body=body, wait_for="response") is None:
             self._save_and_do_callbacks(CONNECTION_KEY, "unavailable")
         else:
             self._save_and_do_callbacks(CONNECTION_KEY, "available")
 
     def ping(self):
-        self._arlo.bg.run(self._ping_and_check_reply)
+        self._core.bg.run(self._ping_and_check_reply)
 
     @property
     def state(self):

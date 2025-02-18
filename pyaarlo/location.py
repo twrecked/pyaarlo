@@ -6,7 +6,7 @@ from .constant import (
     LOCATION_ACTIVEMODE_PATH_FORMAT,
     MODE_REVISION_KEY
 )
-from .super import ArloSuper
+from .object import ArloObject
 
 
 AUTOMATION_ACTIVE_MODE = "automation/activeMode"
@@ -24,14 +24,14 @@ def location_name(name, user):
     return f"location_{name}"
 
 
-class ArloLocation(ArloSuper):
+class ArloLocation(ArloObject):
     """ Represents a Location object.
 
     Each Arlo account can have multiple owned locations and multiple shared locations.
     """
     def __init__(self, arlo, attrs, user=False):
         super().__init__(location_name(attrs.get("locationName", "unknown"), user),
-                         arlo, attrs,
+                         arlo._core, attrs,
                          id=attrs.get("locationId", "unknown"),
                          type="location")
 
@@ -45,8 +45,8 @@ class ArloLocation(ArloSuper):
 
     def _extra_headers(self):
         return {
-            "x-forwarded-user": self._arlo.be.user_id,
-            "x-user-device-id": self._arlo.be.user_id,
+            "x-forwarded-user": self._be.user_id,
+            "x-user-device-id": self._be.user_id,
         }
 
     def _parse_modes(self, modes):
@@ -122,7 +122,7 @@ class ArloLocation(ArloSuper):
         if mode_id is None:
             mode_id = id_or_name
         if mode_id is None:
-            self._arlo.error("passed invalid id or name {id_or_name}")
+            self._log.error("passed invalid id or name {id_or_name}")
             return
 
         # Need to change?
@@ -135,7 +135,7 @@ class ArloLocation(ArloSuper):
         mode_revision = self._load(MODE_REVISION_KEY, 1)
         self.vdebug(f"old-revision={mode_revision}")
 
-        data = self._arlo.be.put(
+        data = self._be.put(
             LOCATION_ACTIVEMODE_PATH_FORMAT.format(self._id) + f"&revision={mode_revision}",
             params={"mode": mode_id},
             headers=self._extra_headers())
@@ -153,7 +153,7 @@ class ArloLocation(ArloSuper):
 
     def update_mode(self):
         """Check and update the base's current mode."""
-        data = self._arlo.be.get(LOCATION_ACTIVEMODE_PATH_FORMAT.format(self._id),
+        data = self._be.get(LOCATION_ACTIVEMODE_PATH_FORMAT.format(self._id),
                                  headers=self._extra_headers())
         mode_id = data.get("properties", {}).get('mode')
         mode_revision = data.get("revision")
@@ -162,12 +162,12 @@ class ArloLocation(ArloSuper):
 
     def update_modes(self, _initial=False):
         """Get and update the available modes for the base."""
-        modes = self._arlo.be.get(LOCATION_MODES_PATH_FORMAT.format(self._id),
+        modes = self._be.get(LOCATION_MODES_PATH_FORMAT.format(self._id),
                                   headers=self._extra_headers())
         if modes is not None:
             self._parse_modes(modes.get("properties", {}))
         else:
-            self._arlo.error("failed to read modes.")
+            self._log.error("failed to read modes.")
 
     def stand_by(self):
         self.mode = "standby"

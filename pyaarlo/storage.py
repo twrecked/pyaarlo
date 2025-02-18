@@ -7,7 +7,7 @@ from .logger import ArloLogger
 from .cfg import ArloCfg
 
 
-class ArloStorage(object):
+class ArloStorage:
     
     _cfg: ArloCfg
     _log: ArloLogger

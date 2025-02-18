@@ -1,6 +1,5 @@
 import base64
 import datetime
-import logging
 import os
 import pprint
 import threading
@@ -42,6 +41,7 @@ from .constant import (
     LOCATIONS_EMERGENCY_PATH,
     VALID_DEVICE_STATES,
 )
+from .core import ArloCore
 from .doorbell import ArloDoorBell
 from .light import ArloLight
 from .media import ArloMediaLibrary
@@ -50,12 +50,12 @@ from .location import ArloLocation
 from .sensor import ArloSensor
 from .logger import ArloLogger
 from .util import time_to_arlotime
-
+from .objects import ArloObjects
 
 __version__ = "0.8.0.17"
 
 
-class PyArlo(object):
+class PyArlo:
     """Entry point for all Arlo operations.
 
     This is used to login to Arlo, open and maintain an evenstream with Arlo, find and store devices and device
@@ -153,47 +153,42 @@ class PyArlo(object):
     You can use the attribute `*` to register for all events.
     """
 
-    _log: ArloLogger
-    _bg: ArloBackground
-    _st: ArloStorage
+    _core: ArloCore = ArloCore
+    _objs: ArloObjects = ArloObjects
 
     def __init__(self, **kwargs):
         """Constructor for the PyArlo object.
         """
 
         # Get logger initialised.
-        self._log = ArloLogger(kwargs.get("verbose_debug", False))
+        self._core.log = ArloLogger(kwargs.get("verbose_debug", False))
 
         # Get version out early.
-        self._log.info(f"pyarlo {__version__} starting...")
+        self._core.log.info(f"pyarlo {__version__} starting...")
 
         # Now load the config.
-        self._cfg = ArloCfg(self._log, **kwargs)
+        self._core.cfg = ArloCfg(self._core.log, **kwargs)
+        # return
 
         # Create storage/scratch directory.
-        if self._cfg.save_state or self._cfg.dump or self._cfg.save_session:
+        if self._core.cfg.save_state or self._core.cfg.dump or self._core.cfg.save_session:
             try:
-                if not os.path.exists(self._cfg.storage_dir):
-                    os.mkdir(self._cfg.storage_dir)
+                if not os.path.exists(self._core.cfg.storage_dir):
+                    os.mkdir(self._core.cfg.storage_dir)
             except Exception:
-                self.warning(f"Problem creating {self._cfg.storage_dir}")
+                self.warning(f"Problem creating {self._core.cfg.storage_dir}")
 
-        # Create remaining components.
-        self._bg = ArloBackground(self._log)
-        self._st = ArloStorage(self._cfg, self._log)
-        self._be = ArloBackEnd(self._cfg, self._log, self._bg)
-        self._ml = ArloMediaLibrary(self)
+        # Create remaining core components.
+        self._core.bg = ArloBackground(self._core.log)
+        self._core.st = ArloStorage(self._core.cfg, self._core.log)
+        self._core.be = ArloBackEnd(self._core.cfg, self._core.log, self._core.bg)
 
-        # Make sure they are empty.
-        self._locations = []
-        self._bases = []
-        self._cameras = []
-        self._lights = []
-        self._doorbells = []
-        self._sensors = []
+        # Fill out the object store.
+        # The lists are created clear but we need to add in the media library.
+        self._objs.ml = ArloMediaLibrary(self)
 
         # Failed to login, then stop now!
-        if not self._be.is_connected:
+        if not self._core.be.is_connected:
             return
 
         self._lock = threading.Condition()
@@ -202,10 +197,10 @@ class PyArlo(object):
         self._today = datetime.date.today()
 
         # Every few hours we can refresh the device list.
-        self._refresh_devices_at = time.monotonic() + self._cfg.refresh_devices_every
+        self._refresh_devices_at = time.monotonic() + self._core.cfg.refresh_devices_every
 
         # Every few minutes we can refresh the mode list.
-        self._refresh_modes_at = time.monotonic() + self._cfg.refresh_modes_every
+        self._refresh_modes_at = time.monotonic() + self._core.cfg.refresh_modes_every
 
         # default blank image when waiting for camera image to appear
         self._blank_image = base64.standard_b64decode(BLANK_IMAGE)
@@ -215,7 +210,7 @@ class PyArlo(object):
         # Get devices, fill local db, and create device instance.
         self.info("pyaarlo starting")
         self._started = False
-        if self._be.multi_location:
+        if self._core.be.multi_location:
             self._refresh_locations()
         self._refresh_devices()
 
@@ -237,7 +232,7 @@ class PyArlo(object):
                 or dtype == "arloq"
                 or dtype == "arloqs"
             ):
-                self._bases.append(ArloBase(dname, self, device))
+                self._objs.bases.append(ArloBase(dname, self, device))
 
             # Newer devices can connect directly to wifi and can be its own base station,
             # it can also be assigned to a real base station
@@ -262,7 +257,7 @@ class PyArlo(object):
             )):
                 parent_id = device.get("parentId", None)
                 if parent_id is None or parent_id == device.get("deviceId", None):
-                    self._bases.append(ArloBase(dname, self, device))
+                    self._objs.bases.append(ArloBase(dname, self, device))
 
             if (
                 dtype == "camera"
@@ -276,56 +271,59 @@ class PyArlo(object):
                     MODEL_ESSENTIAL_VIDEO_DOORBELL
                 ))
             ):
-                self._cameras.append(ArloCamera(dname, self, device))
+                self._objs.cameras.append(ArloCamera(dname, self, device))
             if dtype == "doorbell":
-                self._doorbells.append(ArloDoorBell(dname, self, device))
+                self._objs.doorbells.append(ArloDoorBell(dname, self, device))
             if dtype == "lights":
-                self._lights.append(ArloLight(dname, self, device))
+                self._objs.lights.append(ArloLight(dname, self, device))
             if dtype == "sensors":
-                self._sensors.append(ArloSensor(dname, self, device))
+                self._objs.sensors.append(ArloSensor(dname, self, device))
 
         # Save out unchanging stats!
-        self._st.set(["ARLO", TOTAL_CAMERAS_KEY], len(self._cameras), prefix="aarlo")
-        self._st.set(["ARLO", TOTAL_BELLS_KEY], len(self._doorbells), prefix="aarlo")
-        self._st.set(["ARLO", TOTAL_LIGHTS_KEY], len(self._lights), prefix="aarlo")
+        self._core.st.set(["ARLO", TOTAL_CAMERAS_KEY], len(self._objs.cameras), prefix="aarlo")
+        self._core.st.set(["ARLO", TOTAL_BELLS_KEY], len(self._objs.doorbells), prefix="aarlo")
+        self._core.st.set(["ARLO", TOTAL_LIGHTS_KEY], len(self._objs.lights), prefix="aarlo")
 
         # Subscribe to events.
-        self._be.start_monitoring()
+        self._core.be.start_monitoring()
+
+        self.debug(f"ob2={self._objs.cameras}")
+        self.debug(f"ob2={self._objs.ml}")
 
         # Now ping the bases.
         self._ping_bases()
 
         # Initial config and state retrieval.
-        if self._cfg.synchronous_mode:
+        if self._core.cfg.synchronous_mode:
             # Synchronous; run them one after the other
             self.debug("getting initial settings")
             self._refresh_bases(initial=True)
             self._refresh_modes()
             self._refresh_ambient_sensors()
             self._refresh_doorbells()
-            self._ml.load()
+            self._objs.ml.load()
             self._refresh_camera_thumbnails(True)
             self._refresh_camera_media(True)
             self._initial_refresh_done()
         else:
             # Asynchronous; queue them to run one after the other
             self.debug("queueing initial settings")
-            self._bg.run(self._refresh_bases, initial=True)
-            self._bg.run(self._refresh_modes)
-            self._bg.run(self._refresh_ambient_sensors)
-            self._bg.run(self._refresh_doorbells)
-            self._bg.run(self._ml.load)
-            self._bg.run(self._refresh_camera_thumbnails, wait=False)
-            self._bg.run(self._refresh_camera_media, wait=False)
-            self._bg.run(self._initial_refresh_done)
+            self._core.bg.run(self._refresh_bases, initial=True)
+            self._core.bg.run(self._refresh_modes)
+            self._core.bg.run(self._refresh_ambient_sensors)
+            self._core.bg.run(self._refresh_doorbells)
+            self._core.bg.run(self._objs.ml.load)
+            self._core.bg.run(self._refresh_camera_thumbnails, wait=False)
+            self._core.bg.run(self._refresh_camera_media, wait=False)
+            self._core.bg.run(self._initial_refresh_done)
 
         # Register house keeping cron jobs.
         self.debug("registering cron jobs")
-        self._bg.run_every(self._fast_refresh, FAST_REFRESH_INTERVAL)
-        self._bg.run_every(self._slow_refresh, SLOW_REFRESH_INTERVAL)
+        self._core.bg.run_every(self._fast_refresh, FAST_REFRESH_INTERVAL)
+        self._core.bg.run_every(self._slow_refresh, SLOW_REFRESH_INTERVAL)
 
         # Wait for initial refresh
-        if self._cfg.wait_for_initial_setup:
+        if self._core.cfg.wait_for_initial_setup:
             with self._lock:
                 while not self._started:
                     self.debug("waiting for initial setup...")
@@ -334,7 +332,7 @@ class PyArlo(object):
 
     def __repr__(self):
         # Representation string of object.
-        return "<{0}: {1}>".format(self.__class__.__name__, self._cfg.name)
+        return "<{0}: {1}>".format(self.__class__.__name__, self._core.cfg.name)
 
     # Using this to indicate that we're using location-based modes, vs basestation-based modes.
     # also called Arlo app v4. Open to new ideas for what to call this.
@@ -349,7 +347,7 @@ class PyArlo(object):
         don't. We update what we can.
         """
         url = DEVICES_PATH + "?t={}".format(time_to_arlotime())
-        self._devices = self._be.get(url)
+        self._devices = self._core.be.get(url)
         if not self._devices:
             self.warning("No devices returned from " + url)
             self._devices = []
@@ -372,86 +370,86 @@ class PyArlo(object):
         """Retrieve location list from the backend
         """
         self.debug("_refresh_locations")
-        self._locations = []
+        self._objs.locations = []
 
-        elocation_data = self._be.get(LOCATIONS_EMERGENCY_PATH)
+        elocation_data = self._core.be.get(LOCATIONS_EMERGENCY_PATH)
         if elocation_data:
             self.debug("got something")
         else:
             self.debug("got nothing")
 
         url = LOCATIONS_PATH_FORMAT.format(self.be.user_id)
-        location_data = self._be.get(url)
+        location_data = self._core.be.get(url)
         if not location_data:
             self.warning("No locations returned from " + url)
         else:
             for user_location in location_data.get("userLocations", []):
-                self._locations.append(ArloLocation(self, user_location, True))
+                self._objs.locations.append(ArloLocation(self, user_location, True))
             for shared_location in location_data.get("sharedLocations", []):
-                self._locations.append(ArloLocation(self, shared_location, False))
+                self._objs.locations.append(ArloLocation(self, shared_location, False))
 
-        self.vdebug("locations={}".format(pprint.pformat(self._locations)))
+        self.vdebug("locations={}".format(pprint.pformat(self._objs.locations)))
 
     def _refresh_camera_thumbnails(self, wait=False):
         """Request latest camera thumbnails, called at start up."""
-        for camera in self._cameras:
+        for camera in self._objs.cameras:
             camera.update_last_image(wait)
 
     def _refresh_camera_media(self, wait=False):
         """Rebuild cameras media library, called at start up or when day changes."""
-        for camera in self._cameras:
+        for camera in self._objs.cameras:
             camera.update_media(wait)
 
     def _refresh_ambient_sensors(self):
-        for camera in self._cameras:
+        for camera in self._objs.cameras:
             camera.update_ambient_sensors()
 
     def _refresh_doorbells(self):
-        for doorbell in self._doorbells:
+        for doorbell in self._objs.doorbells:
             doorbell.update_silent_mode()
 
     def _ping_bases(self):
-        for base in self._bases:
+        for base in self._objs.bases:
             if base.has_capability(PING_CAPABILITY):
                 base.ping()
             else:
                 self.vdebug(f"NO ping to {base.device_id}")
 
     def _refresh_bases(self, initial):
-        for base in self._bases:
+        for base in self._objs.bases:
             base.update_modes(initial)
             base.keep_ratls_open()
             base.update_states()
 
     def _refresh_modes(self):
         self.vdebug("refresh modes")
-        for base in self._bases:
+        for base in self._objs.bases:
             base.update_modes()
             base.update_mode()
-        for location in self._locations:
+        for location in self._objs.locations:
             location.update_modes()
             location.update_mode()
 
     def _fast_refresh(self):
         self.vdebug("fast refresh")
-        self._bg.run(self._st.save)
+        self._core.bg.run(self._core.st.save)
         self._ping_bases()
 
         # do we need to reload the modes?
-        if self._cfg.refresh_modes_every != 0:
+        if self._core.cfg.refresh_modes_every != 0:
             now = time.monotonic()
             self.vdebug(
                 "mode reload check {} {}".format(str(now), str(self._refresh_modes_at))
             )
             if now > self._refresh_modes_at:
                 self.debug("mode reload needed")
-                self._refresh_modes_at = now + self._cfg.refresh_modes_every
-                self._bg.run(self._refresh_modes)
+                self._refresh_modes_at = now + self._core.cfg.refresh_modes_every
+                self._core.bg.run(self._refresh_modes)
         else:
             self.vdebug("no mode reload")
 
         # do we need to reload the devices?
-        if self._cfg.refresh_devices_every != 0:
+        if self._core.cfg.refresh_devices_every != 0:
             now = time.monotonic()
             self.vdebug(
                 "device reload check {} {}".format(
@@ -460,8 +458,8 @@ class PyArlo(object):
             )
             if now > self._refresh_devices_at:
                 self.debug("device reload needed")
-                self._refresh_devices_at = now + self._cfg.refresh_devices_every
-                self._bg.run(self._refresh_devices)
+                self._refresh_devices_at = now + self._core.cfg.refresh_devices_every
+                self._core.bg.run(self._refresh_devices)
         else:
             self.vdebug("no device reload")
 
@@ -471,19 +469,19 @@ class PyArlo(object):
         if self._today != today:
             self.debug("day changed to {}!".format(str(today)))
             self._today = today
-            self._bg.run(self._ml.load)
-            self._bg.run(self._refresh_camera_media, wait=False)
+            self._core.bg.run(self._objs.ml.load)
+            self._core.bg.run(self._refresh_camera_media, wait=False)
 
     def _slow_refresh(self):
         self.vdebug("slow refresh")
-        self._bg.run(self._refresh_bases, initial=False)
-        self._bg.run(self._refresh_ambient_sensors)
+        self._core.bg.run(self._refresh_bases, initial=False)
+        self._core.bg.run(self._refresh_ambient_sensors)
 
     def _initial_refresh(self):
         self.debug("initial refresh")
-        self._bg.run(self._refresh_bases, initial=True)
-        self._bg.run(self._refresh_ambient_sensors)
-        self._bg.run(self._initial_refresh_done)
+        self._core.bg.run(self._refresh_bases, initial=True)
+        self._core.bg.run(self._refresh_ambient_sensors)
+        self._core.bg.run(self._initial_refresh_done)
 
     def _initial_refresh_done(self):
         self.debug("initial refresh done")
@@ -493,11 +491,11 @@ class PyArlo(object):
 
     def stop(self, logout=False):
         """Stop connection to Arlo and, optionally, logout."""
-        self._st.save()
-        self._bg.stop()
-        self._ml.stop()
+        self._core.st.save()
+        self._core.bg.stop()
+        self._objs.ml.stop()
         if logout:
-            self._be.logout()
+            self._core.be.logout()
 
     @property
     def entity_id(self):
@@ -524,28 +522,28 @@ class PyArlo(object):
 
     @property
     def cfg(self):
-        return self._cfg
+        return self._core.cfg
 
     @property
     def bg(self):
-        return self._bg
+        return self._core.bg
 
     @property
     def st(self):
-        return self._st
+        return self._core.st
 
     @property
     def be(self):
-        return self._be
+        return self._core.be
 
     @property
     def ml(self):
-        return self._ml
+        return self._objs.ml
 
     @property
     def is_connected(self):
         """Returns `True` if the object is connected to the Arlo servers, `False` otherwise."""
-        return self._be.is_connected
+        return self._core.be.is_connected
 
     @property
     def cameras(self):
@@ -554,7 +552,7 @@ class PyArlo(object):
         :return: a list of cameras.
         :rtype: list(ArloCamera)
         """
-        return self._cameras
+        return self._objs.cameras
 
     @property
     def doorbells(self):
@@ -563,7 +561,7 @@ class PyArlo(object):
         :return: a list of doorbells.
         :rtype: list(ArloDoorBell)
         """
-        return self._doorbells
+        return self._objs.doorbells
 
     @property
     def lights(self):
@@ -572,7 +570,7 @@ class PyArlo(object):
         :return: a list of lights.
         :rtype: list(ArloLight)
         """
-        return self._lights
+        return self._objs.lights
 
     @property
     def base_stations(self):
@@ -581,7 +579,7 @@ class PyArlo(object):
         :return: a list of base stations.
         :rtype: list(ArloBase)
         """
-        return self._bases
+        return self._objs.bases
 
     @property
     def locations(self):
@@ -590,7 +588,7 @@ class PyArlo(object):
         :return: a list of locations.
         :rtype: list(ArloLocation)
         """
-        return self._locations
+        return self._objs.locations
 
     @property
     def all_devices(self):
@@ -598,7 +596,7 @@ class PyArlo(object):
 
     @property
     def sensors(self):
-        return self._sensors
+        return self._objs.sensors
 
     @property
     def blank_image(self):
@@ -724,7 +722,7 @@ class PyArlo(object):
         :type response: JSON data
         """
         self.debug("injecting\n{}".format(pprint.pformat(response)))
-        self._be.ev_inject(response)
+        self._core.be.ev_inject(response)
 
     def attribute(self, attr):
         """Return the value of attribute attr.
@@ -735,7 +733,7 @@ class PyArlo(object):
         :type attr: str
         :return: The value associated with attribute or `None` if not found.
         """
-        return self._st.get(["ARLO", attr], None)
+        return self._core.st.get(["ARLO", attr], None)
 
     def add_attr_callback(self, attr, cb):
         pass
@@ -745,21 +743,21 @@ class PyArlo(object):
         pass
 
     def error(self, msg):
-        self._log.error(msg)
+        self._core.log.error(msg)
 
     @property
     def last_error(self):
         """Return the last reported error."""
-        return self._log.last_error
+        return self._core.log.last_error
 
     def warning(self, msg):
-        self._log.warning(msg)
+        self._core.log.warning(msg)
 
     def info(self, msg):
-        self._log.info(msg)
+        self._core.log.info(msg)
 
     def debug(self, msg):
-        self._log.debug(msg)
+        self._core.log.debug(msg)
 
     def vdebug(self, msg):
-        self._log.vdebug(msg)
+        self._core.log.vdebug(msg)

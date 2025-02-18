@@ -7,7 +7,7 @@ import textwrap
 
 from .constant import CERT_BEGIN, CERT_END
 
-class SecurityUtils(object):
+class SecurityUtils:
   def __init__(self, storage_dir: str) -> None:
     self.__storage_dir = storage_dir
     self.__private_key: str = None

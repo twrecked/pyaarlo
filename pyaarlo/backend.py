@@ -63,7 +63,7 @@ class AuthState(IntEnum):
     TRUST_BROWSER = 10,
 
 
-class AuthDetails(object):
+class AuthDetails:
     """This hold the authentication state.
     """
     state: AuthState = AuthState.STARTING
@@ -76,7 +76,7 @@ class AuthDetails(object):
     tfa_handler: Arlo2FAConsole | Arlo2FAPush | Arlo2FAImap | Arlo2FARestAPI | None = None
 
 
-class RequestDetails(object):
+class RequestDetails:
     """This holds the information we need to provide in get/post requests.
 
     It is built up during the authentication phase and remains constistent
@@ -185,7 +185,7 @@ class RequestDetails(object):
 
 
 # include token and session details
-class ArloBackEnd(object):
+class ArloBackEnd:
 
     _cfg: ArloCfg
     _log: ArloLogger

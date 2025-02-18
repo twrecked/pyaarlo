@@ -22,7 +22,7 @@ from .constant import (
 )
 
 
-class ArloCfg(object):
+class ArloCfg:
     """Helper class to get at Arlo configuration options.
 
     I got sick of adding in variables each time the config changed so I moved it all here. Config

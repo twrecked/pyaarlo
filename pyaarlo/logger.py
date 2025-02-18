@@ -5,7 +5,7 @@ import logging
 _LOGGER = logging.getLogger("pyaarlo")
 
 
-class ArloLogger(object):
+class ArloLogger:
     """An all-in-one-place logger.
 
     And instance is created very early on and passed to all sub-components.

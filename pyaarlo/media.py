@@ -149,7 +149,7 @@ class ArloMediaDownloader(threading.Thread):
         self._arlo.vdebug(f"media-downloader: {msg}")
 
 
-class ArloMediaLibrary(object):
+class ArloMediaLibrary:
     """Arlo Library Media module implementation."""
 
     def __init__(self, arlo):
@@ -358,7 +358,7 @@ class ArloBaseStationMediaLibrary(ArloMediaLibrary):
         return list
 
 
-class ArloMediaObject(object):
+class ArloMediaObject:
     """Object for Arlo Video file."""
 
     def __init__(self, attrs, camera, arlo, base):

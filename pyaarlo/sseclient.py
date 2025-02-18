@@ -11,7 +11,7 @@ import requests
 end_of_field = re.compile(r"\r\n\r\n|\r\r|\n\n")
 
 
-class SSEClient(object):
+class SSEClient:
     def __init__(
         self,
         log,
@@ -137,7 +137,7 @@ class SSEClient(object):
         self.log.debug(f"sseclient: {msg}")
 
 
-class Event(object):
+class Event:
     sse_line_pattern = re.compile("(?P<name>[^:]*):?( ?(?P<value>.*))?")
 
     def __init__(self, data="", event="message", id=None, retry=None):

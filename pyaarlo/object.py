@@ -1,17 +1,14 @@
 import threading
-from typing import TYPE_CHECKING
 from unidecode import unidecode
-
-if TYPE_CHECKING:
-    from . import PyArlo
 
 from .constant import (
     RESOURCE_KEYS,
     RESOURCE_UPDATE_KEYS,
 )
+from .core import ArloCore
 
 
-class ArloSuper(object):
+class ArloObject:
     """Object class for all Arlo objects.
 
     Has code for:
@@ -28,9 +25,15 @@ class ArloSuper(object):
     ArloLocation is the odd piece out, Arlo doesn't supply a device type
     or unique_id for this Object so we create one.
     """
-    def __init__(self, name, arlo: 'PyArlo', attrs, id, type, uid=None):
+
+    _core: ArloCore
+    
+    _name: str
+    
+    def __init__(self, name, core: ArloCore, attrs, id, type, uid=None):
         self._name = name
-        self._arlo = arlo
+        self._core = core
+        
         self._attrs = attrs
         self._id = id
         self._type = type
@@ -40,7 +43,7 @@ class ArloSuper(object):
         self._attr_cbs_ = []
 
         # add a listener
-        self._arlo.be.add_listener(self, self._event_handler)
+        self._core.be.add_listener(self, self._event_handler)
 
     def __repr__(self):
         # Representation string of object.
@@ -70,7 +73,7 @@ class ArloSuper(object):
             cb(self, attr, value)
 
     def _save(self, attr, value):
-        self._arlo.st.set(self._to_storage_key(attr), value, prefix=self._id)
+        self._core.st.set(self._to_storage_key(attr), value, prefix=self._id)
 
     def _save_and_do_callbacks(self, attr, value):
         if value != self._load(attr):
@@ -81,10 +84,10 @@ class ArloSuper(object):
             self.vdebug(f"{attr}: OLD {str(value)[:80]}")
 
     def _load(self, attr, default=None):
-        return self._arlo.st.get(self._to_storage_key(attr), default)
+        return self._core.st.get(self._to_storage_key(attr), default)
 
     def _load_matching(self, attr, default=None):
-        return self._arlo.st.get_matching(self._to_storage_key(attr), default)
+        return self._core.st.get_matching(self._to_storage_key(attr), default)
 
     @property
     def name(self):
@@ -103,9 +106,9 @@ class ArloSuper(object):
 
     @property
     def entity_id(self):
-        if self._arlo.cfg.serial_ids:
+        if self._core.cfg.serial_ids:
             return self.device_id
-        elif self._arlo.cfg.no_unicode_squash:
+        elif self._core.cfg.no_unicode_squash:
             return self.name.lower().replace(" ", "_")
         else:
             return unidecode(self.name.lower().replace(" ", "_"))
@@ -164,7 +167,7 @@ class ArloSuper(object):
         return "ok"
 
     def debug(self, msg):
-        self._arlo.debug(f"{self._name}: {msg}")
+        self._core.log.debug(f"{self._name}: {msg}")
 
     def vdebug(self, msg):
-        self._arlo.vdebug(f"{self._name}: {msg}")
+        self._core.log.vdebug(f"{self._name}: {msg}")

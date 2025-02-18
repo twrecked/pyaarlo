@@ -19,17 +19,17 @@ from .constant import (
     TIMEZONE_KEY,
     XCLOUD_ID_KEY,
 )
-from .super import ArloSuper
+from .object import ArloObject
 
 
-class ArloDevice(ArloSuper):
+class ArloDevice(ArloObject):
     """Base class for all Arlo devices.
 
     Has code to handle providing common attributes and comment event handling.
     """
 
     def __init__(self, name, arlo: 'PyArlo', attrs):
-        super().__init__(name, arlo, attrs,
+        super().__init__(name, arlo._core, attrs,
                          id=attrs.get("deviceId", "unknown"),
                          type=attrs.get("deviceType", "unknown"),
                          uid=attrs.get("uniqueId", None))
@@ -56,9 +56,9 @@ class ArloDevice(ArloSuper):
 
     @property
     def entity_id(self):
-        if self._arlo.cfg.serial_ids:
+        if self._core.cfg.serial_ids:
             return self.device_id
-        elif self._arlo.cfg.no_unicode_squash:
+        elif self._core.cfg.no_unicode_squash:
             return self.name.lower().replace(" ", "_")
         else:
             return unidecode(self.name.lower().replace(" ", "_"))
@@ -268,7 +268,7 @@ class ArloDevice(ArloSuper):
         return self._load(SIGNAL_STR_KEY, 3)
 
     def debug(self, msg):
-        self._arlo.debug(f"{self.device_id}: {msg}")
+        self._core.log.debug(f"{self.device_id}: {msg}")
 
     def vdebug(self, msg):
-        self._arlo.vdebug(f"{self.device_id}: {msg}")
+        self._core.log.vdebug(f"{self.device_id}: {msg}")
