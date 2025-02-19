@@ -8,7 +8,7 @@ class ArloObjects:
     This relies on the future annotations to work. It allows us to break
     the linkage.
     """
-    bases: list[ArloBase] = []
+    base_stations: list[ArloBase] = []
     cameras: list[ArloCamera] = []
     locations: list[ArloLocation] = []
     lights: list[ArloLight] = []

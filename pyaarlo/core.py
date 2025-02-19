@@ -1,13 +1,7 @@
 from __future__ import annotations
 
-# XXX remove this?
-from .backend import ArloBackEnd
-from .background import ArloBackground
-from .cfg import ArloCfg
-from .logger import ArloLogger
-from .storage import ArloStorage
 
-
+# noinspection PyUnresolvedReferences
 class ArloCore:
     """These are the core functionality of Arlo.
 

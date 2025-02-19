@@ -83,13 +83,14 @@ from .constant import (
     TEMPERATURE_KEY,
 )
 from .child_device import ArloChildDevice
-from .util import http_get, http_get_img, the_epoch
+from .core import ArloCore
 from .objects import ArloObjects
+from .util import http_get, http_get_img, the_epoch
 
 
 class ArloCamera(ArloChildDevice):
-    def __init__(self, name, arlo, attrs):
-        super().__init__(name, arlo, attrs)
+    def __init__(self, name: str, core: ArloCore, objs: ArloObjects, attrs):
+        super().__init__(name, core, objs, attrs)
         self._recent = False
         self._recent_job = None
         self._cache_count = None
@@ -110,8 +111,7 @@ class ArloCamera(ArloChildDevice):
         self._blank_image = base64.standard_b64decode(BLANK_IMAGE)
 
         # XXX temporary...
-        self._ml = arlo.ml
-        self.debug(f"camera-count={len(arlo._objs.cameras)}")
+        self.debug(f"camera-count={len(objs.cameras)}")
 
     def _parse_statistic(self, data, scale):
         """Parse binary statistics returned from the history API"""
@@ -167,7 +167,7 @@ class ArloCamera(ArloChildDevice):
     # Media library has updated, reload today's events.
     def _update_from_media_library(self):
         self.debug("reloading cache for " + self._name)
-        count, videos = self._ml.videos_for(self)
+        count, videos = self._objs.ml.videos_for(self)
         if videos:
             captured_today = len([video for video in videos if video.created_today])
             last_captured = videos[0].created_at_pretty(self._core.cfg.last_format)
@@ -198,7 +198,7 @@ class ArloCamera(ArloChildDevice):
         self._do_callbacks(MEDIA_UPLOAD_KEY, True)
 
         # new snapshot?
-        snapshot = self._ml.snapshot_for(self)
+        snapshot = self._objs.ml.snapshot_for(self)
         if snapshot is not None:
             if self._load(SNAPSHOT_KEY, None) != snapshot.image_url:
                 self.debug("snapshot updated for media " + self.name)
@@ -294,7 +294,7 @@ class ArloCamera(ArloChildDevice):
         for retry in self._core.cfg.media_retry:
             self.debug("queueing update in {}".format(retry))
             self._core.bg.run_in(
-                self._ml.queue_update, retry, cb=self._update_from_media_library
+                self._objs.ml.queue_update, retry, cb=self._update_from_media_library
             )
 
     def _mark_as_idle(self):
@@ -440,7 +440,7 @@ class ArloCamera(ArloChildDevice):
             # update.
             if event.get(RECORDING_STOPPED_KEY, False):
                 self.debug("{} -> recording stopped".format(self.name))
-                self._ml.queue_update(self._update_from_media_library)
+                self._objs.ml.queue_update(self._update_from_media_library)
 
             # Examine the URL passed; snapshots contain `/snapshots/` and
             # recordings contain `recordings`. For snapshot, save URL and queue
@@ -868,7 +868,7 @@ class ArloCamera(ArloChildDevice):
         for check in self._core.cfg.snapshot_checks:
             self.debug("queueing snapshot check in {}".format(check))
             self._core.bg.run_in(
-                self._ml.queue_update, check, cb=self._update_from_media_library
+                self._objs.ml.queue_update, check, cb=self._update_from_media_library
             )
 
         self.vdebug("handle dodgy cameras")

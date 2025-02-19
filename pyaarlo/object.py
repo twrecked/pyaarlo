@@ -6,6 +6,7 @@ from .constant import (
     RESOURCE_UPDATE_KEYS,
 )
 from .core import ArloCore
+from .objects import ArloObjects
 
 
 class ArloObject:
@@ -26,13 +27,15 @@ class ArloObject:
     or unique_id for this Object so we create one.
     """
 
-    _core: ArloCore
-    
     _name: str
-    
-    def __init__(self, name, core: ArloCore, attrs, id, type, uid=None):
+    _core: ArloCore
+    _objs: ArloObjects
+
+    def __init__(self, name: str, core: ArloCore, objs: ArloObjects,
+                 attrs, id, type, uid=None):
         self._name = name
         self._core = core
+        self._objs = objs
         
         self._attrs = attrs
         self._id = id

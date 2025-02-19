@@ -2,17 +2,16 @@
 from .constant import (
     CONNECTION_KEY,
 )
+from .core import ArloCore
 from .device import ArloDevice
+from .objects import ArloObjects
 
 
 class ArloChildDevice(ArloDevice):
     """Base class for all Arlo devices that attach to a base station."""
 
-    def __init__(self, name, arlo, attrs):
-        super().__init__(name, arlo, attrs)
-
-        # XXX temporary
-        self._arlo = arlo
+    def __init__(self, name: str, core: ArloCore, objs: ArloObjects, attrs):
+        super().__init__(name, core, objs, attrs)
 
         self.debug("parent is {}".format(self._parent_id))
         self.vdebug("resource is {}".format(self.resource_id))
@@ -73,18 +72,18 @@ class ArloChildDevice(ArloDevice):
         can't find a basestation, this returns the first one (if any exist).
         """
         # look for real parents
-        for base in self._arlo.base_stations:
+        for base in self._objs.base_stations:
             if base.device_id == self.parent_id:
                 return base
 
         # some cameras don't have base stations... it's its own base station...
-        for base in self._arlo.base_stations:
+        for base in self._objs.base_stations:
             if base.device_id == self.device_id:
                 return base
 
         # no idea!
-        if len(self._arlo.base_stations) > 0:
-            return self._arlo.base_stations[0]
+        if len(self._objs.base_stations) > 0:
+            return self._objs.base_stations[0]
 
         self._core.log.error("Could not find any base stations for device " + self._name)
         return None

@@ -1,18 +1,24 @@
 import pprint
 
-from .constant import BATTERY_KEY, BRIGHTNESS_KEY, LAMP_STATE_KEY, MOTION_DETECTED_KEY
+from .constant import (
+    BATTERY_KEY,
+    BRIGHTNESS_KEY,
+    LAMP_STATE_KEY,
+    MOTION_DETECTED_KEY
+)
 from .child_device import ArloChildDevice
+from .core import ArloCore
+from .objects import ArloObjects
 
 
 class ArloLight(ArloChildDevice):
-    def __init__(self, name, arlo, attrs):
+    def __init__(self, name: str, core: ArloCore, objs: ArloObjects, attrs):
         """An Arlo Light.
 
         :param name: name of light
-        :param arlo: controlling arlo instance
         :param attrs: initial attributes give by Arlo
         """
-        super().__init__(name, arlo, attrs)
+        super().__init__(name, core, objs, attrs)
 
     @property
     def resource_type(self):
@@ -42,7 +48,7 @@ class ArloLight(ArloChildDevice):
             pass
 
         self.debug("{} sending {}".format(self._name, pprint.pformat(properties)))
-        self._arlo.be.notify(
+        self._core.be.notify(
             base=self.base_station,
             body={
                 "action": "set",
@@ -55,7 +61,7 @@ class ArloLight(ArloChildDevice):
 
     def turn_off(self):
         """Turn the light off."""
-        self._arlo.be.notify(
+        self._core.be.notify(
             base=self.base_station,
             body={
                 "action": "set",
@@ -71,7 +77,7 @@ class ArloLight(ArloChildDevice):
 
         :param brightness: brightness to use (0-255)
         """
-        self._arlo.be.notify(
+        self._core.be.notify(
             base=self.base_station,
             body={
                 "action": "set",

@@ -1,9 +1,5 @@
 import pprint
 import time
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from . import PyArlo
 
 from .constant import (
     AIR_QUALITY_KEY,
@@ -40,25 +36,24 @@ from .constant import (
     TEMPERATURE_KEY,
     TIMEZONE_KEY,
 )
+from .core import ArloCore
 from .device import ArloDevice
-from .util import time_to_arlotime
 from .media import ArloBaseStationMediaLibrary
+from .objects import ArloObjects
 from .ratls import ArloRatls
+from .util import time_to_arlotime
 
 day_of_week = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su", "Mo"]
 
 
 class ArloBase(ArloDevice):
-    def __init__(self, name: str, arlo: 'PyArlo', attrs):
-        super().__init__(name, arlo, attrs)
+    def __init__(self, name: str, core: ArloCore, objs: ArloObjects, attrs):
+        super().__init__(name, core, objs, attrs)
         self._ml = None
         self._refresh_rate = 15
         self._schedules = None
         self._last_update = 0
         self._ratls = None
-
-        # XXX temporary
-        self._arlo = arlo
 
     def _id_to_name(self, mode_id):
         return self._load([MODE_ID_TO_NAME_KEY, mode_id], None)
@@ -433,7 +428,7 @@ class ArloBase(ArloDevice):
         else:
             self.debug("V3Modes - None on BaseStation")
             curr_location = None
-            for location in self._arlo.locations:
+            for location in self._objs.locations:
                 for device_id in location.device_ids:
                     if device_id == self.unique_id:
                         curr_location = location
@@ -613,7 +608,7 @@ class ArloBase(ArloDevice):
         return super().has_capability(cap)
 
     def build_ratls(self, public=False):
-        self._ratls = ArloRatls(self._arlo, self, public=public)
+        self._ratls = ArloRatls(self._core, self, public=public)
 
     def keep_ratls_open(self):
         if self._ratls:
@@ -621,7 +616,7 @@ class ArloBase(ArloDevice):
             self._ratls.open_port()
 
     def build_media_library(self):
-        self._ml = ArloBaseStationMediaLibrary(self._arlo, self)
+        self._ml = ArloBaseStationMediaLibrary(self._core, self._objs, self)
         self._ml.load()
 
     @property

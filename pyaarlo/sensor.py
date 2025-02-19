@@ -10,20 +10,21 @@ from .constant import (
     WATER_STATE_KEY,
 )
 from .child_device import ArloChildDevice
+from .core import ArloCore
+from .objects import ArloObjects
 
 
 class ArloSensor(ArloChildDevice):
-    def __init__(self, name, arlo, attrs):
+    def __init__(self, name: str, core: ArloCore, objs: ArloObjects, attrs):
         """An Arlo All-in-One Sensor.
 
         Currently we handle light level, battery, open/close, motion,
         tamper, temperature and water states.
 
         :param name: name of sensor
-        :param arlo: controlling arlo instance
         :param attrs: initial attributes give by Arlo
         """
-        super().__init__(name, arlo, attrs)
+        super().__init__(name, core, objs, attrs)
 
     @property
     def resource_type(self):

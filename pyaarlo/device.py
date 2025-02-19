@@ -1,9 +1,4 @@
-from typing import TYPE_CHECKING
-
 from unidecode import unidecode
-
-if TYPE_CHECKING:
-    from . import PyArlo
 
 from .constant import (
     BATTERY_KEY,
@@ -19,7 +14,9 @@ from .constant import (
     TIMEZONE_KEY,
     XCLOUD_ID_KEY,
 )
+from .core import ArloCore
 from .object import ArloObject
+from .objects import ArloObjects
 
 
 class ArloDevice(ArloObject):
@@ -28,8 +25,9 @@ class ArloDevice(ArloObject):
     Has code to handle providing common attributes and comment event handling.
     """
 
-    def __init__(self, name, arlo: 'PyArlo', attrs):
-        super().__init__(name, arlo._core, attrs,
+    def __init__(self, name: str, core: ArloCore, objs: ArloObjects, attrs):
+        super().__init__(name, core, objs,
+                         attrs=attrs,
                          id=attrs.get("deviceId", "unknown"),
                          type=attrs.get("deviceType", "unknown"),
                          uid=attrs.get("uniqueId", None))

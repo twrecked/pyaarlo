@@ -2,25 +2,27 @@ import ssl
 import json
 import os
 from urllib.request import Request, build_opener, HTTPSHandler
-from .security_utils import SecurityUtils
 
 from .constant import (
     RATLS_CONNECTIVITY_PATH,
     RATLS_TOKEN_GENERATE_PATH,
     CREATE_DEVICE_CERTS_PATH
 )
+from .core import ArloCore
+from .device import ArloDevice
+from .security_utils import SecurityUtils
 
 
 class ArloRatls:
-    def __init__(self, arlo, base, public=False):
+    def __init__(self, core: ArloCore, base: ArloDevice, public=False):
         self._base_connection_details = None
         self._base_station_token = None
-        self._arlo = arlo
+        self._core = core
         self._base = base
         self._public = public
         self._unique_id = base.unique_id
         self._device_id = base.device_id
-        self._security = SecurityUtils(arlo.cfg.storage_dir)
+        self._security = SecurityUtils(core.cfg.storage_dir)
 
         self._check_device_certs()
         self.open_port()
@@ -29,9 +31,9 @@ class ArloRatls:
         """ RATLS port will automatically close after 10 minutes """
         self._base_station_token = self._get_station_token()
 
-        self._arlo.debug(f"Opening port for {self._unique_id}")
+        self.debug(f"Opening port for {self._unique_id}")
 
-        response = self._arlo.be.notify(
+        response = self._core.be.notify(
             self._base,
             {
                 "action": "open",
@@ -67,7 +69,7 @@ class ArloRatls:
                 return response
             return json.loads(response.read())
         except Exception as e:
-            self._arlo.warning("request-error={}".format(type(e).__name__))
+            self._core.log.warning("request-error={}".format(type(e).__name__))
             return None
 
     def _ratls_req_headers(self):
@@ -77,14 +79,14 @@ class ArloRatls:
             "Accept-Language": "en-US,en;q=0.9",
             "Origin": "https://my.arlo.com",
             "SchemaVersion": "1",
-            "User-Agent": self._arlo.be.user_agent(self._arlo.cfg.user_agent)
+            "User-Agent": self._core.be.user_agent(self._core.cfg.user_agent)
         }
 
     def _get_station_token(self):
         """ Tokens expire after 10 minutes """
-        self._arlo.debug(f"Fetching token for {self._device_id}")
+        self.debug(f"Fetching token for {self._device_id}")
 
-        response = self._arlo.be.get(
+        response = self._core.be.get(
             RATLS_TOKEN_GENERATE_PATH + f"/{self._device_id}"
         )
 
@@ -108,10 +110,10 @@ class ArloRatls:
         self._base_client = build_opener(HTTPSHandler(context=self._sslcontext))
 
     def _check_device_certs(self):
-        self._arlo.debug(f"Checking for existing certificates for {self._unique_id}")
+        self.debug(f"Checking for existing certificates for {self._unique_id}")
 
         if not self._security.has_device_certs(self._unique_id):
-            response = self._arlo.be.post(
+            response = self._core.be.post(
                 CREATE_DEVICE_CERTS_PATH,
                 params={
                     "uuid": self._device_id,
@@ -127,7 +129,7 @@ class ArloRatls:
             if not response["success"]:
                 raise Exception(f"Error getting certs: {response['message']} - {response['reason']}")
 
-            self._arlo.debug(f"Saving certificates for {self._unique_id}")
+            self.debug(f"Saving certificates for {self._unique_id}")
 
             self._security.save_device_certs(self._unique_id, response["data"])
 
@@ -161,3 +163,6 @@ class ArloRatls:
     @property
     def publicUrl(self):
         return f"https://{self.publicIp}:{self.port}"
+
+    def debug(self, msg):
+        self._core.log.debug(f"ratls: {msg}")

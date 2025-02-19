@@ -185,7 +185,8 @@ class PyArlo:
 
         # Fill out the object store.
         # The lists are created clear but we need to add in the media library.
-        self._objs.ml = ArloMediaLibrary(self)
+        # XXX remove ml from here?
+        self._objs.ml = ArloMediaLibrary(self._core, self._objs)
 
         # Failed to login, then stop now!
         if not self._core.be.is_connected:
@@ -232,7 +233,7 @@ class PyArlo:
                 or dtype == "arloq"
                 or dtype == "arloqs"
             ):
-                self._objs.bases.append(ArloBase(dname, self, device))
+                self._objs.base_stations.append(ArloBase(dname, self._core, self._objs, device))
 
             # Newer devices can connect directly to wifi and can be its own base station,
             # it can also be assigned to a real base station
@@ -257,7 +258,7 @@ class PyArlo:
             )):
                 parent_id = device.get("parentId", None)
                 if parent_id is None or parent_id == device.get("deviceId", None):
-                    self._objs.bases.append(ArloBase(dname, self, device))
+                    self._objs.base_stations.append(ArloBase(dname, self._core, self._objs, device))
 
             if (
                 dtype == "camera"
@@ -271,13 +272,13 @@ class PyArlo:
                     MODEL_ESSENTIAL_VIDEO_DOORBELL
                 ))
             ):
-                self._objs.cameras.append(ArloCamera(dname, self, device))
+                self._objs.cameras.append(ArloCamera(dname, self._core, self._objs, device))
             if dtype == "doorbell":
-                self._objs.doorbells.append(ArloDoorBell(dname, self, device))
+                self._objs.doorbells.append(ArloDoorBell(dname, self._core, self._objs, device))
             if dtype == "lights":
-                self._objs.lights.append(ArloLight(dname, self, device))
+                self._objs.lights.append(ArloLight(dname, self._core, self._objs, device))
             if dtype == "sensors":
-                self._objs.sensors.append(ArloSensor(dname, self, device))
+                self._objs.sensors.append(ArloSensor(dname, self._core, self._objs, device))
 
         # Save out unchanging stats!
         self._core.st.set(["ARLO", TOTAL_CAMERAS_KEY], len(self._objs.cameras), prefix="aarlo")
@@ -384,9 +385,9 @@ class PyArlo:
             self.warning("No locations returned from " + url)
         else:
             for user_location in location_data.get("userLocations", []):
-                self._objs.locations.append(ArloLocation(self, user_location, True))
+                self._objs.locations.append(ArloLocation(self._core, self._objs, user_location, True))
             for shared_location in location_data.get("sharedLocations", []):
-                self._objs.locations.append(ArloLocation(self, shared_location, False))
+                self._objs.locations.append(ArloLocation(self._core, self._objs, shared_location, False))
 
         self.vdebug("locations={}".format(pprint.pformat(self._objs.locations)))
 
@@ -409,21 +410,21 @@ class PyArlo:
             doorbell.update_silent_mode()
 
     def _ping_bases(self):
-        for base in self._objs.bases:
+        for base in self._objs.base_stations:
             if base.has_capability(PING_CAPABILITY):
                 base.ping()
             else:
                 self.vdebug(f"NO ping to {base.device_id}")
 
     def _refresh_bases(self, initial):
-        for base in self._objs.bases:
+        for base in self._objs.base_stations:
             base.update_modes(initial)
             base.keep_ratls_open()
             base.update_states()
 
     def _refresh_modes(self):
         self.vdebug("refresh modes")
-        for base in self._objs.bases:
+        for base in self._objs.base_stations:
             base.update_modes()
             base.update_mode()
         for location in self._objs.locations:
@@ -579,7 +580,7 @@ class PyArlo:
         :return: a list of base stations.
         :rtype: list(ArloBase)
         """
-        return self._objs.bases
+        return self._objs.base_stations
 
     @property
     def locations(self):

@@ -15,11 +15,13 @@ from .constant import (
     SIREN_STATE_KEY,
 )
 from .child_device import ArloChildDevice
+from .core import ArloCore
+from .objects import ArloObjects
 
 
 class ArloDoorBell(ArloChildDevice):
-    def __init__(self, name, arlo, attrs):
-        super().__init__(name, arlo, attrs)
+    def __init__(self, name: str, core: ArloCore, objs: ArloObjects, attrs):
+        super().__init__(name, core, objs, attrs)
         self._motion_time_job = None
         self._ding_time_job = None
         self._has_motion_detect = False
@@ -56,9 +58,9 @@ class ArloDoorBell(ArloChildDevice):
                 if props.get(CONNECTION_KEY, "") == "available":
                     self._save_and_do_callbacks(MOTION_DETECTED_KEY, True)
                     with self._lock:
-                        self._arlo.bg.cancel(self._motion_time_job)
-                        self._motion_time_job = self._arlo.bg.run_in(
-                            self._motion_stopped, self._arlo.cfg.db_motion_time
+                        self._core.bg.cancel(self._motion_time_job)
+                        self._motion_time_job = self._core.bg.run_in(
+                            self._motion_stopped, self._core.cfg.db_motion_time
                         )
 
             # For button presses we only get a buttonPressed notification, not
@@ -67,9 +69,9 @@ class ArloDoorBell(ArloChildDevice):
             if BUTTON_PRESSED_KEY in props:
                 self._save_and_do_callbacks(BUTTON_PRESSED_KEY, True)
                 with self._lock:
-                    self._arlo.bg.cancel(self._ding_time_job)
-                    self._ding_time_job = self._arlo.bg.run_in(
-                        self._button_unpressed, self._arlo.cfg.db_ding_time
+                    self._core.bg.cancel(self._ding_time_job)
+                    self._ding_time_job = self._core.bg.run_in(
+                        self._button_unpressed, self._core.cfg.db_ding_time
                     )
 
             # Save out chimes
@@ -113,7 +115,7 @@ class ArloDoorBell(ArloChildDevice):
 
         Queues a job that requests the info from Arlo.
         """
-        self._arlo.be.notify(
+        self._core.be.notify(
             base=self.base_station,
             body={
                 "action": "get",
@@ -143,7 +145,7 @@ class ArloDoorBell(ArloChildDevice):
         self.debug(self.name + " silence is " + str(properties))
 
         # Send out request.
-        response = self._arlo.be.notify(
+        response = self._core.be.notify(
             base=self.base_station,
             body={
                 "action": "set",
@@ -156,7 +158,7 @@ class ArloDoorBell(ArloChildDevice):
 
         # Not none means a 200 so we assume it works until told otherwise.
         if response is not None:
-            self._arlo.bg.run(
+            self._core.bg.run(
                 self._save_and_do_callbacks,
                 attr=SILENT_MODE_KEY,
                 value=silence_settings,
@@ -216,7 +218,7 @@ class ArloDoorBell(ArloChildDevice):
                 "pattern": "alarm",
             },
         }
-        self._arlo.be.notify(base=self, body=body)
+        self._core.be.notify(base=self, body=body)
 
     def siren_off(self):
         """Turn camera siren off.
@@ -229,4 +231,4 @@ class ArloDoorBell(ArloChildDevice):
             "publishResponse": True,
             "properties": {"sirenState": "off"},
         }
-        self._arlo.be.notify(base=self, body=body)
+        self._core.be.notify(base=self, body=body)

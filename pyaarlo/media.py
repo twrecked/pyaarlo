@@ -10,13 +10,15 @@ from .constant import (
     RATLS_DOWNLOAD_PATH,
     VIDEO_CONTENT_TYPES
 )
+from .core import ArloCore
+from .objects import ArloObjects
 from .util import arlotime_strftime, arlotime_to_datetime, http_get, http_stream
 
 
 class ArloMediaDownloader(threading.Thread):
-    def __init__(self, arlo, save_format):
+    def __init__(self, core: ArloCore, save_format):
         super().__init__()
-        self._arlo = arlo
+        self._core = core
         self._save_format = save_format
         self._lock = threading.Condition()
         self._queue = []
@@ -63,7 +65,7 @@ class ArloMediaDownloader(threading.Thread):
                 + f".{media.extension}"
             )
         except KeyError as _e:
-            self._arlo.error(f"format error: {self._save_format}")
+            self._core.log.error(f"format error: {self._save_format}")
             return None
 
     def _download(self, media):
@@ -92,7 +94,7 @@ class ArloMediaDownloader(threading.Thread):
                 )
                 return 0
         except OSError as _e:
-            self._arlo.error(f"failed to download: {save_file}")
+            self._core.log.error(f"failed to download: {save_file}")
             return -1
 
     def run(self):
@@ -143,17 +145,19 @@ class ArloMediaDownloader(threading.Thread):
             return len(self._queue) > 0 or self._downloading
 
     def debug(self, msg):
-        self._arlo.debug(f"media-downloader: {msg}")
+        self._core.log.debug(f"media-downloader: {msg}")
 
     def vdebug(self, msg):
-        self._arlo.vdebug(f"media-downloader: {msg}")
+        self._core.log.vdebug(f"media-downloader: {msg}")
 
 
 class ArloMediaLibrary:
     """Arlo Library Media module implementation."""
 
-    def __init__(self, arlo):
-        self._arlo = arlo
+    def __init__(self, core: ArloCore, objs: ArloObjects):
+        self._core = core
+        self._objs = objs
+
         self._lock = threading.Lock()
         self._load_cbs_ = []
         self._count = 0
@@ -162,18 +166,24 @@ class ArloMediaLibrary:
         self._snapshots = {}
         self._base = None
 
-        self._downloader = ArloMediaDownloader(arlo, self._arlo.cfg.save_media_to)
+        self._downloader = ArloMediaDownloader(core, self._core.cfg.save_media_to)
         self._downloader.name = "ArloMediaDownloader"
         self._downloader.daemon = True
         self._downloader.start()
 
     def __repr__(self):
-        return "<{0}:{1}>".format(self.__class__.__name__, self._arlo.cfg.name)
+        return "<{0}:{1}>".format(self.__class__.__name__, self._core.cfg.name)
 
     def _fetch_library(self, date_from, date_to):
-        return self._arlo.be.post(
+        return self._core.be.post(
             LIBRARY_PATH, {"dateFrom": date_from, "dateTo": date_to}
         )
+
+    def _lookup_camera_by_id(self, device_id: str):
+        camera = list(filter(lambda cam: cam.device_id == device_id, self._objs.cameras))
+        if camera:
+            return camera[0]
+        return None
 
     # grab recordings from last day, add to existing library if not there
     def update(self):
@@ -193,7 +203,7 @@ class ArloMediaLibrary:
         for video in data:
 
             # camera, skip if not found
-            camera = self._arlo.lookup_camera_by_id(video.get("deviceId"))
+            camera = self._lookup_camera_by_id(video.get("deviceId"))
             if not camera:
                 continue
 
@@ -202,7 +212,7 @@ class ArloMediaLibrary:
                 if camera.device_id not in snapshots:
                     self.debug(f"adding snapshot for {camera.name}")
                     snapshots[camera.device_id] = ArloSnapshot(
-                        video, camera, self._arlo, camera.base_station
+                        video, camera, camera.base_station
                     )
                 continue
 
@@ -217,7 +227,7 @@ class ArloMediaLibrary:
                     self.vdebug(f"skipping {key} for {camera.name}")
                     continue
                 self.debug(f"adding {key} for {camera.name}")
-                video = ArloVideo(video, camera, self._arlo, self._base)
+                video = ArloVideo(video, camera, self._base)
                 videos.append(video)
                 self._downloader.queue_download(video)
                 keys.append(key)
@@ -239,7 +249,7 @@ class ArloMediaLibrary:
     def load(self):
 
         # set beginning and end
-        days = self._arlo.cfg.library_days
+        days = self._core.cfg.library_days
         now = datetime.today()
         date_from = (now - timedelta(days=days)).strftime("%Y%m%d")
         date_to = now.strftime("%Y%m%d")
@@ -249,7 +259,7 @@ class ArloMediaLibrary:
         data = self._fetch_library(date_from, date_to)
 
         if data is None:
-            self._arlo.warning("error loading the image library")
+            self._core.log.warning("error loading the image library")
             return
 
         videos = []
@@ -258,7 +268,7 @@ class ArloMediaLibrary:
         for video in data:
 
             # Look for camera, skip if not found.
-            camera = self._arlo.lookup_camera_by_id(video.get("deviceId"))
+            camera = self._lookup_camera_by_id(video.get("deviceId"))
             if camera is None:
                 key = "{0}:{1}".format(
                     video.get("deviceId"),
@@ -272,7 +282,7 @@ class ArloMediaLibrary:
                 if camera.device_id not in snapshots:
                     self.debug(f"adding snapshot for {camera.name}")
                     snapshots[camera.device_id] = ArloSnapshot(
-                        video, camera, self._arlo, camera.base_station
+                        video, camera, camera.base_station
                     )
                 continue
 
@@ -284,7 +294,7 @@ class ArloMediaLibrary:
                     arlotime_strftime(video.get("utcCreatedDate")),
                 )
                 self.vdebug(f"adding {key} for {camera.name}")
-                video = ArloVideo(video, camera, self._arlo, self._base)
+                video = ArloVideo(video, camera, self._base)
                 videos.append(video)
                 self._downloader.queue_download(video)
                 keys.append(key)
@@ -324,23 +334,23 @@ class ArloMediaLibrary:
         with self._lock:
             if not self._load_cbs_:
                 self.debug("queueing image library update")
-                self._arlo.bg.run_low_in(self.update, 2)
+                self._core.bg.run_low_in(self.update, 2)
             self._load_cbs_.append(cb)
 
     def stop(self):
         self._downloader.stop()
 
     def debug(self, msg):
-        self._arlo.debug(f"media-library: {msg}")
+        self._core.log.debug(f"media-library: {msg}")
 
     def vdebug(self, msg):
-        self._arlo.vdebug(f"media-library: {msg}")
+        self._core.log.vdebug(f"media-library: {msg}")
 
 
 class ArloBaseStationMediaLibrary(ArloMediaLibrary):
     """Arlo Media Library for Base Stations"""
-    def __init__(self, arlo, base):
-        super().__init__(arlo)
+    def __init__(self, core: ArloCore, objs: ArloObjects, base):
+        super().__init__(core, objs)
         self._base = base
 
     def _fetch_library(self, date_from, date_to):
@@ -348,7 +358,7 @@ class ArloBaseStationMediaLibrary(ArloMediaLibrary):
 
         # Fetch each page individually, since the base station still only return results for one date at a time
         for date in range(int(date_from), int(date_to) + 1):
-            for camera in self._arlo.cameras:
+            for camera in self._objs.cameras:
                 if camera.parent_id == self._base.device_id:
                     # This URL is mysterious -- it won't return multiple days of videos
                     data = self._base.ratls.get(f"{RATLS_LIBRARY_PATH}/{date}/{date}/{camera.device_id}")
@@ -361,9 +371,9 @@ class ArloBaseStationMediaLibrary(ArloMediaLibrary):
 class ArloMediaObject:
     """Object for Arlo Video file."""
 
-    def __init__(self, attrs, camera, arlo, base):
+    def __init__(self, attrs, camera, base):
         """Video Object."""
-        self._arlo = arlo
+        # self._arlo = arlo
         self._attrs = attrs
         self._camera = camera
         self._base = base
@@ -446,9 +456,9 @@ class ArloMediaObject:
 class ArloVideo(ArloMediaObject):
     """Object for Arlo Video file."""
 
-    def __init__(self, attrs, camera, arlo, base):
+    def __init__(self, attrs, camera, base):
         """Video Object."""
-        super().__init__(attrs, camera, arlo, base)
+        super().__init__(attrs, camera, base)
 
     @property
     def media_duration_seconds(self):
@@ -516,9 +526,9 @@ class ArloVideo(ArloMediaObject):
 class ArloSnapshot(ArloMediaObject):
     """Object for Arlo Snapshot file."""
 
-    def __init__(self, attrs, camera, arlo, base):
+    def __init__(self, attrs, camera, base):
         """Snapshot Object."""
-        super().__init__(attrs, camera, arlo, base)
+        super().__init__(attrs, camera, base)
 
     @property
     def image_url(self):
