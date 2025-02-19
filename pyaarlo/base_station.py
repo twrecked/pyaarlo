@@ -46,7 +46,7 @@ from .util import time_to_arlotime
 day_of_week = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su", "Mo"]
 
 
-class ArloBase(ArloDevice):
+class ArloBaseStation(ArloDevice):
     def __init__(self, name: str, core: ArloCore, objs: ArloObjects, attrs):
         super().__init__(name, core, objs, attrs)
         self._ml = None

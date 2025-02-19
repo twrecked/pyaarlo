@@ -7,7 +7,7 @@ import time
 
 from .backend import ArloBackEnd
 from .background import ArloBackground
-from .base import ArloBase
+from .base_station import ArloBaseStation
 from .camera import ArloCamera
 from .cfg import ArloCfg
 from .constant import (
@@ -233,7 +233,7 @@ class PyArlo:
                 or dtype == "arloq"
                 or dtype == "arloqs"
             ):
-                self._objs.base_stations.append(ArloBase(dname, self._core, self._objs, device))
+                self._objs.base_stations.append(ArloBaseStation(dname, self._core, self._objs, device))
 
             # Newer devices can connect directly to wifi and can be its own base station,
             # it can also be assigned to a real base station
@@ -258,7 +258,7 @@ class PyArlo:
             )):
                 parent_id = device.get("parentId", None)
                 if parent_id is None or parent_id == device.get("deviceId", None):
-                    self._objs.base_stations.append(ArloBase(dname, self._core, self._objs, device))
+                    self._objs.base_stations.append(ArloBaseStation(dname, self._core, self._objs, device))
 
             if (
                 dtype == "camera"
