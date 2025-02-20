@@ -29,6 +29,8 @@ from .constant import (
     MODEL_WIRED_VIDEO_DOORBELL_GEN2_2K,
     MODEL_WIRED_VIDEO_DOORBELL_GEN2_HD,
     PING_CAPABILITY,
+    RATLS_DOWNLOAD_PATH,
+    RATLS_LIBRARY_PATH,
     RESOURCE_CAPABILITY,
     RESTART_PATH,
     SCHEDULE_KEY,
@@ -38,7 +40,7 @@ from .constant import (
 )
 from .core import ArloCore
 from .device import ArloDevice
-from .media import ArloBaseStationMediaLibrary
+from .media import ArloMediaLibrary, ArloVideo
 from .objects import ArloObjects
 from .ratls import ArloRatls
 from .util import time_to_arlotime
@@ -626,3 +628,78 @@ class ArloBaseStation(ArloDevice):
     @property
     def ratls(self):
         return self._ratls
+
+
+class ArloBaseStationVideo(ArloVideo):
+    """A video directly from the base station.
+    """
+
+    _base: ArloBaseStation
+
+    def __init__(self, attrs, camera, base: ArloBaseStation):
+        super().__init__(attrs, camera)
+
+        self._base = base
+
+    def download_video(self, filename=None):
+
+        video_url = f"{RATLS_DOWNLOAD_PATH}/{self.video_url}"
+        response = self._base.ratls.get(video_url, raw=True)
+        if response is None:
+            return False
+
+        with open(filename, "wb") as data:
+            data.write(response.read())
+        return True
+
+    @property
+    def created_at(self):
+        """Returns date video was creaed, adjusted to ms"""
+        timestamp = super().created_at
+        if timestamp:
+            return timestamp * 1000
+        return None
+
+    @property
+    def stream_video(self):
+        response = self._base.ratls.get(f"{RATLS_DOWNLOAD_PATH}/{self.video_url}", raw=True)
+        response.raise_for_status()
+        for data in response.iter_content(4096):
+            yield data
+
+
+class ArloBaseStationMediaLibrary(ArloMediaLibrary):
+    """Arlo Media Library for Base Stations
+    """
+
+    _base: ArloBaseStation
+
+    def __init__(self, core: ArloCore, objs: ArloObjects, base: ArloBaseStation):
+        super().__init__(core, objs)
+
+        self._base = base
+
+    def _fetch_library(self, date_from, date_to):
+        """Fetch the library from the device.
+        """
+        list = []
+
+        # Fetch each page individually, since the base station still only return results for one date at a time
+        for date in range(int(date_from), int(date_to) + 1):
+            for camera in self._objs.cameras:
+                if camera.parent_id == self._base.device_id:
+                    # This URL is mysterious -- it won't return multiple days of videos
+                    data = self._base.ratls.get(f"{RATLS_LIBRARY_PATH}/{date}/{date}/{camera.device_id}")
+                    if data and "data" in data:
+                        list += data["data"]
+
+        return list
+
+    def _create_video(self, video, camera):
+        """Build the video object.
+
+        Add base device to the video.
+        """
+        return ArloBaseStationVideo(video, camera, self._base)
+
+

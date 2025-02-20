@@ -6,8 +6,6 @@ from slugify import slugify
 
 from .constant import (
     LIBRARY_PATH,
-    RATLS_LIBRARY_PATH,
-    RATLS_DOWNLOAD_PATH,
     VIDEO_CONTENT_TYPES
 )
 from .core import ArloCore
@@ -164,7 +162,6 @@ class ArloMediaLibrary:
         self._videos = []
         self._video_keys = []
         self._snapshots = {}
-        self._base = None
 
         self._downloader = ArloMediaDownloader(core, self._core.cfg.save_media_to)
         self._downloader.name = "ArloMediaDownloader"
@@ -175,9 +172,27 @@ class ArloMediaLibrary:
         return "<{0}:{1}>".format(self.__class__.__name__, self._core.cfg.name)
 
     def _fetch_library(self, date_from, date_to):
+        """Get the library.
+
+        Override as needed.
+        """
         return self._core.be.post(
             LIBRARY_PATH, {"dateFrom": date_from, "dateTo": date_to}
         )
+
+    def _create_video(self, video, camera):
+        """Build the video object.
+
+        Override as needed.
+        """
+        return ArloVideo(video, camera)
+
+    def _create_snapshot(self, video, camera):
+        """Build the snapshot object.
+
+        Override as needed.
+        """
+        return ArloSnapshot(video, camera)
 
     def _lookup_camera_by_id(self, device_id: str):
         camera = list(filter(lambda cam: cam.device_id == device_id, self._objs.cameras))
@@ -186,6 +201,7 @@ class ArloMediaLibrary:
         return None
 
     # grab recordings from last day, add to existing library if not there
+    # XXX can this and load be updated?
     def update(self):
         self.debug("updating image library")
 
@@ -211,8 +227,8 @@ class ArloMediaLibrary:
             if video.get("reason", "") == "snapshot":
                 if camera.device_id not in snapshots:
                     self.debug(f"adding snapshot for {camera.name}")
-                    snapshots[camera.device_id] = ArloSnapshot(
-                        video, camera, camera.base_station
+                    snapshots[camera.device_id] = self._create_snapshot(
+                        video, camera
                     )
                 continue
 
@@ -227,7 +243,7 @@ class ArloMediaLibrary:
                     self.vdebug(f"skipping {key} for {camera.name}")
                     continue
                 self.debug(f"adding {key} for {camera.name}")
-                video = ArloVideo(video, camera, self._base)
+                video = self._create_video(video, camera,)
                 videos.append(video)
                 self._downloader.queue_download(video)
                 keys.append(key)
@@ -281,8 +297,8 @@ class ArloMediaLibrary:
             if video.get("reason", "") == "snapshot":
                 if camera.device_id not in snapshots:
                     self.debug(f"adding snapshot for {camera.name}")
-                    snapshots[camera.device_id] = ArloSnapshot(
-                        video, camera, camera.base_station
+                    snapshots[camera.device_id] = self._create_snapshot(
+                        video, camera
                     )
                 continue
 
@@ -294,7 +310,7 @@ class ArloMediaLibrary:
                     arlotime_strftime(video.get("utcCreatedDate")),
                 )
                 self.vdebug(f"adding {key} for {camera.name}")
-                video = ArloVideo(video, camera, self._base)
+                video = self._create_video(video, camera)
                 videos.append(video)
                 self._downloader.queue_download(video)
                 keys.append(key)
@@ -347,36 +363,14 @@ class ArloMediaLibrary:
         self._core.log.vdebug(f"media-library: {msg}")
 
 
-class ArloBaseStationMediaLibrary(ArloMediaLibrary):
-    """Arlo Media Library for Base Stations"""
-    def __init__(self, core: ArloCore, objs: ArloObjects, base):
-        super().__init__(core, objs)
-        self._base = base
-
-    def _fetch_library(self, date_from, date_to):
-        list = []
-
-        # Fetch each page individually, since the base station still only return results for one date at a time
-        for date in range(int(date_from), int(date_to) + 1):
-            for camera in self._objs.cameras:
-                if camera.parent_id == self._base.device_id:
-                    # This URL is mysterious -- it won't return multiple days of videos
-                    data = self._base.ratls.get(f"{RATLS_LIBRARY_PATH}/{date}/{date}/{camera.device_id}")
-                    if data and "data" in data:
-                        list += data["data"]
-
-        return list
-
-
 class ArloMediaObject:
     """Object for Arlo Video file."""
 
-    def __init__(self, attrs, camera, base):
+    def __init__(self, attrs, camera):
         """Video Object."""
         # self._arlo = arlo
         self._attrs = attrs
         self._camera = camera
-        self._base = base
 
     def __repr__(self):
         """Representation string of object."""
@@ -456,9 +450,9 @@ class ArloMediaObject:
 class ArloVideo(ArloMediaObject):
     """Object for Arlo Video file."""
 
-    def __init__(self, attrs, camera, base):
+    def __init__(self, attrs, camera):
         """Video Object."""
-        super().__init__(attrs, camera, base)
+        super().__init__(attrs, camera)
 
     @property
     def media_duration_seconds(self):
@@ -484,51 +478,19 @@ class ArloVideo(ArloMediaObject):
         return self._attrs.get("presignedContentUrl", None)
 
     def download_video(self, filename=None):
-        video_url = self.video_url
-
-        if self._base:
-            video_url = f"{RATLS_DOWNLOAD_PATH}/{video_url}"
-
-            response = self._base.ratls.get(video_url, raw=True)
-
-            if response is None:
-                return False
-
-            with open(filename, "wb") as data:
-                data.write(response.read())
-
-            return True
-        else:
-
-            return http_get(video_url, filename)
-
-    @property
-    def created_at(self):
-        """Returns date video was creaed, adjusted to ms"""
-        timestamp = super().created_at
-        if self._base:
-            if timestamp:
-                return timestamp * 1000
-            return None
-        return timestamp
+        return http_get(self.video_url, filename)
 
     @property
     def stream_video(self):
-        if self._base:
-            response = self._base.ratls.get(f"{RATLS_DOWNLOAD_PATH}/{self.video_url}", raw=True)
-            response.raise_for_status()
-            for data in response.iter_content(4096):
-                yield data
-        else:
-            http_stream(self.video_url)
+        return http_stream(self.video_url)
 
 
 class ArloSnapshot(ArloMediaObject):
     """Object for Arlo Snapshot file."""
 
-    def __init__(self, attrs, camera, base):
+    def __init__(self, attrs, camera):
         """Snapshot Object."""
-        super().__init__(attrs, camera, base)
+        super().__init__(attrs, camera)
 
     @property
     def image_url(self):
