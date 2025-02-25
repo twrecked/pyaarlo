@@ -1282,6 +1282,12 @@ class ArloBackEnd:
         """Perform all the steps to authenticate against the Arlo servers.
         """
 
+        # Restart. We might be able to miss out the login stage and just try
+        # for a factor-id.
+        if self._auth.state != AuthState.STARTING:
+            self._auth.state = AuthState.STARTING
+            self.debug("auth: restarting")
+
         while self._auth.state != AuthState.SUCCESS and self._auth.state != AuthState.FAILED:            
             if self._auth.state == AuthState.STARTING:
                 self._auth.state = self._auth_starting()
