@@ -346,7 +346,7 @@ class ArloCamera(ArloChildDevice):
 
         headers = {"xcloudId": self.xcloud_id}
         if user_agent is not None:
-            headers["User-Agent"] = self._core.be.user_agent(user_agent)
+            headers["User-Agent"] = self._core.cfg.user_agent_string(user_agent)
 
         self._stream_url = self._core.be.post(STREAM_START_PATH, body, headers=headers)
         if self._stream_url is not None:
@@ -391,7 +391,7 @@ class ArloCamera(ArloChildDevice):
 
         headers = {"xcloudId": self.xcloud_id}
         if user_agent is not None:
-            headers["User-Agent"] = self._core.be.user_agent(user_agent)
+            headers["User-Agent"] = self._core.cfg.user_agent_string(user_agent)
 
         self._stream_url = self._core.be.post(STREAM_START_PATH, body, headers=headers)
         if self._stream_url is not None:

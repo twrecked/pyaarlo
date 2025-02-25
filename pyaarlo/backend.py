@@ -42,7 +42,6 @@ from .constant import (
     TFA_IMAP_SOURCE,
     TFA_REST_API_SOURCE,
     TRANSID_PREFIX,
-    USER_AGENTS,
 )
 from .background import ArloBackground
 from .cfg import ArloCfg
@@ -91,6 +90,7 @@ class RequestDetails:
     token: str | None = None
     token64: str | None = None
     token_expires_in: int | None = None
+    user_agent: str | None = None
 
     # Internal state/fields for the object.
     _save_lock = threading.Lock()
@@ -293,7 +293,7 @@ class ArloBackEnd:
             # "Sec-Fetch-Dest": "empty",
             # "Sec-Fetch-Mode": "cors",
             # "Sec-Fetch-Site": "same-site",
-            "User-Agent": self._user_agent,
+            "User-Agent": self._req.user_agent,
             "X-Service-Version": "3",
             "X-User-Device-Automation-Name": "QlJPV1NFUg==",
             "X-User-Device-Id": self._req.device_id,
@@ -339,7 +339,7 @@ class ArloBackEnd:
             # "Sec-Fetch-Dest": "empty",
             # "Sec-Fetch-Mode": "cors",
             # "Sec-Fetch-Site": "same-site",
-            "User-Agent": self._user_agent,
+            "User-Agent": self._req.user_agent,
         }
 
     def _request_tuple(
@@ -1271,7 +1271,8 @@ class ArloBackEnd:
         self.debug("auth: starting")
 
         self._load_cookies()
-        self._user_agent = self.user_agent(self._cfg.user_agent)
+        self._req.user_agent = self._cfg.user_agent_string()
+        # self._req.user_agent = self.user_agent(self._cfg.user_agent)
         self._connection = None
         self._auth.factor_id = None
         self._auth.needs_pairing = True
@@ -1622,26 +1623,6 @@ class ArloBackEnd:
 
     def devices(self):
         return self.get(DEVICES_PATH + "?t={}".format(time_to_arlotime()))
-
-    def user_agent(self, agent):
-        """Map `agent` to a real user agent.
-
-        User provides a default user agent they want for most interactions but it can be overridden
-        for stream operations.
-
-        `!real-string` will use the provided string as-is, used when passing user agent
-        from a browser.
-
-        `random` will provide a different user agent for each log in attempt.
-        """
-        if agent.startswith("!"):
-            self.debug(f"using user supplied user_agent {agent[:70]}")
-            return agent[1:]
-        agent = agent.lower()
-        self.debug(f"looking for user_agent {agent}")
-        if agent == "random":
-            return self.user_agent(random.choice(list(USER_AGENTS.keys())))
-        return USER_AGENTS.get(agent, USER_AGENTS["linux"])
 
     def ev_inject(self, response):
         self._event_dispatcher(response)

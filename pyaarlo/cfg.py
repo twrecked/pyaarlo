@@ -4,6 +4,7 @@ import platform
 import tempfile
 import os
 import re
+import random
 
 from typing import Any
 from urllib.parse import urlparse
@@ -13,6 +14,7 @@ from .constant import (
     DEFAULT_AUTH_HOST,
     DEFAULT_HOST,
     DEFAULT_MQTT_PORT,
+    ECDH_CURVES,
     MQTT_HOST,
     PRELOAD_DAYS,
     TFA_CONSOLE_SOURCE,
@@ -20,7 +22,7 @@ from .constant import (
     TFA_DELAY,
     TFA_EMAIL_TYPE,
     TFA_RETRIES,
-    ECDH_CURVES
+    USER_AGENTS,
 )
 
 
@@ -44,7 +46,7 @@ class ArloCfg:
         """
         self._log = log
         self._kw = kwargs
-        self._log.debug("config: loaded")
+        self._debug("loaded")
 
         # Determine storage location, this is platform specific.
         strplatform = platform.system()
@@ -72,6 +74,9 @@ class ArloCfg:
 
     def _user_storage_file(self, suffix: str) -> str:
         return f"{self.storage_dir}/{self._email_to_dir(self.username)}.{suffix}"
+
+    def _debug(self, msg):
+        self._log.debug(f"cfg: {msg}")
 
     @property
     def storage_dir(self):
@@ -174,6 +179,27 @@ class ArloCfg:
     @property
     def user_agent(self):
         return self._kw.get("user_agent", "arlo")
+
+    def user_agent_string(self, agent=None):
+        """Map `agent` to a user agent string.
+
+        `!real-string` will use the provided string as-is, used when passing user agent
+        from a browser.
+
+        `random` will provide a different user agent for each log in attempt.
+
+        Passing in no agent will return the configured one.
+        """
+        if agent is None:
+            agent = self.user_agent
+        if agent.startswith("!"):
+            self._debug(f"using user supplied user_agent {agent[:70]}")
+            return agent[1:]
+        agent = agent.lower()
+        self._debug(f"looking for user_agent {agent}")
+        if agent == "random":
+            return self.user_agent_string(random.choice(list(USER_AGENTS.keys())))
+        return USER_AGENTS.get(agent, USER_AGENTS["linux"])
 
     @property
     def mode_api(self):
@@ -343,3 +369,4 @@ class ArloCfg:
     @property
     def send_source(self):
         return self._kw.get("send_source", False)
+

@@ -79,7 +79,7 @@ class ArloRatls:
             "Accept-Language": "en-US,en;q=0.9",
             "Origin": "https://my.arlo.com",
             "SchemaVersion": "1",
-            "User-Agent": self._core.be.user_agent(self._core.cfg.user_agent)
+            "User-Agent": self._core.cfg.user_agent_string()
         }
 
     def _get_station_token(self):
