@@ -152,6 +152,9 @@ class ArloMediaDownloader(threading.Thread):
 class ArloMediaLibrary:
     """Arlo Library Media module implementation."""
 
+    _code: ArloCore
+    _objs: ArloObjects
+
     def __init__(self, core: ArloCore, objs: ArloObjects):
         self._core = core
         self._objs = objs
@@ -200,27 +203,31 @@ class ArloMediaLibrary:
             return camera[0]
         return None
 
-    # grab recordings from last day, add to existing library if not there
-    # XXX can this and load be updated?
-    def update(self):
-        self.debug("updating image library")
+    def _sync_library(self, date_from, date_to, keys):
+        """Read library between dates given, add videos not present.
 
-        # grab today's images
-        date_to = datetime.today().strftime("%Y%m%d")
-        data = self._fetch_library(date_to, date_to)
+        Passing an empty keys will cause all video information in the given
+        date range to be recorded.
+        """
 
-        # get current videos
-        with self._lock:
-            keys = self._video_keys
+        # Fetch video metadata.
+        data = self._fetch_library(date_from, date_to)
+        if data is None:
+            self._core.log.warning("error loading the image library")
+            return None, None, None
 
-        # add in new images
         videos = []
         snapshots = {}
         for video in data:
 
-            # camera, skip if not found
+            # Look for camera, skip if not found.
             camera = self._lookup_camera_by_id(video.get("deviceId"))
-            if not camera:
+            if camera is None:
+                key = "{0}:{1}".format(
+                    video.get("deviceId"),
+                    arlotime_strftime(video.get("utcCreatedDate")),
+                )
+                self.vdebug("skipping {0}".format(key))
                 continue
 
             # snapshots, use first found
@@ -248,13 +255,30 @@ class ArloMediaLibrary:
                 self._downloader.queue_download(video)
                 keys.append(key)
 
-        # note changes and run callbacks
+        return videos, snapshots, keys
+
+    # grab recordings from last day, add to existing library if not there
+    def update(self):
+        self.debug("updating image library")
+
+        # Get known videos.
+        with self._lock:
+            keys = self._video_keys
+
+        # Get today's new videos.
+        date_to = datetime.today().strftime("%Y%m%d")
+        videos, snapshots, keys = self._sync_library(date_to, date_to, keys)
+        if videos is None:
+            self._core.log.warning("error updating the image library")
+            return
+
+        # Append the new videos.
         with self._lock:
             self._count += 1
             self._videos = videos + self._videos
             self._video_keys = keys
             self._snapshots = snapshots
-            self.debug("update-count=" + str(self._count))
+            self.debug(f"update-count={self._count}, video-count={len(videos)}, snapshot-count={len(snapshots)}")
             cbs = self._load_cbs_
             self._load_cbs_ = []
 
@@ -269,60 +293,21 @@ class ArloMediaLibrary:
         now = datetime.today()
         date_from = (now - timedelta(days=days)).strftime("%Y%m%d")
         date_to = now.strftime("%Y%m%d")
-        self.debug("loading image library ({} days)".format(days))
+        self.debug(f"loading image library ({days} days)")
 
         # save videos for cameras we know about
-        data = self._fetch_library(date_from, date_to)
-
-        if data is None:
+        videos, snapshots, keys = self._sync_library(date_from, date_to, [])
+        if videos is None:
             self._core.log.warning("error loading the image library")
             return
 
-        videos = []
-        keys = []
-        snapshots = {}
-        for video in data:
-
-            # Look for camera, skip if not found.
-            camera = self._lookup_camera_by_id(video.get("deviceId"))
-            if camera is None:
-                key = "{0}:{1}".format(
-                    video.get("deviceId"),
-                    arlotime_strftime(video.get("utcCreatedDate")),
-                )
-                self.vdebug("skipping {0}".format(key))
-                continue
-
-            # snapshots, use first found
-            if video.get("reason", "") == "snapshot":
-                if camera.device_id not in snapshots:
-                    self.debug(f"adding snapshot for {camera.name}")
-                    snapshots[camera.device_id] = self._create_snapshot(
-                        video, camera
-                    )
-                continue
-
-            # videos, add all
-            content_type = video.get("contentType", "")
-            if content_type.startswith("video/") or content_type in VIDEO_CONTENT_TYPES:
-                key = "{0}:{1}".format(
-                    video.get("deviceId"),
-                    arlotime_strftime(video.get("utcCreatedDate")),
-                )
-                self.vdebug(f"adding {key} for {camera.name}")
-                video = self._create_video(video, camera)
-                videos.append(video)
-                self._downloader.queue_download(video)
-                keys.append(key)
-                continue
-
-        # set update count, load() never runs callbacks
+        # Set the initial library values.
         with self._lock:
             self._count += 1
             self._videos = videos
             self._video_keys = keys
             self._snapshots = snapshots
-            self.debug("load-count=" + str(self._count))
+            self.debug(f"load-count={self._count}, video-count={len(videos)}, snapshot-count={len(snapshots)}")
 
     def snapshot_for(self, camera):
         with self._lock:
