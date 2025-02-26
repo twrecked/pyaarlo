@@ -608,6 +608,25 @@ class ArloBackEnd:
         self._req.details.web_id = self._req.details.user_id + "_web"
         self._req.details.sub_id = "subscriptions/" + self._req.details.web_id
 
+    def _auth_post(self, path, params=None, headers=None, raw=False, timeout=None, cookies=None):
+        return self._req.request_tuple(
+            path, "POST", params, headers, False, raw, timeout, self._cfg.auth_host, authpost=True, cookies=cookies
+        )
+
+    def _auth_get(
+            self, path, params=None, headers=None, stream=False, raw=False, timeout=None, cookies=None
+    ):
+        return self._req.request(
+            path, "GET", params, headers, stream, raw, timeout, self._cfg.auth_host, authpost=True, cookies=cookies
+        )
+
+    def _auth_options(
+            self, path, headers=None, timeout=None
+    ):
+        return self._req.request(
+            path, "OPTIONS", None, headers, False, False, timeout, self._cfg.auth_host, authpost=True
+        )
+
     def _auth_find_factor_id(self) -> str | None:
         """Get list of suitable 2fa options.
 
@@ -617,7 +636,7 @@ class ArloBackEnd:
         self.debug("auth: finding factor id")
 
         # Get a list of factors to use.
-        factors = self.auth_get(
+        factors = self._auth_get(
             f"{AUTH_GET_FACTORS}?data = {int(time.time())}", {
             },
             self._auth.headers
@@ -665,7 +684,7 @@ class ArloBackEnd:
             return AuthState.SUCCESS
 
         # Start the pairing.
-        code, body = self.auth_post(
+        code, body = self._auth_post(
             AUTH_START_PAIRING, {
                 "factorAuthCode": self._auth.browser_code,
                 "factorData": "",
@@ -691,7 +710,7 @@ class ArloBackEnd:
         # Update the token in the header to the new token.
         self._auth.headers["Authorization"] = self._req.details.token64
 
-        validated = self.auth_get(
+        validated = self._auth_get(
             f"{AUTH_VALIDATE_PATH}?data = {int(time.time())}", {
             },
             self._auth.headers
@@ -728,8 +747,8 @@ class ArloBackEnd:
         self._tfa_start()
         
         # Start authentication to send out code. Stop if this fails.
-        self.auth_options(AUTH_START_PATH, self._auth.headers)
-        code, body = self.auth_post(
+        self._auth_options(AUTH_START_PATH, self._auth.headers)
+        code, body = self._auth_post(
             AUTH_START_PATH, {
                 "factorId": self._auth.factor_id,
                 "factorType": self._auth.factor_type,
@@ -767,7 +786,7 @@ class ArloBackEnd:
         while True:
             # finish authentication
             self.debug(f"finishing auth attempt #{tries}")
-            code, body = self.auth_post(
+            code, body = self._auth_post(
                 AUTH_FINISH_PATH,
                 payload,
                 self._auth.headers
@@ -805,8 +824,8 @@ class ArloBackEnd:
         """
         self.debug("auth: start trusted auth")
 
-        self.auth_options(AUTH_START_PATH, self._auth.headers)
-        code, body = self.auth_post(
+        self._auth_options(AUTH_START_PATH, self._auth.headers)
+        code, body = self._auth_post(
             AUTH_START_PATH, {
                 "factorId": self._auth.factor_id,
                 "factorType": "BROWSER",
@@ -843,8 +862,8 @@ class ArloBackEnd:
 
         # Retrieve current factor ID. If we have previously trusted this
         # "browser" we will be able to skip the 2fa section.
-        self.auth_options(AUTH_GET_FACTORID, self._auth.headers)
-        code, body = self.auth_post(
+        self._auth_options(AUTH_GET_FACTORID, self._auth.headers)
+        code, body = self._auth_post(
             AUTH_GET_FACTORID, {
                 "factorType": "BROWSER",
                 "factorData": "",
@@ -900,8 +919,8 @@ class ArloBackEnd:
                 self._auth.headers = self._req.auth_headers()
 
                 # Attempt the auth.
-                self.auth_options(AUTH_PATH, self._auth.headers)
-                code, body = self.auth_post(
+                self._auth_options(AUTH_PATH, self._auth.headers)
+                code, body = self._auth_post(
                     AUTH_PATH, {
                         "email": self._cfg.username,
                         "password": to_b64(self._cfg.password),
@@ -1241,25 +1260,6 @@ class ArloBackEnd:
             self._bg.run(
                 self._req.request, path=path, method="POST", params=params, headers=headers, stream=False, raw=raw, timeout=timeout
             )
-
-    def auth_post(self, path, params=None, headers=None, raw=False, timeout=None, cookies=None):
-        return self._req.request_tuple(
-            path, "POST", params, headers, False, raw, timeout, self._cfg.auth_host, authpost=True, cookies=cookies
-        )
-
-    def auth_get(
-        self, path, params=None, headers=None, stream=False, raw=False, timeout=None, cookies=None
-    ):
-        return self._req.request(
-            path, "GET", params, headers, stream, raw, timeout, self._cfg.auth_host, authpost=True, cookies=cookies
-        )
-
-    def auth_options(
-        self, path, headers=None, timeout=None
-     ):
-        return self._req.request(
-            path, "OPTIONS", None, headers, False, False, timeout, self._cfg.auth_host, authpost=True
-        )
 
     @property
     def session(self):
