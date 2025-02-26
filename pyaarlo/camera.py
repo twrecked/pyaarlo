@@ -82,10 +82,10 @@ from .constant import (
     STREAM_START_PATH,
     TEMPERATURE_KEY,
 )
-from .child_device import ArloChildDevice
 from .core import ArloCore
+from .child_device import ArloChildDevice
 from .objects import ArloObjects
-from .util import http_get, http_get_img, the_epoch
+from .utils import http_get, http_get_img, the_epoch
 
 
 class ArloCamera(ArloChildDevice):

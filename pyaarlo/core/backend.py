@@ -19,7 +19,7 @@ import requests
 import requests.adapters
 
 
-from .constant import (
+from ..constant import (
     AUTH_FINISH_PATH,
     AUTH_GET_FACTORID,
     AUTH_GET_FACTORS,
@@ -43,12 +43,13 @@ from .constant import (
     TFA_REST_API_SOURCE,
     TRANSID_PREFIX,
 )
+from ..utils import now_strftime, time_to_arlotime, to_b64
 from .background import ArloBackground
 from .cfg import ArloCfg
 from .logger import ArloLogger
+from .session import ArloSession
 from .sseclient import SSEClient
 from .tfa import Arlo2FAConsole, Arlo2FAImap, Arlo2FARestAPI, Arlo2FAPush
-from .util import now_strftime, time_to_arlotime, to_b64
 
 
 class AuthState(IntEnum):
@@ -77,115 +78,6 @@ class AuthDetails:
     tfa_handler: Arlo2FAConsole | Arlo2FAPush | Arlo2FAImap | Arlo2FARestAPI | None = None
 
 
-class RequestDetails:
-    """This holds the information we need to provide in get/post requests.
-
-    It is built up during the authentication phase and remains constistent
-    during the non-authetication phase.
-    """
-    device_id: str | None = None
-    user_id: str | None = None
-    web_id: str | None = None
-    sub_id: str | None = None
-    token: str | None = None
-    token64: str | None = None
-    token_expires_in: int | None = None
-    user_agent: str | None = None
-
-    # Internal state/fields for the object.
-    _save_lock = threading.Lock()
-    _save_info: dict[str, {str, str}] | None = {}
-    _save_enabled: bool = True
-    _save_filename: str | None = None
-    _save_username: str | None = None
-    
-    # External objects.
-    _log: ArloLogger | None = None
-
-    def __init__(self, cfg: ArloCfg, log: ArloLogger):
-        self._save_enabled = cfg.save_session
-        self._save_filename = cfg.session_file
-        self._save_username = cfg.username
-        self._log = log
-
-    def load(self):
-
-        # Clear out what we have.
-        self.device_id = None
-        self.user_id = None
-        self.web_id = None
-        self.sub_id = None
-        self.token = None
-        self.token_expires_in = 0
-
-        try:
-            with RequestDetails._save_lock:
-                with open(self._save_filename, "rb") as dump:
-                    RequestDetails._save_info = pickle.load(dump)
-                    session_info: dict[str, {str, str}] | None = RequestDetails._save_info.get(self._save_username, None)
-                    if session_info is not None:
-                        self.device_id = session_info["device_id"]
-                        self.user_id = session_info["user_id"]
-                        self.web_id = session_info["web_id"]
-                        self.sub_id = session_info["sub_id"]
-                        self.token = session_info["token"]
-                        self.token_expires_in = int(session_info["expires_in"])
-                        self.debug(f"load session_info={RequestDetails._save_info}")
-                    else:
-                        self.debug("load failed")
-        except Exception:
-            self.debug("session file not read")
-            RequestDetails._save_info = {
-                "version": "2",
-            }
-
-    def save(self):
-        try:
-            with RequestDetails._save_lock:
-                with open(self._save_filename, "wb") as dump:
-                    RequestDetails._save_info[self._save_username] = {
-                        "device_id": self.device_id,
-                        "user_id": self.user_id,
-                        "web_id": self.web_id,
-                        "sub_id": self.sub_id,
-                        "token": self.token,
-                        "expires_in": str(self.token_expires_in),
-                    }
-                    pickle.dump(RequestDetails._save_info, dump)
-                    self.debug(f"save session_info={RequestDetails._save_info}")
-        except Exception as e:
-            self.debug(f"session file not written {str(e)}")
-
-    def update(self, body):
-        """Update session details from the packet body passed.
-
-        What we grab is:
-         - token
-         - our usedID
-         - when the token expires
-
-        What we create is:
-         - token converted to base64
-         - our web id
-         - our subscription id
-        """
-
-        # If we have this we have to drop down a level.
-        if "accessToken" in body:
-            body = body["accessToken"]
-
-        self.token = body["token"]
-        self.user_id = body["userId"]
-        self.token_expires_in = body["expiresIn"]
-
-        self.token64 = to_b64(self.token)
-        self.web_id = self.user_id + "_web"
-        self.sub_id = "subscriptions/" + self.web_id
-
-    def debug(self, msg: str):
-        self._log.debug(f"request: {msg}")
-
-
 # include token and session details
 class ArloBackEnd:
 
@@ -198,14 +90,14 @@ class ArloBackEnd:
     _use_mqtt: bool = False
 
     # This holds the request state.
-    _req: RequestDetails | None = None
+    _req: ArloSession | None = None
 
     # This holds the auth details and state.
     _auth: AuthDetails = AuthDetails()
 
     # This is how we talk to the backend. It is used in both authentication and
     # post-authentication phases.
-    _connection: cloudscraper.CloudScraper | None = None
+    # _connection: cloudscraper.CloudScraper | None = None
 
     def __init__(self, cfg: ArloCfg, log: ArloLogger, bg: ArloBackground):
 
@@ -230,236 +122,19 @@ class ArloBackEnd:
         self._stop_thread = False
 
         # Create state..
-        self._req = RequestDetails(cfg, log)
+        self._req = ArloSession(cfg, log)
 
         # Restore the persistent session information.
         self._req.load()
-        if self._req.device_id is None:
+        if self._req.details.device_id is None:
             self.debug("created new user ID")
-            self._req.device_id = str(uuid.uuid4())
+            self._req.details.device_id = str(uuid.uuid4())
 
         # Start the login
         self._logged_in = self._login() and self._session_finalize()
         if not self._logged_in:
             self.debug("failed to log in")
         return
-
-    def _save_cookies(self, requests_cookiejar):
-        if self._cookies is not None:
-            self.debug(f"saving-cookies={self._cookies}")
-            self._cookies.save(ignore_discard=True)
-
-    def _load_cookies(self):
-        self._cookies = LWPCookieJar(self._cfg.cookies_file)
-        try:
-            self._cookies.load()
-        except:
-            pass
-        self.debug(f"loading cookies={self._cookies}")
-
-    def _transaction_id(self):
-        return 'FE!' + str(uuid.uuid4())
-
-    def _build_url(self, url, tid):
-        sep = "&" if "?" in url else "?"
-        now = time_to_arlotime()
-        return f"{url}{sep}eventId={tid}&time={now}"
-
-    def _build_auth_headers(self):
-        """Build headers needed for authentication phase.
-
-        This list was determined by packet inspection when logging onto the
-        my.arlo.com website. We need to keep it as close as possible. The
-        commented out code is still being passed by the web browser we just
-        don't seem to need it, I left it in to make adding it back easier.
-
-        Note, we add and update an 'Authentication' field as the login process
-        progresses.
-        """
-        headers = {
-            "Accept": "application/json, text/plain, */*",
-            "Accept-Encoding": "gzip, deflate, br, zstd",
-            "Accept-Language": "en-GB,en;q=0.9,en-US;q=0.8",
-            "Cache-Control": "no-cache",
-            "Content-Type": "application/json",
-            # "Dnt": "1",
-            "Origin": ORIGIN_HOST,
-            "Pragma": "no-cache",
-            "Priority": "u=1, i",
-            "Referer": REFERER_HOST,
-            # "Sec-Ch-Ua": '"Not.A/Brand";v="8", "Chromium";v="114", "Google Chrome";v="114"',
-            # "Sec-Ch-Ua-Mobile": "?0",
-            # "Sec-Ch-Ua-Platform": "Linux",
-            # "Sec-Fetch-Dest": "empty",
-            # "Sec-Fetch-Mode": "cors",
-            # "Sec-Fetch-Site": "same-site",
-            "User-Agent": self._req.user_agent,
-            "X-Service-Version": "3",
-            "X-User-Device-Automation-Name": "QlJPV1NFUg==",
-            "X-User-Device-Id": self._req.device_id,
-            "X-User-Device-Type": "BROWSER",
-        }
-
-        # Add Source if asked for.
-        if self._cfg.send_source:
-            headers.update({
-                "Source": "arloCamWeb",
-            })
-
-        return headers
-
-    def _build_connection_headers(self):
-        """Build headers needed for post-authentication phase.
-
-        This list was determined by packet inspection when logging onto the
-        my.arlo.com website. We need to keep it as close as possible. The
-        commented out code is still being passed by the web browser we just
-        don't seem to need it, I left it in to make adding it back easier.
-
-        This list is built immediately after a successful authentication and
-        doesn't change until we reauthenticate.
-        """
-        return {
-            "Accept": "application/json",
-            "Accept-Encoding": "gzip, deflate, br, zstd",
-            "Accept-Language": "en-GB,en;q=0.9,en-US;q=0.8",
-            "Auth-Version": "2",
-            "Authorization": self._req.token,
-            "Cache-Control": "no-cache",
-            "Content-Type": "application/json; charset=utf-8;",
-            # "Dnt": "1",
-            "Origin": ORIGIN_HOST,
-            "Pragma": "no-cache",
-            "Priority": "u=1, i",
-            "Referer": REFERER_HOST,
-            "SchemaVersion": "1",
-            # "Sec-Ch-Ua": '"Not.A/Brand";v="8", "Chromium";v="114", "Google Chrome";v="114"',
-            # "Sec-Ch-Ua-Mobile": "?0",
-            # "Sec-Ch-Ua-Platform": "Linux",
-            # "Sec-Fetch-Dest": "empty",
-            # "Sec-Fetch-Mode": "cors",
-            # "Sec-Fetch-Site": "same-site",
-            "User-Agent": self._req.user_agent,
-        }
-
-    def _request_tuple(
-            self,
-            path,
-            method="GET",
-            params=None,
-            headers=None,
-            stream=False,
-            raw=False,
-            timeout=None,
-            host=None,
-            authpost=False,
-            cookies=None
-    ):
-        if params is None:
-            params = {}
-        if headers is None:
-            headers = {}
-        if timeout is None:
-            timeout = self._cfg.request_timeout
-        try:
-            with self._req_lock:
-                if host is None:
-                    host = self._cfg.host
-                if authpost:
-                    url = host + path
-                else:
-                    tid = self._transaction_id()
-                    url = self._build_url(host + path, tid)
-                    headers['x-transaction-id'] = tid
-
-                self.vdebug("request-url={}".format(url))
-                self.vdebug("request-params=\n{}".format(pprint.pformat(params)))
-                self.vdebug("request-headers=\n{}".format(pprint.pformat(headers)))
-
-                if method == "GET":
-                    r = self._connection.get(
-                        url,
-                        params=params,
-                        headers=headers,
-                        stream=stream,
-                        timeout=timeout,
-                        cookies=cookies,
-                    )
-                    if stream is True:
-                        return 200, r
-                elif method == "PUT":
-                    r = self._connection.put(
-                        url, json=params, headers=headers, timeout=timeout, cookies=cookies,
-                    )
-                elif method == "POST":
-                    r = self._connection.post(
-                        url, json=params, headers=headers, timeout=timeout, cookies=cookies,
-                    )
-                elif method == "OPTIONS":
-                    self._connection.options(
-                        url, json=params, headers=headers, timeout=timeout
-                    )
-                    return 200, None
-        except Exception as e:
-            self._log.warning("request-error={}".format(type(e).__name__))
-            return 500, None
-
-        try:
-            if "application/json" in r.headers["Content-Type"]:
-                body = r.json()
-            else:
-                body = r.text
-            self.vdebug("request-body=\n{}".format(pprint.pformat(body)))
-        except Exception as e:
-            self._log.warning("body-error={}".format(type(e).__name__))
-            self.debug(f"request-text={r.text}")
-            return 500, None
-
-        self.vdebug("request-end={}".format(r.status_code))
-        if r.status_code != 200:
-            return r.status_code, None
-
-        if raw:
-            return 200, body
-
-        # New auth style and TFA helper
-        if "meta" in body:
-            if body["meta"]["code"] == 200:
-                return 200, body["data"]
-            else:
-                # don't warn on untrusted errors, they just mean we need to log in
-                if body["meta"]["error"] != 9204:
-                    self._log.warning("error in new response=" + str(body))
-                return int(body["meta"]["code"]), body["meta"]["message"]
-
-        # Original response type
-        elif "success" in body:
-            if body["success"]:
-                if "data" in body:
-                    return 200, body["data"]
-                # success, but no data so fake empty data
-                return 200, {}
-            else:
-                self._log.warning("error in response=" + str(body))
-
-        return 500, None
-
-    def _request(
-            self,
-            path,
-            method="GET",
-            params=None,
-            headers=None,
-            stream=False,
-            raw=False,
-            timeout=None,
-            host=None,
-            authpost=False,
-            cookies=None
-    ):
-        code, body = self._request_tuple(path=path, method=method, params=params, headers=headers,
-                                         stream=stream, raw=raw, timeout=timeout, host=host, authpost=authpost, cookies=cookies)
-        return body
 
     def _event_dispatcher(self, response):
 
@@ -681,11 +356,11 @@ class ArloBackEnd:
         # Make sure we are listening to library events and individual base
         # station events. This seems sufficient for now.
         self._event_client.subscribe([
-            (f"u/{self._req.user_id}/in/userSession/connect", 0),
-            (f"u/{self._req.user_id}/in/userSession/disconnect", 0),
-            (f"u/{self._req.user_id}/in/library/add", 0),
-            (f"u/{self._req.user_id}/in/library/update", 0),
-            (f"u/{self._req.user_id}/in/library/remove", 0)
+            (f"u/{self._req.details.user_id}/in/userSession/connect", 0),
+            (f"u/{self._req.details.user_id}/in/userSession/disconnect", 0),
+            (f"u/{self._req.details.user_id}/in/library/add", 0),
+            (f"u/{self._req.details.user_id}/in/library/update", 0),
+            (f"u/{self._req.details.user_id}/in/library/remove", 0)
         ])
 
         topics = self._mqtt_topics()
@@ -731,7 +406,7 @@ class ArloBackEnd:
             }
 
             # Build a new client_id per login. The last 10 numbers seem to need to be random.
-            self._event_client_id = f"user_{self._req.user_id}_" + "".join(
+            self._event_client_id = f"user_{self._req.details.user_id}_" + "".join(
                 str(random.randint(0, 9)) for _ in range(10)
             )
             self.debug(f"mqtt: client_id={self._event_client_id}")
@@ -746,7 +421,7 @@ class ArloBackEnd:
             ssl_context = ssl.create_default_context()
             ssl_context.check_hostname = self._cfg.mqtt_hostname_check
             self._event_client.tls_set_context(ssl_context)
-            self._event_client.username_pw_set(f"{self._req.user_id}", self._req.token)
+            self._event_client.username_pw_set(f"{self._req.details.user_id}", self._req.details.token)
             self._event_client.ws_set_options(path=MQTT_PATH, headers=headers)
             self.debug(f"mqtt: host={self._cfg.mqtt_host}, "
                        f"check={self._cfg.mqtt_hostname_check}, "
@@ -782,7 +457,7 @@ class ArloBackEnd:
                 self._event_client = SSEClient(
                     self._log,
                     self._cfg.host + SUBSCRIBE_PATH,
-                    headers=self._build_connection_headers(),
+                    headers=self._req.headers(),
                     reconnect_cb=self._sse_reconnected,
                 )
             else:
@@ -794,7 +469,7 @@ class ArloBackEnd:
                 self._event_client = SSEClient(
                     self._log,
                     self._cfg.host + SUBSCRIBE_PATH,
-                    headers=self._build_connection_headers(),
+                    headers=self._req.headers(),
                     reconnect_cb=self._sse_reconnected,
                     timeout=self._cfg.stream_timeout,
                 )
@@ -925,13 +600,13 @@ class ArloBackEnd:
         if "accessToken" in body:
             body = body["accessToken"]
 
-        self._req.token = body["token"]
-        self._req.user_id = body["userId"]
-        self._req.token_expires_in = body["expiresIn"]
+        self._req.details.token = body["token"]
+        self._req.details.user_id = body["userId"]
+        self._req.details.token_expires_in = body["expiresIn"]
 
-        self._req.token64 = to_b64(self._req.token)
-        self._req.web_id = self._req.user_id + "_web"
-        self._req.sub_id = "subscriptions/" + self._req.web_id
+        self._req.details.token64 = to_b64(self._req.details.token)
+        self._req.details.web_id = self._req.details.user_id + "_web"
+        self._req.details.sub_id = "subscriptions/" + self._req.details.web_id
 
     def _auth_find_factor_id(self) -> str | None:
         """Get list of suitable 2fa options.
@@ -1014,7 +689,7 @@ class ArloBackEnd:
         self.debug("auth: validating")
 
         # Update the token in the header to the new token.
-        self._auth.headers["Authorization"] = self._req.token64
+        self._auth.headers["Authorization"] = self._req.details.token64
 
         validated = self.auth_get(
             f"{AUTH_VALIDATE_PATH}?data = {int(time.time())}", {
@@ -1058,7 +733,7 @@ class ArloBackEnd:
             AUTH_START_PATH, {
                 "factorId": self._auth.factor_id,
                 "factorType": self._auth.factor_type,
-                "userId": self._req.user_id
+                "userId": self._req.details.user_id
             },
             self._auth.headers
         )
@@ -1135,7 +810,7 @@ class ArloBackEnd:
             AUTH_START_PATH, {
                 "factorId": self._auth.factor_id,
                 "factorType": "BROWSER",
-                "userId": self._req.user_id
+                "userId": self._req.details.user_id
             },
             self._auth.headers
         )
@@ -1173,10 +848,10 @@ class ArloBackEnd:
             AUTH_GET_FACTORID, {
                 "factorType": "BROWSER",
                 "factorData": "",
-                "userId": self._req.user_id
+                "userId": self._req.details.user_id
             },
             self._auth.headers,
-            cookies=self._cookies
+            cookies=self._req.details.cookies
         )
 
         # This means we are trusted. Save factor ID and move on to validation.
@@ -1208,7 +883,7 @@ class ArloBackEnd:
                 self.debug(f"auth: CloudFlare curve set to: {curve}")
 
                 # Create the connection.
-                self._connection = cloudscraper.create_scraper(
+                self._req.details.connection = cloudscraper.create_scraper(
                     # browser={
                     #     'browser': 'chrome',
                     #     'platform': 'darwin',
@@ -1219,10 +894,10 @@ class ArloBackEnd:
                     ecdhCurve=curve,
                     debug=False,
                 )
-                self._connection.cookies = self._cookies
+                self._req.details.connection.cookies = self._req.details.cookies
 
                 # Set the authentication headers.
-                self._auth.headers = self._build_auth_headers()
+                self._auth.headers = self._req.auth_headers()
 
                 # Attempt the auth.
                 self.auth_options(AUTH_PATH, self._auth.headers)
@@ -1246,7 +921,7 @@ class ArloBackEnd:
                     # Update our user info and add the Authorization field to the
                     # auth headers.
                     self._req.update(body)
-                    self._auth.headers["Authorization"] = self._req.token64
+                    self._auth.headers["Authorization"] = self._req.details.token64
 
                     # See what state to move to next.
                     if not body["authCompleted"]:
@@ -1270,10 +945,10 @@ class ArloBackEnd:
         """
         self.debug("auth: starting")
 
-        self._load_cookies()
-        self._req.user_agent = self._cfg.user_agent_string()
+        self._req.load_cookies()
+        self._req.details.user_agent = self._cfg.user_agent_string()
         # self._req.user_agent = self.user_agent(self._cfg.user_agent)
-        self._connection = None
+        self._req.details.connection = None
         self._auth.factor_id = None
         self._auth.needs_pairing = True
 
@@ -1314,8 +989,7 @@ class ArloBackEnd:
         #  - save the cookies for reloading
         #  - set up the connection headers for the non-authentication phase
         self._req.save()
-        self._save_cookies(self._cookies)
-        # self._connection.headers.update(self._build_connection_headers())
+        self._req.save_cookies()
         return True
 
     def _session_connection(self) -> bool:
@@ -1323,7 +997,7 @@ class ArloBackEnd:
         """
         self.debug("session: fixing connection")
 
-        self._connection.headers.update(self._build_connection_headers())
+        self._req.details.connection.headers.update(self._req.headers())
         return True
 
     def _session_v3_details(self) -> bool:
@@ -1366,7 +1040,7 @@ class ArloBackEnd:
 
         body["to"] = base.device_id
         if "from" not in body:
-            body["from"] = self._req.web_id
+            body["from"] = self._req.details.web_id
         body["transId"] = trans_id
 
         response = self.post(
@@ -1500,13 +1174,13 @@ class ArloBackEnd:
     ):
         if wait_for == "response":
             self.vdebug("get+response running")
-            return self._request(
+            return self._req.request(
                 path, "GET", params, headers, stream, raw, timeout, host, cookies
             )
         else:
             self.vdebug("get sent")
             self._bg.run(
-                self._request, path=path, method="GET", params=params, headers=headers, stream=stream, raw=raw, timeout=timeout, host=host
+                self._req.request, path=path, method="GET", params=params, headers=headers, stream=stream, raw=raw, timeout=timeout, host=host
             )
 
     def put(
@@ -1521,11 +1195,11 @@ class ArloBackEnd:
     ):
         if wait_for == "response":
             self.vdebug("put+response running")
-            return self._request(path, "PUT", params, headers, False, raw, timeout, cookies)
+            return self._req.request(path, "PUT", params, headers, False, raw, timeout, cookies)
         else:
             self.vdebug("put sent")
             self._bg.run(
-                self._request, path=path, method="PUT", params=params, headers=headers, stream=False, raw=raw, timeout=timeout
+                self._req.request, path=path, method="PUT", params=params, headers=headers, stream=False, raw=raw, timeout=timeout
             )
 
     def post(
@@ -1557,47 +1231,47 @@ class ArloBackEnd:
             if tid is None:
                 tid = list(params.keys())[0]
             tid = self._start_transaction(tid)
-            self._request(path, "POST", params, headers, False, raw, timeout)
+            self._req.request(path, "POST", params, headers, False, raw, timeout)
             return self._wait_for_transaction(tid, timeout)
         if wait_for == "response":
             self.vdebug("post+response running")
-            return self._request(path, "POST", params, headers, False, raw, timeout)
+            return self._req.request(path, "POST", params, headers, False, raw, timeout)
         else:
             self.vdebug("post sent")
             self._bg.run(
-                self._request, path=path, method="POST", params=params, headers=headers, stream=False, raw=raw, timeout=timeout
+                self._req.request, path=path, method="POST", params=params, headers=headers, stream=False, raw=raw, timeout=timeout
             )
 
     def auth_post(self, path, params=None, headers=None, raw=False, timeout=None, cookies=None):
-        return self._request_tuple(
+        return self._req.request_tuple(
             path, "POST", params, headers, False, raw, timeout, self._cfg.auth_host, authpost=True, cookies=cookies
         )
 
     def auth_get(
         self, path, params=None, headers=None, stream=False, raw=False, timeout=None, cookies=None
     ):
-        return self._request(
+        return self._req.request(
             path, "GET", params, headers, stream, raw, timeout, self._cfg.auth_host, authpost=True, cookies=cookies
         )
 
     def auth_options(
         self, path, headers=None, timeout=None
      ):
-        return self._request(
+        return self._req.request(
             path, "OPTIONS", None, headers, False, False, timeout, self._cfg.auth_host, authpost=True
         )
 
     @property
     def session(self):
-        return self._connection
+        return self._req.details.connection
 
     @property
     def sub_id(self):
-        return self._req.sub_id
+        return self._req.details.sub_id
 
     @property
     def user_id(self):
-        return self._req.user_id
+        return self._req.details.user_id
 
     @property
     def multi_location(self):

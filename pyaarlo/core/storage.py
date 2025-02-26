@@ -3,8 +3,8 @@ import pickle
 import pprint
 import threading
 
-from .logger import ArloLogger
 from .cfg import ArloCfg
+from .logger import ArloLogger
 
 
 class ArloStorage:

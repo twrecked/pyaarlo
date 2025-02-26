@@ -9,8 +9,8 @@ from .constant import (
     TEMPERATURE_KEY,
     WATER_STATE_KEY,
 )
-from .child_device import ArloChildDevice
 from .core import ArloCore
+from .child_device import ArloChildDevice
 from .objects import ArloObjects
 
 

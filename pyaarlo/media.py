@@ -10,7 +10,8 @@ from .constant import (
 )
 from .core import ArloCore
 from .objects import ArloObjects
-from .util import arlotime_strftime, arlotime_to_datetime, http_get, http_stream
+from .utils import (arlotime_strftime, arlotime_to_datetime, http_get,
+http_stream)
 
 
 class ArloMediaDownloader(threading.Thread):

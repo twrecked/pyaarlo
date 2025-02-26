@@ -43,7 +43,7 @@ from .device import ArloDevice
 from .media import ArloMediaLibrary, ArloVideo
 from .objects import ArloObjects
 from .ratls import ArloRatls
-from .util import time_to_arlotime
+from .utils import time_to_arlotime
 
 day_of_week = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su", "Mo"]
 

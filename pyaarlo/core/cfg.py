@@ -9,8 +9,7 @@ import random
 from typing import Any
 from urllib.parse import urlparse
 
-from .logger import ArloLogger
-from .constant import (
+from ..constant import (
     DEFAULT_AUTH_HOST,
     DEFAULT_HOST,
     DEFAULT_MQTT_PORT,
@@ -24,6 +23,7 @@ from .constant import (
     TFA_RETRIES,
     USER_AGENTS,
 )
+from .logger import ArloLogger
 
 
 class ArloCfg:

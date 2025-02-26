@@ -10,7 +10,7 @@ from .constant import (
 )
 from .core import ArloCore
 from .device import ArloDevice
-from .security_utils import SecurityUtils
+from .utils.security import SecurityUtils
 
 
 class ArloRatls:

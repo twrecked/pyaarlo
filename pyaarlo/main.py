@@ -12,7 +12,7 @@ import sys
 import click
 
 from . import PyArlo
-from .util import to_b64
+from .utils import to_b64
 
 logging.basicConfig(level=logging.ERROR,
                     format='%(asctime)s:%(name)s:%(levelname)s: %(message)s')

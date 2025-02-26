@@ -6,8 +6,8 @@ from .constant import (
     LAMP_STATE_KEY,
     MOTION_DETECTED_KEY
 )
-from .child_device import ArloChildDevice
 from .core import ArloCore
+from .child_device import ArloChildDevice
 from .objects import ArloObjects
 
 
