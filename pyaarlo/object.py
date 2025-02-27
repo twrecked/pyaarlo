@@ -46,7 +46,7 @@ class ArloObject:
         self._attr_cbs_ = []
 
         # add a listener
-        self._core.be.add_listener(self, self._event_handler)
+        self._core.be.add_listener(self.device_id, self.unique_id, self._event_handler)
 
     def __repr__(self):
         # Representation string of object.

@@ -116,7 +116,8 @@ class ArloDoorBell(ArloChildDevice):
         Queues a job that requests the info from Arlo.
         """
         self._core.be.notify(
-            base=self.base_station,
+            device_id=self.base_station.device_id,
+            xcloud_id=self.base_station.xcloud_id,
             body={
                 "action": "get",
                 "resource": self.resource_id,
@@ -146,7 +147,8 @@ class ArloDoorBell(ArloChildDevice):
 
         # Send out request.
         response = self._core.be.notify(
-            base=self.base_station,
+            device_id=self.base_station.device_id,
+            xcloud_id=self.base_station.xcloud_id,
             body={
                 "action": "set",
                 "properties": properties,
@@ -218,7 +220,11 @@ class ArloDoorBell(ArloChildDevice):
                 "pattern": "alarm",
             },
         }
-        self._core.be.notify(base=self, body=body)
+        self._core.be.notify(
+            device_id=self.device_id,
+            xcloud_id=self.xcloud_id,
+            body=body
+        )
 
     def siren_off(self):
         """Turn camera siren off.
@@ -231,4 +237,8 @@ class ArloDoorBell(ArloChildDevice):
             "publishResponse": True,
             "properties": {"sirenState": "off"},
         }
-        self._core.be.notify(base=self, body=body)
+        self._core.be.notify(
+            device_id=self.device_id,
+            xcloud_id=self.xcloud_id,
+            body=body
+        )

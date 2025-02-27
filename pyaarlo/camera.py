@@ -317,7 +317,8 @@ class ArloCamera(ArloChildDevice):
     def _stop_activity(self):
         """Request the camera stop whatever it is doing and return to the idle state."""
         response = self._core.be.notify(
-            base=self.base_station,
+            device_id=self.base_station.device_id,
+            xcloud_id=self.base_station.xcloud_id,
             body={
                 "action": "set",
                 "properties": {"activityState": "idle"},
@@ -708,7 +709,11 @@ class ArloCamera(ArloChildDevice):
             "publishResponse": True,
             "properties": {"brightness": brightness},
         }
-        self._core.be.notify(base=self, body=body)
+        self._core.be.notify(
+            device_id=self.device_id,
+            xcloud_id=self.xcloud_id,
+            body=body
+        )
 
     @property
     def flip_state(self):
@@ -789,7 +794,8 @@ class ArloCamera(ArloChildDevice):
         """
         if self.model_id == MODEL_BABY:
             self._core.be.notify(
-                base=self.base_station,
+                device_id=self.base_station.device_id,
+                xcloud_id=self.base_station.xcloud_id,
                 body={
                     "action": "get",
                     "resource": "cameras/{}/ambientSensors/history".format(
@@ -1138,7 +1144,11 @@ class ArloCamera(ArloChildDevice):
                 "pattern": "alarm",
             },
         }
-        self._core.be.notify(base=self, body=body)
+        self._core.be.notify(
+            device_id=self.device_id,
+            xcloud_id=self.xcloud_id,
+            body=body
+        )
 
     def siren_off(self):
         """Turn camera siren off.
@@ -1151,7 +1161,11 @@ class ArloCamera(ArloChildDevice):
             "publishResponse": True,
             "properties": {"sirenState": "off"},
         }
-        self._core.be.notify(base=self, body=body)
+        self._core.be.notify(
+            device_id=self.device_id,
+            xcloud_id=self.xcloud_id,
+            body=body
+        )
 
     @property
     def is_on(self):
@@ -1166,7 +1180,11 @@ class ArloCamera(ArloChildDevice):
             "publishResponse": True,
             "properties": {"privacyActive": False},
         }
-        self._core.be.notify(base=self.base_station, body=body)
+        self._core.be.notify(
+            device_id=self.base_station.device_id,
+            xcloud_id=self.base_station.xcloud_id,
+            body=body
+        )
 
     def turn_off(self):
         """Turn the camera off."""
@@ -1176,12 +1194,20 @@ class ArloCamera(ArloChildDevice):
             "publishResponse": True,
             "properties": {"privacyActive": True},
         }
-        self._core.be.notify(base=self.base_station, body=body)
+        self._core.be.notify(
+            device_id=self.base_station.device_id,
+            xcloud_id=self.base_station.xcloud_id,
+            body=body
+        )
 
     def get_audio_playback_status(self):
         """Gets the current playback status and available track list"""
         body = {"action": "get", "publishResponse": True, "resource": "audioPlayback"}
-        self._core.be.notify(base=self, body=body)
+        self._core.be.notify(
+            device_id=self.device_id,
+            xcloud_id=self.xcloud_id,
+            body=body
+        )
 
     def play_track(self, track_id=None, position=0):
         """Play the track. A track ID of None will resume playing the current
@@ -1211,7 +1237,11 @@ class ArloCamera(ArloChildDevice):
                     "action": "play",
                 }
             )
-        self._core.be.notify(base=self, body=body)
+        self._core.be.notify(
+            device_id=self.device_id,
+            xcloud_id=self.xcloud_id,
+            body=body
+        )
 
     def pause_track(self):
         """Pause the playing track."""
@@ -1220,7 +1250,11 @@ class ArloCamera(ArloChildDevice):
             "publishResponse": True,
             "resource": MEDIA_PLAYER_RESOURCE_ID,
         }
-        self._core.be.notify(base=self, body=body)
+        self._core.be.notify(
+            device_id=self.device_id,
+            xcloud_id=self.xcloud_id,
+            body=body
+        )
 
     def previous_track(self):
         """Skips to the previous track in the playlist."""
@@ -1229,7 +1263,11 @@ class ArloCamera(ArloChildDevice):
             "publishResponse": True,
             "resource": MEDIA_PLAYER_RESOURCE_ID,
         }
-        self._core.be.notify(base=self, body=body)
+        self._core.be.notify(
+            device_id=self.device_id,
+            xcloud_id=self.xcloud_id,
+            body=body
+        )
 
     def next_track(self):
         """Skips to the next track in the playlist."""
@@ -1238,7 +1276,11 @@ class ArloCamera(ArloChildDevice):
             "publishResponse": True,
             "resource": MEDIA_PLAYER_RESOURCE_ID,
         }
-        self._core.be.notify(base=self, body=body)
+        self._core.be.notify(
+            device_id=self.device_id,
+            xcloud_id=self.xcloud_id,
+            body=body
+        )
 
     def set_music_loop_mode_continuous(self):
         """Sets the music loop mode to repeat the entire playlist."""
@@ -1248,7 +1290,11 @@ class ArloCamera(ArloChildDevice):
             "resource": "audioPlayback/config",
             "properties": {"config": {"loopbackMode": "continuous"}},
         }
-        self._core.be.notify(base=self, body=body)
+        self._core.be.notify(
+            device_id=self.device_id,
+            xcloud_id=self.xcloud_id,
+            body=body
+        )
 
     def set_music_loop_mode_single(self):
         """Sets the music loop mode to repeat the current track."""
@@ -1258,7 +1304,11 @@ class ArloCamera(ArloChildDevice):
             "resource": "audioPlayback/config",
             "properties": {"config": {"loopbackMode": "singleTrack"}},
         }
-        self._core.be.notify(base=self, body=body)
+        self._core.be.notify(
+            device_id=self.device_id,
+            xcloud_id=self.xcloud_id,
+            body=body
+        )
 
     def set_shuffle(self, shuffle=True):
         """Sets playback to shuffle.
@@ -1271,7 +1321,11 @@ class ArloCamera(ArloChildDevice):
             "resource": "audioPlayback/config",
             "properties": {"config": {"shuffleActive": shuffle}},
         }
-        self._core.be.notify(base=self, body=body)
+        self._core.be.notify(
+            device_id=self.device_id,
+            xcloud_id=self.xcloud_id,
+            body=body
+        )
 
     def set_volume(self, mute=False, volume=50):
         """Sets the music volume.
@@ -1285,14 +1339,19 @@ class ArloCamera(ArloChildDevice):
             "resource": self.resource_id,
             "properties": {"speaker": {"mute": mute, "volume": volume}},
         }
-        self._core.be.notify(base=self, body=body)
+        self._core.be.notify(
+            device_id=self.device_id,
+            xcloud_id=self.xcloud_id,
+            body=body
+        )
 
     def _set_nightlight_properties(self, properties):
         self.debug(
             "{}: setting nightlight properties: {}".format(self._name, properties)
         )
         self._core.be.notify(
-            base=self.base_station,
+            device_id=self.base_station.device_id,
+            xcloud_id=self.base_station.xcloud_id,
             body={
                 "action": "set",
                 "properties": {"nightLight": properties},
@@ -1350,7 +1409,8 @@ class ArloCamera(ArloChildDevice):
             "{}: setting spotlight properties: {}".format(self._name, properties)
         )
         self._core.be.notify(
-            base=self.base_station,
+            device_id=self.base_station.device_id,
+            xcloud_id=self.base_station.xcloud_id,
             body={
                 "action": "set",
                 "properties": {"spotlight": properties},
@@ -1382,7 +1442,8 @@ class ArloCamera(ArloChildDevice):
             "{}: setting floodlight properties: {}".format(self._name, properties)
         )
         self._core.be.notify(
-            base=self.base_station,
+            device_id=self.base_station.device_id,
+            xcloud_id=self.base_station.xcloud_id,
             body={
                 "action": "set",
                 "properties": {"floodlight": properties},

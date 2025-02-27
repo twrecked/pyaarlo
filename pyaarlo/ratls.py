@@ -34,7 +34,8 @@ class ArloRatls:
         self.debug(f"Opening port for {self._unique_id}")
 
         response = self._core.be.notify(
-            self._base,
+            self._base.device_id,
+            self._base.xcloud_id,
             {
                 "action": "open",
                 "resource": "storage/ratls",

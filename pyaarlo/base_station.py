@@ -300,7 +300,8 @@ class ArloBaseStation(ArloDevice):
             self.debug(self.name + ":new-mode=" + mode_name + ",id=" + mode_id)
             if self._v1_modes:
                 self._core.be.notify(
-                    base=self,
+                    device_id=self.device_id,
+                    xcloud_id=self.xcloud_id,
                     body={
                         "action": "set",
                         "resource": "modes",
@@ -372,7 +373,8 @@ class ArloBaseStation(ArloDevice):
                 _set_mode_v2_cb(1)
             else:
                 self._core.be.notify(
-                    base=self,
+                    device_id=self.device_id,
+                    xcloud_id=self.xcloud_id,
                     body={
                         "action": "set",
                         "resource": "modes",
@@ -407,7 +409,8 @@ class ArloBaseStation(ArloDevice):
             if initial and self._core.cfg.synchronous_mode:
                 time.sleep(5)
             resp = self._core.be.notify(
-                base=self,
+                device_id=self.device_id,
+                xcloud_id=self.xcloud_id,
                 body={"action": "get", "resource": "modes", "publishResponse": False},
                 wait_for="event",
             )
@@ -449,7 +452,8 @@ class ArloBaseStation(ArloDevice):
         if self.device_type == 'basestation' or self.device_type == 'arlobridge':
             self.debug("updating state")
             self._core.be.notify(
-                base=self,
+                device_id=self.device_id,
+                xcloud_id=self.xcloud_id,
                 body={
                     "action": "get",
                     "resource": "devices",
@@ -502,7 +506,11 @@ class ArloBaseStation(ArloDevice):
             },
         }
         self.debug(str(body))
-        self._core.be.notify(base=self, body=body)
+        self._core.be.notify(
+            device_id=self.device_id,
+            xcloud_id=self.xcloud_id,
+            body=body
+        )
 
     def siren_off(self):
         """Turn base siren off.
@@ -516,7 +524,11 @@ class ArloBaseStation(ArloDevice):
             "properties": {"sirenState": "off"},
         }
         self.debug(str(body))
-        self._core.be.notify(base=self, body=body)
+        self._core.be.notify(
+            device_id=self.device_id,
+            xcloud_id=self.xcloud_id,
+            body=body
+        )
 
     def restart(self):
         params = {"deviceId": self.device_id}
@@ -535,7 +547,12 @@ class ArloBaseStation(ArloDevice):
             "properties": {"devices": [self.device_id]},
         }
         self.debug("pinging {}".format(self.name))
-        if self._core.be.notify(base=self, body=body, wait_for="response") is None:
+        if self._core.be.notify(
+                device_id=self.device_id,
+                xcloud_id=self.xcloud_id,
+                body=body,
+                wait_for="response"
+        ) is None:
             self._save_and_do_callbacks(CONNECTION_KEY, "unavailable")
         else:
             self._save_and_do_callbacks(CONNECTION_KEY, "available")

@@ -856,17 +856,21 @@ class ArloBackEnd:
         """
         return self._session_connection() and self._session_v3_details()
 
-    def _notify(self, base, body, trans_id=None):
+    def _notify(self, device_id, xcloud_id, body, trans_id=None):
         if trans_id is None:
             trans_id = self.gen_trans_id()
 
-        body["to"] = base.device_id
+        body["to"] = device_id
         if "from" not in body:
             body["from"] = self._req.details.web_id
         body["transId"] = trans_id
 
         response = self.post(
-            NOTIFY_PATH + base.device_id, body, headers={"xcloudId": base.xcloud_id}
+            NOTIFY_PATH + device_id,
+            body,
+            headers={
+                "xcloudId": xcloud_id
+            }
         )
 
         if response is None:
@@ -945,7 +949,7 @@ class ArloBackEnd:
             self._event_stream.stop()
         self.put(LOGOUT_PATH)
 
-    def notify(self, base, body, timeout=None, wait_for=None):
+    def notify(self, device_id, xcloud_id, body, timeout=None, wait_for=None):
         """Send in a notification.
 
         Notifications are Arlo's way of getting stuff done - turn on a light, change base station mode,
@@ -961,7 +965,8 @@ class ArloBackEnd:
         There is a third way to send a notification where the code waits for the initial response to come back
         but that must be specified by setting `wait_for` to `response`.
 
-        :param base: base station to use
+        :param device_id: device_id to use
+        :param xcloud_id: xcloud_id to use
         :param body: notification message
         :param timeout: how long to wait for response before failing, only applied if `wait_for` is `event`.
         :param wait_for: what to wait for, either `None`, `event`, `response` or `nothing`.
@@ -973,15 +978,15 @@ class ArloBackEnd:
         if wait_for == "event":
             self.vdebug("notify+event running")
             tid = self._start_transaction()
-            self._notify(base, body=body, trans_id=tid)
+            self._notify(device_id, xcloud_id, body=body, trans_id=tid)
             return self._wait_for_transaction(tid, timeout)
             # return self._notify_and_get_event(base, body, timeout=timeout)
         elif wait_for == "response":
             self.vdebug("notify+response running")
-            return self._notify(base, body=body)
+            return self._notify(device_id, xcloud_id, body=body)
         else:
-            self.vdebug("notify+ sent")
-            self._bg.run(self._notify, base=base, body=body)
+            self.vdebug("notify+sent")
+            self._bg.run(self._notify, device_id=device_id, xcloud_id=xcloud_id, body=body)
 
     def get(
             self,
@@ -1081,14 +1086,14 @@ class ArloBackEnd:
     def multi_location(self):
         return self._multi_location
 
-    def add_listener(self, device, callback):
+    def add_listener(self, device_id, unique_id, callback):
         with self._lock:
-            if device.device_id not in self._callbacks:
-                self._callbacks[device.device_id] = []
-            self._callbacks[device.device_id].append(callback)
-            if device.unique_id not in self._callbacks:
-                self._callbacks[device.unique_id] = []
-            self._callbacks[device.unique_id].append(callback)
+            if device_id not in self._callbacks:
+                self._callbacks[device_id] = []
+            self._callbacks[device_id].append(callback)
+            if unique_id not in self._callbacks:
+                self._callbacks[unique_id] = []
+            self._callbacks[unique_id].append(callback)
 
     def add_any_listener(self, callback):
         with self._lock:

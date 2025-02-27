@@ -49,7 +49,8 @@ class ArloLight(ArloChildDevice):
 
         self.debug("{} sending {}".format(self._name, pprint.pformat(properties)))
         self._core.be.notify(
-            base=self.base_station,
+            device_id=self.base_station.device_id,
+            xcloud_id=self.base_station.xcloud_id,
             body={
                 "action": "set",
                 "properties": properties,
@@ -62,7 +63,8 @@ class ArloLight(ArloChildDevice):
     def turn_off(self):
         """Turn the light off."""
         self._core.be.notify(
-            base=self.base_station,
+            device_id=self.base_station.device_id,
+            xcloud_id=self.base_station.xcloud_id,
             body={
                 "action": "set",
                 "properties": {LAMP_STATE_KEY: "off"},
@@ -78,7 +80,8 @@ class ArloLight(ArloChildDevice):
         :param brightness: brightness to use (0-255)
         """
         self._core.be.notify(
-            base=self.base_station,
+            device_id=self.base_station.device_id,
+            xcloud_id=self.base_station.xcloud_id,
             body={
                 "action": "set",
                 "properties": {BRIGHTNESS_KEY: brightness},
