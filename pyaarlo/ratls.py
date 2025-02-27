@@ -27,11 +27,14 @@ class ArloRatls:
         self._check_device_certs()
         self.open_port()
 
+    def _debug(self, msg):
+        self._core.log.debug(f"ratls: {msg}")
+
     def open_port(self):
         """ RATLS port will automatically close after 10 minutes """
         self._base_station_token = self._get_station_token()
 
-        self.debug(f"Opening port for {self._unique_id}")
+        self._debug(f"Opening port for {self._unique_id}")
 
         response = self._core.be.notify(
             self._base.device_id,
@@ -85,13 +88,13 @@ class ArloRatls:
 
     def _get_station_token(self):
         """ Tokens expire after 10 minutes """
-        self.debug(f"Fetching token for {self._device_id}")
+        self._debug(f"Fetching token for {self._device_id}")
 
         response = self._core.be.get(
             RATLS_TOKEN_GENERATE_PATH + f"/{self._device_id}"
         )
 
-        if response is None or not 'ratlsToken' in response:
+        if response is None or 'ratlsToken' not in response:
             raise Exception(f"Failed get station token: {response}")
 
         return response['ratlsToken']
@@ -111,7 +114,7 @@ class ArloRatls:
         self._base_client = build_opener(HTTPSHandler(context=self._sslcontext))
 
     def _check_device_certs(self):
-        self.debug(f"Checking for existing certificates for {self._unique_id}")
+        self._debug(f"Checking for existing certificates for {self._unique_id}")
 
         if not self._security.has_device_certs(self._unique_id):
             response = self._core.be.post(
@@ -130,7 +133,7 @@ class ArloRatls:
             if not response["success"]:
                 raise Exception(f"Error getting certs: {response['message']} - {response['reason']}")
 
-            self.debug(f"Saving certificates for {self._unique_id}")
+            self._debug(f"Saving certificates for {self._unique_id}")
 
             self._security.save_device_certs(self._unique_id, response["data"])
 
@@ -141,16 +144,16 @@ class ArloRatls:
     @property
     def url(self):
         if self._public:
-            return self.publicUrl
+            return self.public_url
         else:
-            return self.privateUrl
+            return self.private_url
 
     @property
-    def privateIp(self):
+    def private_ip(self):
         return self._base_connection_details['privateIP']
 
     @property
-    def publicIp(self):
+    def public_ip(self):
         return self._base_connection_details['publicIP']
 
     @property
@@ -158,12 +161,9 @@ class ArloRatls:
         return self._base_connection_details['port']
 
     @property
-    def privateUrl(self):
-        return f"https://{self.privateIp}:{self.port}"
+    def private_url(self):
+        return f"https://{self.private_ip}:{self.port}"
 
     @property
-    def publicUrl(self):
-        return f"https://{self.publicIp}:{self.port}"
-
-    def debug(self, msg):
-        self._core.log.debug(f"ratls: {msg}")
+    def public_url(self):
+        return f"https://{self.public_ip}:{self.port}"
