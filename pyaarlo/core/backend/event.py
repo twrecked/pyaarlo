@@ -177,9 +177,15 @@ class _SSE:
         self._session.log.debug(f"sse: {msg}")
 
     def stop(self):
+        self._debug("stopping")
         self._stream.stop()
 
     def run(self):
+        """Open and connect an SSE stream.
+
+        It will wait for certain signals before moving into a connected
+        state.
+        """
 
         # get stream, restart after requested seconds of inactivity or forced close
         try:
@@ -244,6 +250,14 @@ class _SSE:
 
 
 class ArloEvent:
+    """Wrapper around the event stream providers.
+
+    Currently this can be either SSE or MQTT. Which to use is chosen by the
+    user or (preferred) chosen by the Arlo servers.
+
+    This class does no threading. It's just a fancy wrapper that forwards to
+    a class doing the real work.
+    """
 
     _session: _EventSession
     _bg: ArloBackground
@@ -260,18 +274,11 @@ class ArloEvent:
     def _debug(self, msg):
         self._session.log.debug(f"event: {msg}")
 
-    def _reconnect(self):
-        pass
-
-    def run(self):
-        if self._state != _EventState.READY:
-            self._session.log.warning(f"event is not ready in {self._state}")
-            return
-
-        self._state = _EventState.RUNNING
-        self._device.run()
-
     def setup(self):
+        """Move instance into ready state.
+
+        Pick the back end to use.
+        """
         if self._state != _EventState.STARTING:
             self._session.log.warning(f"event is not starting in {self._state}")
             return
@@ -285,7 +292,25 @@ class ArloEvent:
         # Ready to run.
         self._state = _EventState.READY
 
+    def run(self):
+        """Call the back end run function.
+
+        This function will run until the connection closes. This can be for
+        several reasons:
+         - we closed it
+         - arlo closed it
+         - network connectivity issues
+        """
+        if self._state != _EventState.READY:
+            self._session.log.warning(f"event is not ready in {self._state}")
+            return
+
+        self._state = _EventState.RUNNING
+        self._device.run()
+
     def stop(self):
+        """Ask the event stream to stop.
+        """
         if self._state != _EventState.RUNNING:
             self._session.log.warning(f"event is not running in {self._state}")
             return
@@ -294,6 +319,11 @@ class ArloEvent:
         self._device.stop()
 
     def update(self, **kwargs):
+        """Update the event stream.
+
+        This is stream specific; for MQTT it will update subscriptions, for
+        SSE it will do nothing.
+        """
         if self._state != _EventState.RUNNING:
             self._session.log.warning(f"event is not running in {self._state}")
             return

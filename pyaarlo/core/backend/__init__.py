@@ -83,8 +83,8 @@ class ArloBackEnd:
     _auth: _AuthDetails = _AuthDetails()
 
     # How we are talking to the backend.
-    _event: ArloEvent | None = None
-    _event_connected: bool = False
+    _event_stream: ArloEvent | None = None
+    _event_stream_connected: bool = False
     _event_loop_thread: threading.Thread | None = None
     _event_loop_exiting: bool = False
 
@@ -235,7 +235,7 @@ class ArloBackEnd:
 
     def _event_connected_handler(self):
         with self._lock:
-            self._event_connected = True
+            self._event_stream_connected = True
             self._lock.notify_all()
         self.debug("event connected")
         return {
@@ -301,7 +301,7 @@ class ArloBackEnd:
                             self._lock.notify_all()
 
     def _event_reconnect(self):
-        self._event.stop()
+        self._event_stream.stop()
 
     def _event_loop_stop(self):
         self._event_loop_exiting = True
@@ -325,7 +325,7 @@ class ArloBackEnd:
                 self._logged_in = self._login() and self._session_finalize()
 
             self.debug("starting event device")
-            self._event.run()
+            self._event_stream.run()
             self.debug("exited event device")
 
             # clear down and signal out
@@ -906,13 +906,13 @@ class ArloBackEnd:
 
     def start_monitoring(self):
         # Build event details...
-        self._event = ArloEvent(self._cfg, self._log, self._bg, self._req.details,
-                                self._event_response_handler,
-                                self._event_connected_handler,
-                                self._event_reconnected_handler)
-        self._event.setup()
+        self._event_stream = ArloEvent(self._cfg, self._log, self._bg, self._req.details,
+                                       self._event_response_handler,
+                                       self._event_connected_handler,
+                                       self._event_reconnected_handler)
+        self._event_stream.setup()
 
-        self._event_connected = False
+        self._event_stream_connected = False
         self._event_loop_thread = threading.Thread(
             name="ArloEventStream", target=self._event_loop, args=()
         )
@@ -921,7 +921,7 @@ class ArloBackEnd:
         with self._lock:
             self._event_loop_thread.start()
             count = 0
-            while not self._event_connected and count < 30:
+            while not self._event_stream_connected and count < 30:
                 self.debug("waiting for stream up")
                 self._lock.wait(1)
                 count += 1
@@ -941,8 +941,8 @@ class ArloBackEnd:
     def logout(self):
         self.debug("trying to logout")
         self._event_loop_stop()
-        if self._event is not None:
-            self._event.stop()
+        if self._event_stream is not None:
+            self._event_stream.stop()
         self.put(LOGOUT_PATH)
 
     def notify(self, base, body, timeout=None, wait_for=None):
