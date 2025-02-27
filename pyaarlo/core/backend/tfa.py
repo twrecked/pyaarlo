@@ -5,11 +5,11 @@ import time
 import ssl
 import requests
 
-from .cfg import ArloCfg
-from .logger import ArloLogger
+from ..cfg import ArloCfg
+from ..logger import ArloLogger
 
 
-class Arlo2FABase:
+class _Arlo2FABase:
     """Base  class for 2fa components.
     """
 
@@ -26,7 +26,7 @@ class Arlo2FABase:
         self._log.debug(f"{self._prefix}: {msg}")
 
 
-class Arlo2FAConsole(Arlo2FABase):
+class Arlo2FAConsole(_Arlo2FABase):
     """2FA authentication via console.
     Accepts input from console and returns that for 2FA.
     """
@@ -46,7 +46,7 @@ class Arlo2FAConsole(Arlo2FABase):
         self.debug("stopping")
 
 
-class Arlo2FAPush(Arlo2FABase):
+class Arlo2FAPush(_Arlo2FABase):
     """2FA authentication via console.
     Dummy for PUSH support. Always returns an empty code.
     """
@@ -66,7 +66,7 @@ class Arlo2FAPush(Arlo2FABase):
         self.debug("stopping")
 
 
-class Arlo2FAImap(Arlo2FABase):
+class Arlo2FAImap(_Arlo2FABase):
     """2FA authentication via IMAP
     Connects to IMAP server and waits for email from Arlo with 2FA code in it.
 
@@ -203,7 +203,7 @@ class Arlo2FAImap(Arlo2FABase):
         self._new_ids = None
 
 
-class Arlo2FARestAPI(Arlo2FABase):
+class Arlo2FARestAPI(_Arlo2FABase):
     """2FA authentication via rest API.
     Queries web site until code appears
     """

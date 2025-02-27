@@ -7,16 +7,16 @@ import threading
 import cloudscraper
 from http.cookiejar import LWPCookieJar
 
-from ..constant import (
+from ...constant import (
     ORIGIN_HOST,
     REFERER_HOST,
 )
-from ..utils import (
+from ...utils import (
     time_to_arlotime,
     to_b64,
 )
-from .cfg import ArloCfg
-from .logger import ArloLogger
+from ..cfg import ArloCfg
+from ..logger import ArloLogger
 
 
 class ArloSessionDetails:
@@ -38,6 +38,8 @@ class ArloSessionDetails:
     token64: str | None = None
     token_expires_in: int | None = None
     user_agent: str | None = None
+    headers: dict[str, str]
+    auth_headers: dict[str, str]
 
     # Connection Objects.
     connection: cloudscraper.CloudScraper | None = None
@@ -66,7 +68,7 @@ class ArloSession:
 
         self._cfg = cfg
         self._log = log
-        
+
         self._save_enabled = cfg.save_session
         self._save_filename = cfg.session_file
         self._save_username = cfg.username
@@ -145,7 +147,7 @@ class ArloSession:
             pass
         self._debug(f"loading cookies={self.details.cookies}")
 
-    def auth_headers(self):
+    def auth_headers(self) -> dict[str, str]:
         """Build headers needed for authentication phase.
 
         This list was determined by packet inspection when logging onto the
@@ -156,7 +158,7 @@ class ArloSession:
         Note, we add and update an 'Authentication' field as the login process
         progresses.
         """
-        headers = {
+        self.details.auth_headers = {
             "Accept": "application/json, text/plain, */*",
             "Accept-Encoding": "gzip, deflate, br, zstd",
             "Accept-Language": "en-GB,en;q=0.9,en-US;q=0.8",
@@ -182,13 +184,13 @@ class ArloSession:
 
         # Add Source if asked for.
         if self._cfg.send_source:
-            headers.update({
+            self.details.auth_headers.update({
                 "Source": "arloCamWeb",
             })
 
-        return headers
+        return self.details.auth_headers
 
-    def headers(self):
+    def headers(self) -> dict[str, str]:
         """Build headers needed for post-authentication phase.
 
         This list was determined by packet inspection when logging onto the
@@ -200,7 +202,7 @@ class ArloSession:
         doesn't change until we reauthenticate.
         """
 
-        return {
+        self.details.headers = {
             "Accept": "application/json",
             "Accept-Encoding": "gzip, deflate, br, zstd",
             "Accept-Language": "en-GB,en;q=0.9,en-US;q=0.8",
@@ -222,6 +224,7 @@ class ArloSession:
             # "Sec-Fetch-Site": "same-site",
             "User-Agent": self.details.user_agent,
         }
+        return self.details.headers
 
     def update(self, body):
         """Update session details from the packet body passed.

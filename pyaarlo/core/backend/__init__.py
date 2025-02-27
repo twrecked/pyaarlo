@@ -1,25 +1,14 @@
 from __future__ import annotations
 
-import json
-import pickle
 import pprint
 import re
-import ssl
 import threading
 import time
-import traceback
 import uuid
-import random
-from enum import IntEnum
-from http.cookiejar import LWPCookieJar
-
 import cloudscraper
-import paho.mqtt.client as mqtt
-import requests
-import requests.adapters
+from enum import IntEnum
 
-
-from ..constant import (
+from ...constant import (
     AUTH_FINISH_PATH,
     AUTH_GET_FACTORID,
     AUTH_GET_FACTORS,
@@ -30,29 +19,24 @@ from ..constant import (
     DEFAULT_RESOURCES,
     DEVICES_PATH,
     LOGOUT_PATH,
-    MQTT_HOST,
-    MQTT_PATH,
     MQTT_URL_KEY,
     NOTIFY_PATH,
-    ORIGIN_HOST,
-    REFERER_HOST,
     SESSION_PATH,
-    SUBSCRIBE_PATH,
     TFA_CONSOLE_SOURCE,
     TFA_IMAP_SOURCE,
     TFA_REST_API_SOURCE,
     TRANSID_PREFIX,
 )
-from ..utils import now_strftime, time_to_arlotime, to_b64
-from .background import ArloBackground
-from .cfg import ArloCfg
-from .logger import ArloLogger
+from ...utils import now_strftime, time_to_arlotime, to_b64
+from ..background import ArloBackground
+from ..cfg import ArloCfg
+from ..logger import ArloLogger
+from .event import ArloEvent
 from .session import ArloSession
-from .sseclient import SSEClient
 from .tfa import Arlo2FAConsole, Arlo2FAImap, Arlo2FARestAPI, Arlo2FAPush
 
 
-class AuthState(IntEnum):
+class _AuthState(IntEnum):
     STARTING = 0,
     SUCCESS = 1,
     FAILED = 2,
@@ -65,10 +49,10 @@ class AuthState(IntEnum):
     TRUST_BROWSER = 10,
 
 
-class AuthDetails:
+class _AuthDetails:
     """This hold the authentication state.
     """
-    state: AuthState = AuthState.STARTING
+    state: _AuthState = _AuthState.STARTING
     headers: dict[str, str] | None = None
     browser_code = None
     factor_id: str | None = None
@@ -85,41 +69,36 @@ class ArloBackEnd:
     _log: ArloLogger
     _bg: ArloBackground
 
+    # Exclusive access.
+    _lock: threading.Condition = threading.Condition()
+
     # These affect how we talk to the backend.
     _multi_location: bool = False
-    _use_mqtt: bool = False
 
     # This holds the request state.
     _req: ArloSession | None = None
+    _req_lock: threading.Lock = threading.Lock()
 
     # This holds the auth details and state.
-    _auth: AuthDetails = AuthDetails()
+    _auth: _AuthDetails = _AuthDetails()
 
-    # This is how we talk to the backend. It is used in both authentication and
-    # post-authentication phases.
-    # _connection: cloudscraper.CloudScraper | None = None
+    # How we are talking to the backend.
+    _event: ArloEvent | None = None
+    _event_connected: bool = False
+    _event_loop_thread: threading.Thread | None = None
+    _event_loop_exiting: bool = False
 
     def __init__(self, cfg: ArloCfg, log: ArloLogger, bg: ArloBackground):
 
         self._cfg = cfg
         self._log = log
         self._bg = bg
-        
-        self._lock = threading.Condition()
-        self._req_lock = threading.Lock()
 
         self._dump_file = self._cfg.dump_file
-        self._use_mqtt = False
 
         self._requests = {}
         self._callbacks = {}
         self._resource_types = DEFAULT_RESOURCES
-
-        # event thread stuff
-        self._event_thread = None
-        self._event_client = None
-        self._event_connected = False
-        self._stop_thread = False
 
         # Create state..
         self._req = ArloSession(cfg, log)
@@ -254,7 +233,20 @@ class ArloBackEnd:
             for cb in cbs:
                 self._bg.run(cb, resource=resource, event=response)
 
-    def _event_handle_response(self, response):
+    def _event_connected_handler(self):
+        with self._lock:
+            self._event_connected = True
+            self._lock.notify_all()
+        self.debug("event connected")
+        return {
+            "devices": self.devices()
+        }
+
+    def _event_reconnected_handler(self):
+        self.debug("event re-connected")
+        self.devices()
+
+    def _event_response_handler(self, response):
 
         # Debugging.
         if self._dump_file is not None:
@@ -308,13 +300,16 @@ class ArloBackEnd:
                             self._requests[request] = response
                             self._lock.notify_all()
 
-    def _event_stop_loop(self):
-        self._stop_thread = True
+    def _event_reconnect(self):
+        self._event.stop()
 
-    def _event_main(self):
+    def _event_loop_stop(self):
+        self._event_loop_exiting = True
+
+    def _event_loop(self):
         self.debug("re-logging in")
 
-        while not self._stop_thread:
+        while not self._event_loop_exiting:
 
             # say we're starting
             if self._dump_file is not None:
@@ -329,11 +324,9 @@ class ArloBackEnd:
                 self.debug("re-logging in")
                 self._logged_in = self._login() and self._session_finalize()
 
-            if self._use_mqtt:
-                self._mqtt_main()
-            else:
-                self._sse_main()
-            self.debug("exited the event loop")
+            self.debug("starting event device")
+            self._event.run()
+            self.debug("exited event device")
 
             # clear down and signal out
             with self._lock:
@@ -342,197 +335,7 @@ class ArloBackEnd:
                 self._lock.notify_all()
 
             # restart login...
-            self._event_client = None
             self._logged_in = False
-
-    def _mqtt_topics(self):
-        topics = []
-        for device in self.devices():
-            for topic in device.get("allowedMqttTopics", []):
-                topics.append((topic, 0))
-        return topics
-
-    def _mqtt_subscribe(self):
-        # Make sure we are listening to library events and individual base
-        # station events. This seems sufficient for now.
-        self._event_client.subscribe([
-            (f"u/{self._req.details.user_id}/in/userSession/connect", 0),
-            (f"u/{self._req.details.user_id}/in/userSession/disconnect", 0),
-            (f"u/{self._req.details.user_id}/in/library/add", 0),
-            (f"u/{self._req.details.user_id}/in/library/update", 0),
-            (f"u/{self._req.details.user_id}/in/library/remove", 0)
-        ])
-
-        topics = self._mqtt_topics()
-        self.debug("topics=\n{}".format(pprint.pformat(topics)))
-        self._event_client.subscribe(topics)
-
-    def _mqtt_on_connect(self, _client, _userdata, _flags, rc):
-        # Subscribing in on_connect() means that if we lose the connection and
-        # reconnect then subscriptions will be renewed.
-        self.debug(f"mqtt: connected={str(rc)}")
-        self._mqtt_subscribe()
-        with self._lock:
-            self._event_connected = True
-            self._lock.notify_all()
-
-    def _mqtt_on_log(self, _client, _userdata, _level, msg):
-        self.vdebug(f"mqtt: log={str(msg)}")
-
-    def _mqtt_on_message(self, _client, _userdata, msg):
-        self.debug(f"mqtt: topic={msg.topic}")
-        try:
-            response = json.loads(msg.payload.decode("utf-8"))
-
-            # deal with mqtt specific pieces
-            if response.get("action", "") == "logout":
-                # Logged out? MQTT will log back in until stopped.
-                self._log.warning("logged out? did you log in from elsewhere?")
-                return
-
-            # pass on to general handler
-            self._event_handle_response(response)
-
-        except json.decoder.JSONDecodeError as e:
-            self.debug("reopening: json error " + str(e))
-
-    def _mqtt_main(self):
-
-        try:
-            self.debug("(re)starting mqtt event loop")
-            headers = {
-                "Host": MQTT_HOST,
-                "Origin": ORIGIN_HOST,
-            }
-
-            # Build a new client_id per login. The last 10 numbers seem to need to be random.
-            self._event_client_id = f"user_{self._req.details.user_id}_" + "".join(
-                str(random.randint(0, 9)) for _ in range(10)
-            )
-            self.debug(f"mqtt: client_id={self._event_client_id}")
-
-            # Create and set up the MQTT client.
-            self._event_client = mqtt.Client(
-                client_id=self._event_client_id, transport=self._cfg.mqtt_transport
-            )
-            self._event_client.on_log = self._mqtt_on_log
-            self._event_client.on_connect = self._mqtt_on_connect
-            self._event_client.on_message = self._mqtt_on_message
-            ssl_context = ssl.create_default_context()
-            ssl_context.check_hostname = self._cfg.mqtt_hostname_check
-            self._event_client.tls_set_context(ssl_context)
-            self._event_client.username_pw_set(f"{self._req.details.user_id}", self._req.details.token)
-            self._event_client.ws_set_options(path=MQTT_PATH, headers=headers)
-            self.debug(f"mqtt: host={self._cfg.mqtt_host}, "
-                       f"check={self._cfg.mqtt_hostname_check}, "
-                       f"transport={self._cfg.mqtt_transport}")
-
-            # Connect.
-            self._event_client.connect(self._cfg.mqtt_host, port=self._cfg.mqtt_port, keepalive=60)
-            self._event_client.loop_forever()
-
-        except Exception as e:
-            # self._log.warning('general exception ' + str(e))
-            self._log.error(
-                "mqtt-error={}\n{}".format(
-                    type(e).__name__, traceback.format_exc()
-                )
-            )
-
-    def _sse_reconnected(self):
-        self.debug("fetching device list after ev-reconnect")
-        self.devices()
-
-    def _sse_reconnect(self):
-        self.debug("trying to reconnect")
-        if self._event_client is not None:
-            self._event_client.stop()
-
-    def _sse_main(self):
-
-        # get stream, restart after requested seconds of inactivity or forced close
-        try:
-            if self._cfg.stream_timeout == 0:
-                self.debug("starting stream with no timeout")
-                self._event_client = SSEClient(
-                    self._log,
-                    self._cfg.host + SUBSCRIBE_PATH,
-                    headers=self._req.headers(),
-                    reconnect_cb=self._sse_reconnected,
-                )
-            else:
-                self.debug(
-                    "starting stream with {} timeout".format(
-                        self._cfg.stream_timeout
-                    )
-                )
-                self._event_client = SSEClient(
-                    self._log,
-                    self._cfg.host + SUBSCRIBE_PATH,
-                    headers=self._req.headers(),
-                    reconnect_cb=self._sse_reconnected,
-                    timeout=self._cfg.stream_timeout,
-                )
-
-            for event in self._event_client:
-
-                # stopped?
-                if event is None:
-                    self.debug("reopening: no event")
-                    break
-
-                # dig out response
-                try:
-                    response = json.loads(event.data)
-                except json.decoder.JSONDecodeError as e:
-                    self.debug("reopening: json error " + str(e))
-                    break
-
-                # deal with SSE specific pieces
-                # logged out? signal exited
-                if response.get("action", "") == "logout":
-                    self._log.warning("logged out? did you log in from elsewhere?")
-                    break
-
-                # connected - yay!
-                if response.get("status", "") == "connected":
-                    with self._lock:
-                        self._event_connected = True
-                        self._lock.notify_all()
-                    continue
-
-                # pass on to general handler
-                self._event_handle_response(response)
-
-        except requests.exceptions.ConnectionError:
-            self._log.warning("event loop timeout")
-        except requests.exceptions.HTTPError:
-            self._log.warning("event loop closed by server")
-        except AttributeError as e:
-            self._log.warning("forced close " + str(e))
-        except Exception as e:
-            # self._log.warning('general exception ' + str(e))
-            self._log.error(
-                "sse-error={}\n{}".format(
-                    type(e).__name__, traceback.format_exc()
-                )
-            )
-
-    def _select_backend(self):
-        # determine backend to use
-        if self._cfg.event_backend == 'auto':
-            if len(self._mqtt_topics()) == 0:
-                self.debug("auto chose SSE backend")
-                self._use_mqtt = False
-            else:
-                self.debug("auto chose MQTT backend")
-                self._use_mqtt = True
-        elif self._cfg.event_backend == 'mqtt':
-            self.debug("user chose MQTT backend")
-            self._use_mqtt = True
-        else:
-            self.debug("user chose SSE backend")
-            self._use_mqtt = False
 
     def _tfa_start(self):
         """Determine which tfa mechanism to use and set up the handlers if needed.
@@ -664,7 +467,7 @@ class ArloBackEnd:
         self._log.error("login failed: 2fa: no secondary choices available")
         return None
 
-    def _auth_trust_browser(self) -> AuthState:
+    def _auth_trust_browser(self) -> _AuthState:
         """Trust the device.
 
         If this is a new authentication we tell Arlo to trust this browser. Arlo
@@ -676,12 +479,12 @@ class ArloBackEnd:
         # If we have already paired we don't do it again.
         if not self._auth.needs_pairing:
             self.debug("no pairing required")
-            return AuthState.SUCCESS
+            return _AuthState.SUCCESS
 
         # If we have no browser code there is nothing to pair.
         if self._auth.browser_code is None:
             self.debug("pairing postponed")
-            return AuthState.SUCCESS
+            return _AuthState.SUCCESS
 
         # Start the pairing.
         code, body = self._auth_post(
@@ -694,13 +497,13 @@ class ArloBackEnd:
         )
         if code != 200:
             self._log.error(f"pairing: failed: {code} - {body}")
-            return AuthState.SUCCESS
+            return _AuthState.SUCCESS
 
         # We did it.
         self.debug("pairing succeeded")
-        return AuthState.SUCCESS
+        return _AuthState.SUCCESS
 
-    def _auth_validate(self) -> AuthState:
+    def _auth_validate(self) -> _AuthState:
         """Validate the token we have.
 
         Make sure the token we have is still good.
@@ -717,11 +520,11 @@ class ArloBackEnd:
         )
         if validated is None:
             self._log.error("token validation failed")
-            return AuthState.FAILED
+            return _AuthState.FAILED
 
-        return AuthState.TRUST_BROWSER
+        return _AuthState.TRUST_BROWSER
 
-    def _auth_new_auth(self) -> AuthState:
+    def _auth_new_auth(self) -> _AuthState:
         """We have to authenticate again.
 
         There are several steps to this:
@@ -738,14 +541,14 @@ class ArloBackEnd:
         # Find a factor ID to use
         self._auth.factor_id = self._auth_find_factor_id()
         if self._auth.factor_id is None:
-            return AuthState.FAILED
+            return _AuthState.FAILED
         self.debug(f"using factor id {self._auth.factor_id}")
 
         # Set up tfa. Call it now so it can capture state before we start
         # the authentication proper. For example, capture the current state
         # of an inbox before emails are sent.
         self._tfa_start()
-        
+
         # Start authentication to send out code. Stop if this fails.
         self._auth_options(AUTH_START_PATH, self._auth.headers)
         code, body = self._auth_post(
@@ -759,7 +562,7 @@ class ArloBackEnd:
         if code != 200:
             self._tfa_stop()
             self._log.error(f"login failed: new start failed1: {code} - {body}")
-            return AuthState.FAILED
+            return _AuthState.FAILED
 
         # We need this for the next step.
         factor_auth_code = body["factorAuthCode"]
@@ -771,7 +574,7 @@ class ArloBackEnd:
 
         if otp is None:
             self._log.error(f"login failed: 2fa: code retrieval failed")
-            return AuthState.FAILED
+            return _AuthState.FAILED
 
         # Build the payload. If we returned a one-time-passcode then enter it.
         payload = {
@@ -798,7 +601,7 @@ class ArloBackEnd:
             if code == 200:
                 self._auth.browser_code = body.get("browserAuthCode", None)
                 self._req.update(body)
-                return AuthState.VALIDATE_TOKEN
+                return _AuthState.VALIDATE_TOKEN
 
             # We have a code and we only have one attempt, so fail.
             if otp:
@@ -814,9 +617,9 @@ class ArloBackEnd:
             tries += 1
 
         self._log.error(f"login failed: finish failed: {code} - {body}")
-        return AuthState.FAILED
+        return _AuthState.FAILED
 
-    def _auth_trusted_auth(self) -> AuthState:
+    def _auth_trusted_auth(self) -> _AuthState:
         """Arlo still trusts us.
 
         Send back the factor id that was passed. We have a cookie - browser_trust_* -
@@ -837,7 +640,7 @@ class ArloBackEnd:
         # We failed at this stage. Stop trying for now.
         if code != 200:
             self._log.error(f"login failed: trusted start failed1: {code} - {body}")
-            return AuthState.FAILED
+            return _AuthState.FAILED
 
         # Save auth info.
         self._req.update(body)
@@ -845,11 +648,11 @@ class ArloBackEnd:
         # Check if we are done.
         if not body["authCompleted"]:
             self._log.error(f"login failed: trusted start failed2: {code} - {body}")
-            return AuthState.FAILED
+            return _AuthState.FAILED
         else:
-            return AuthState.VALIDATE_TOKEN
+            return _AuthState.VALIDATE_TOKEN
 
-    def _auth_current_factor_id(self) -> AuthState:
+    def _auth_current_factor_id(self) -> _AuthState:
         """Get the current factor id
 
         If we have paired this "device" with Arlo before it will return an ID
@@ -877,12 +680,12 @@ class ArloBackEnd:
         if code == 200:
             self._auth.needs_pairing = False
             self._auth.factor_id = body["factorId"]
-            return AuthState.TRUSTED_AUTH
+            return _AuthState.TRUSTED_AUTH
 
         # Look for a way to authenticate.
-        return AuthState.NEW_AUTH
-    
-    def _auth_login(self) -> AuthState:
+        return _AuthState.NEW_AUTH
+
+    def _auth_login(self) -> _AuthState:
         """Perform the actual login.
 
         This is when username and password get used. In an attempt to bypass
@@ -933,7 +736,7 @@ class ArloBackEnd:
                 # Username/password mismatch.
                 if code == 401:
                     self._log.error(f"login failed: {code} - {body}")
-                    return AuthState.FAILED
+                    return _AuthState.FAILED
 
                 # We've succeeded.
                 if code == 200:
@@ -944,9 +747,9 @@ class ArloBackEnd:
 
                     # See what state to move to next.
                     if not body["authCompleted"]:
-                        return AuthState.CURRENT_FACTOR_ID
+                        return _AuthState.CURRENT_FACTOR_ID
                     else:
-                        return AuthState.VALIDATE_TOKEN
+                        return _AuthState.VALIDATE_TOKEN
 
                 # Flag the failure.
                 self._log.error(f"login failed: {code} - possible cloudflare issue")
@@ -957,9 +760,9 @@ class ArloBackEnd:
 
         # Here means we're out of retries so stop now.
         self._log.error(f"login failed: no more curves - possible cloudflare issue")
-        return AuthState.FAILED
+        return _AuthState.FAILED
 
-    def _auth_starting(self) -> AuthState:
+    def _auth_starting(self) -> _AuthState:
         """Clear auth state to a known starting point.
         """
         self.debug("auth: starting")
@@ -971,7 +774,7 @@ class ArloBackEnd:
         self._auth.factor_id = None
         self._auth.needs_pairing = True
 
-        return AuthState.LOGIN
+        return _AuthState.LOGIN
 
     def _login(self):
         """Perform all the steps to authenticate against the Arlo servers.
@@ -979,28 +782,28 @@ class ArloBackEnd:
 
         # Restart. We might be able to miss out the login stage and just try
         # for a factor-id.
-        if self._auth.state != AuthState.STARTING:
-            self._auth.state = AuthState.STARTING
+        if self._auth.state != _AuthState.STARTING:
+            self._auth.state = _AuthState.STARTING
             self.debug("auth: restarting")
 
-        while self._auth.state != AuthState.SUCCESS and self._auth.state != AuthState.FAILED:            
-            if self._auth.state == AuthState.STARTING:
+        while self._auth.state != _AuthState.SUCCESS and self._auth.state != _AuthState.FAILED:
+            if self._auth.state == _AuthState.STARTING:
                 self._auth.state = self._auth_starting()
-            if self._auth.state == AuthState.LOGIN:
+            if self._auth.state == _AuthState.LOGIN:
                 self._auth.state = self._auth_login()
-            if self._auth.state == AuthState.CURRENT_FACTOR_ID:
+            if self._auth.state == _AuthState.CURRENT_FACTOR_ID:
                 self._auth.state = self._auth_current_factor_id()
-            if self._auth.state == AuthState.TRUSTED_AUTH:
+            if self._auth.state == _AuthState.TRUSTED_AUTH:
                 self._auth.state = self._auth_trusted_auth()
-            if self._auth.state == AuthState.NEW_AUTH:
+            if self._auth.state == _AuthState.NEW_AUTH:
                 self._auth.state = self._auth_new_auth()
-            if self._auth.state == AuthState.VALIDATE_TOKEN:
+            if self._auth.state == _AuthState.VALIDATE_TOKEN:
                 self._auth.state = self._auth_validate()
-            if self._auth.state == AuthState.TRUST_BROWSER:
+            if self._auth.state == _AuthState.TRUST_BROWSER:
                 self._auth.state = self._auth_trust_browser()
 
         self.debug(f"auth: login exit state: {self._auth.state}")
-        if self._auth.state != AuthState.SUCCESS:
+        if self._auth.state != _AuthState.SUCCESS:
             return False
 
         # We are in a successful state so:
@@ -1102,16 +905,21 @@ class ArloBackEnd:
         return trans_type + "!" + str(uuid.uuid4())
 
     def start_monitoring(self):
-        self._select_backend()
-        self._event_client = None
+        # Build event details...
+        self._event = ArloEvent(self._cfg, self._log, self._bg, self._req.details,
+                                self._event_response_handler,
+                                self._event_connected_handler,
+                                self._event_reconnected_handler)
+        self._event.setup()
+
         self._event_connected = False
-        self._event_thread = threading.Thread(
-            name="ArloEventStream", target=self._event_main, args=()
+        self._event_loop_thread = threading.Thread(
+            name="ArloEventStream", target=self._event_loop, args=()
         )
-        self._event_thread.daemon = True
+        self._event_loop_thread.daemon = True
 
         with self._lock:
-            self._event_thread.start()
+            self._event_loop_thread.start()
             count = 0
             while not self._event_connected and count < 30:
                 self.debug("waiting for stream up")
@@ -1119,10 +927,9 @@ class ArloBackEnd:
                 count += 1
 
         # start logout daemon for sse clients
-        if not self._use_mqtt:
-            if self._cfg.reconnect_every != 0:
-                self.debug("automatically reconnecting")
-                self._bg.run_every(self._sse_reconnect, self._cfg.reconnect_every)
+        if self._cfg.reconnect_every != 0:
+            self.debug("automatically reconnecting")
+            self._bg.run_every(self._event_reconnect, self._cfg.reconnect_every)
 
         self.debug("stream up")
         return True
@@ -1133,12 +940,9 @@ class ArloBackEnd:
 
     def logout(self):
         self.debug("trying to logout")
-        self._event_stop_loop()
-        if self._event_client is not None:
-            if self._use_mqtt:
-                self._event_client.disconnect()
-            else:
-                self._event_client.stop()
+        self._event_loop_stop()
+        if self._event is not None:
+            self._event.stop()
         self.put(LOGOUT_PATH)
 
     def notify(self, base, body, timeout=None, wait_for=None):
@@ -1180,16 +984,16 @@ class ArloBackEnd:
             self._bg.run(self._notify, base=base, body=body)
 
     def get(
-        self,
-        path,
-        params=None,
-        headers=None,
-        stream=False,
-        raw=False,
-        timeout=None,
-        host=None,
-        wait_for="response",
-        cookies=None,
+            self,
+            path,
+            params=None,
+            headers=None,
+            stream=False,
+            raw=False,
+            timeout=None,
+            host=None,
+            wait_for="response",
+            cookies=None,
     ):
         if wait_for == "response":
             self.vdebug("get+response running")
@@ -1203,14 +1007,14 @@ class ArloBackEnd:
             )
 
     def put(
-        self,
-        path,
-        params=None,
-        headers=None,
-        raw=False,
-        timeout=None,
-        wait_for="response",
-        cookies=None,
+            self,
+            path,
+            params=None,
+            headers=None,
+            raw=False,
+            timeout=None,
+            wait_for="response",
+            cookies=None,
     ):
         if wait_for == "response":
             self.vdebug("put+response running")
@@ -1222,14 +1026,14 @@ class ArloBackEnd:
             )
 
     def post(
-        self,
-        path,
-        params=None,
-        headers=None,
-        raw=False,
-        timeout=None,
-        tid=None,
-        wait_for="response"
+            self,
+            path,
+            params=None,
+            headers=None,
+            raw=False,
+            timeout=None,
+            tid=None,
+            wait_for="response"
     ):
         """Post a request to the Arlo servers.
 
