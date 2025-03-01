@@ -47,6 +47,7 @@ class _AuthState(IntEnum):
     FINISH_NEW_AUTH = 8,
     VALIDATE_TOKEN = 9,
     TRUST_BROWSER = 10,
+    REVALIDATE_TOKEN = 11,
 
 
 class _AuthDetails:
@@ -60,6 +61,8 @@ class _AuthDetails:
     needs_pairing: bool = False
     tfa_type: str | None = None
     tfa_handler: Arlo2FAConsole | Arlo2FAPush | Arlo2FAImap | Arlo2FARestAPI | None = None
+    attempt: int = 4
+    curves: list[str] = []
 
 
 # include token and session details
@@ -419,7 +422,7 @@ class ArloBackEnd:
     def _auth_get(
             self, path, params=None, headers=None, stream=False, raw=False, timeout=None, cookies=None
     ):
-        return self._req.request(
+        return self._req.request_tuple(
             path, "GET", params, headers, stream, raw, timeout, self._cfg.auth_host, authpost=True, cookies=cookies
         )
 
@@ -439,7 +442,7 @@ class ArloBackEnd:
         self.debug("auth: finding factor id")
 
         # Get a list of factors to use.
-        factors = self._auth_get(
+        code, factors = self._auth_get(
             f"{AUTH_GET_FACTORS}?data = {int(time.time())}", {
             },
             self._auth.headers
@@ -478,12 +481,12 @@ class ArloBackEnd:
 
         # If we have already paired we don't do it again.
         if not self._auth.needs_pairing:
-            self.debug("no pairing required")
+            self.debug("auth: no pairing required")
             return _AuthState.SUCCESS
 
         # If we have no browser code there is nothing to pair.
         if self._auth.browser_code is None:
-            self.debug("pairing postponed")
+            self.debug("auth: pairing postponed")
             return _AuthState.SUCCESS
 
         # Start the pairing.
@@ -496,11 +499,11 @@ class ArloBackEnd:
             self._auth.headers
         )
         if code != 200:
-            self._log.error(f"pairing: failed: {code} - {body}")
+            self._log.error(f"login: auth pairing failed: {code} - {body}")
             return _AuthState.SUCCESS
 
         # We did it.
-        self.debug("pairing succeeded")
+        self.debug("auth: pairing succeeded")
         return _AuthState.SUCCESS
 
     def _auth_validate(self) -> _AuthState:
@@ -513,7 +516,7 @@ class ArloBackEnd:
         # Update the token in the header to the new token.
         self._auth.headers["Authorization"] = self._req.details.token64
 
-        validated = self._auth_get(
+        code, validated = self._auth_get(
             f"{AUTH_VALIDATE_PATH}?data = {int(time.time())}", {
             },
             self._auth.headers
@@ -685,26 +688,25 @@ class ArloBackEnd:
         # Look for a way to authenticate.
         return _AuthState.NEW_AUTH
 
-    def _auth_login(self) -> _AuthState:
-        """Perform the actual login.
+    def _auth_get_connection(self) -> bool:
+        """Keep track of connection attempts and curve tries.
 
-        This is when username and password get used. In an attempt to bypass
-        cloudlfare issues it will try several different curve options.
+        We make 3 attempts to login. Each attempt will try a different
+        CloudFlare curve. Once we login we use the working connection
+        for the next stage of the login.
+
+        Note, these loops can be flipped if needed
+
+        Before its first use:
+         - set _auth.attempt to 1
+         - set _auth.curves to []
         """
-        self.debug("auth: logging in")
 
-        # We make 3 attempts to login. Each attempt will try a different
-        # CloudFlare curve. Once we login we use the working connection
-        # for the next stage of the login.
-        # XXX these `for` loops can be flipped if needed
-        for attempt in range(1, 4):
-            self.debug(f"auth: login attempt #{attempt}")
-
-            # Try each curve in each attempt.
-            for curve in self._cfg.ecdh_curves:
+        while True:
+            # We still have a curve to try? Grab a connection using it.
+            if self._auth.curves:
+                curve = self._auth.curves.pop(0)
                 self.debug(f"auth: CloudFlare curve set to: {curve}")
-
-                # Create the connection.
                 self._req.details.connection = cloudscraper.create_scraper(
                     # browser={
                     #     'browser': 'chrome',
@@ -716,43 +718,106 @@ class ArloBackEnd:
                     ecdhCurve=curve,
                     debug=False,
                 )
-                self._req.details.connection.cookies = self._req.details.cookies
+                return True
 
-                # Set the authentication headers.
-                self._auth.headers = self._req.auth_headers()
+            # Do we still have attempts left? Refill the curves and try the
+            # next one.
+            if self._auth.attempt < 4:
+                self.debug(f"auth: login attempt #{self._auth.attempt}")
+                self._auth.attempt += 1
+                self._auth.curves = self._cfg.ecdh_curves
+                self.debug(f"auth: login attempt #{self._auth.attempt - 1}, curves={self._auth.curves}")
+                continue
 
-                # Attempt the auth.
-                self._auth_options(AUTH_PATH, self._auth.headers)
-                code, body = self._auth_post(
-                    AUTH_PATH, {
-                        "email": self._cfg.username,
-                        "password": to_b64(self._cfg.password),
-                        "language": "en",
-                        "EnvSource": "prod",
-                    },
-                    self._auth.headers,
-                )
+            # We've failed...
+            self.debug("auth: failed")
+            self._req.details.connection = None
+            break
 
-                # Username/password mismatch.
-                if code == 401:
-                    self._log.error(f"login failed: {code} - {body}")
-                    return _AuthState.FAILED
+        return False
 
-                # We've succeeded.
-                if code == 200:
-                    # Update our user info and add the Authorization field to the
-                    # auth headers.
-                    self._req.update(body)
-                    self._auth.headers["Authorization"] = self._req.details.token64
+    def _auth_revalidate_token(self) -> _AuthState:
+        """See if we can skip auth by re-using the old token.
+        """
+        self.debug("auth: testing trust")
 
-                    # See what state to move to next.
-                    if not body["authCompleted"]:
-                        return _AuthState.CURRENT_FACTOR_ID
-                    else:
-                        return _AuthState.VALIDATE_TOKEN
+        # We haven't logged in at all yet.
+        if self._req.details.token64 is None:
+            self.debug("auth: nothing to test")
+            return _AuthState.LOGIN
 
-                # Flag the failure.
-                self._log.error(f"login failed: {code} - possible cloudflare issue")
+        # The current token has expired.
+        self.debug(f"now={int(time.time())}, expires={int(self._req.details.token_expires_in - 300)}")
+        if self._req.details.token_expires_in - 300 < time.time():
+            self.debug("auth: login expired")
+            return _AuthState.LOGIN
+
+        while self._auth_get_connection():
+
+            # Fix up the connection with saved state.
+            self._req.details.connection.cookies = self._req.details.cookies
+            self._auth.headers = self._req.auth_headers()
+            self._auth.headers["Authorization"] = self._req.details.token64
+
+            # Try the current token.
+            state = self._auth_validate()
+            if state != _AuthState.FAILED:
+                self.debug("auth: testing ok")
+                return _AuthState.SUCCESS
+
+            # Don't try too hard.
+            time.sleep(3)
+
+        # Login...
+        # Maybe reset here...
+        return _AuthState.LOGIN
+
+    def _auth_login(self) -> _AuthState:
+        """Perform the actual login.
+
+        This is when username and password get used. In an attempt to bypass
+        cloudlfare issues it will try several different curve options.
+        """
+        self.debug("auth: logging in")
+
+        while self._auth_get_connection():
+
+            # Fix up the connection with saved state.
+            self._req.details.connection.cookies = self._req.details.cookies
+            self._auth.headers = self._req.auth_headers()
+
+            # Attempt the auth.
+            self._auth_options(AUTH_PATH, self._auth.headers)
+            code, body = self._auth_post(
+                AUTH_PATH, {
+                    "email": self._cfg.username,
+                    "password": to_b64(self._cfg.password),
+                    "language": "en",
+                    "EnvSource": "prod",
+                },
+                self._auth.headers,
+            )
+
+            # Username/password mismatch.
+            if code == 401:
+                self._log.error(f"login failed: {code} - {body}")
+                return _AuthState.FAILED
+
+            # We've succeeded.
+            if code == 200:
+                # Update our user info and add the Authorization field to the
+                # auth headers.
+                self._req.update(body)
+                self._auth.headers["Authorization"] = self._req.details.token64
+
+                # See what state to move to next.
+                if not body["authCompleted"]:
+                    return _AuthState.CURRENT_FACTOR_ID
+                else:
+                    return _AuthState.VALIDATE_TOKEN
+
+            # Flag the failure.
+            self._log.error(f"login failed: {code} - possible cloudflare issue")
 
             # Wait before the next attempt.
             # XXX this can be indented to wait after every curve
@@ -769,12 +834,13 @@ class ArloBackEnd:
 
         self._req.load_cookies()
         self._req.details.user_agent = self._cfg.user_agent_string()
-        # self._req.user_agent = self.user_agent(self._cfg.user_agent)
         self._req.details.connection = None
         self._auth.factor_id = None
         self._auth.needs_pairing = True
+        self._auth.attempt = 1
+        self._auth.curves = []
 
-        return _AuthState.LOGIN
+        return _AuthState.REVALIDATE_TOKEN
 
     def _login(self):
         """Perform all the steps to authenticate against the Arlo servers.
@@ -789,6 +855,8 @@ class ArloBackEnd:
         while self._auth.state != _AuthState.SUCCESS and self._auth.state != _AuthState.FAILED:
             if self._auth.state == _AuthState.STARTING:
                 self._auth.state = self._auth_starting()
+            if self._auth.state == _AuthState.REVALIDATE_TOKEN:
+                self._auth.state = self._auth_revalidate_token()
             if self._auth.state == _AuthState.LOGIN:
                 self._auth.state = self._auth_login()
             if self._auth.state == _AuthState.CURRENT_FACTOR_ID:

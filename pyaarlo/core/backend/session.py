@@ -96,19 +96,24 @@ class ArloSession:
         self.details.sub_id = None
         self.details.token = None
         self.details.token_expires_in = 0
+        self.details.token64 = None
 
         try:
             with open(self._save_filename, "rb") as dump:
                 ArloSession._save_info = pickle.load(dump)
                 session_info: dict[str, {str, str}] | None = ArloSession._save_info.get(self._save_username, None)
                 if session_info is not None:
+                    # Read in values.
                     self.details.device_id = session_info["device_id"]
                     self.details.user_id = session_info["user_id"]
                     self.details.web_id = session_info["web_id"]
                     self.details.sub_id = session_info["sub_id"]
                     self.details.token = session_info["token"]
                     self.details.token_expires_in = int(session_info["expires_in"])
-                    self._debug(f"load session_info={ArloSession._save_info}")
+                    # Build remaining.
+                    self.details.token64 = to_b64(self.details.token)
+                    self._debug(f"load saved={ArloSession._save_info}")
+                    self._debug(f"load toke64={self.details.token64}")
                 else:
                     self._debug("load failed")
         except Exception:
@@ -176,7 +181,7 @@ class ArloSession:
             # "Sec-Fetch-Mode": "cors",
             # "Sec-Fetch-Site": "same-site",
             "User-Agent": self.details.user_agent,
-            "X-Service-Version": "3",
+            "X-Service-Version": "v3",
             "X-User-Device-Automation-Name": "QlJPV1NFUg==",
             "X-User-Device-Id": self.details.device_id,
             "X-User-Device-Type": "BROWSER",

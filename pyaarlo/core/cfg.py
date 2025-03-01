@@ -361,10 +361,11 @@ class ArloCfg:
     @property
     def ecdh_curves(self):
         curve = self._kw.get("ecdh_curve", None)
-        if curve in ECDH_CURVES:
+        curves = ECDH_CURVES
+        if curve in curves:
             # Moves user-selected curve to front of list
-            ECDH_CURVES.insert(0, ECDH_CURVES.pop(ECDH_CURVES.index(curve)))
-        return ECDH_CURVES
+            curves.insert(0, curves.pop(curves.index(curve)))
+        return curves
 
     @property
     def send_source(self):
