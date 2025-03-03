@@ -60,6 +60,15 @@ class _AuthDetails:
     curves: list[str] = []
 
 
+class _EventDetails:
+    """This tracks the event stream state.
+    """
+    loop_exiting: bool = False
+    loop_thread: threading.Thread | None = None
+    stream: ArloEvent | None = None
+    stream_connected: bool = False
+
+
 # include token and session details
 class ArloBackEnd:
 
@@ -75,16 +84,12 @@ class ArloBackEnd:
 
     # This holds the request state.
     _req: ArloSession | None = None
-    _req_lock: threading.Lock = threading.Lock()
 
     # This holds the auth details and state.
     _auth: _AuthDetails = _AuthDetails()
 
-    # How we are talking to the backend.
-    _event_stream: ArloEvent | None = None
-    _event_stream_connected: bool = False
-    _event_loop_thread: threading.Thread | None = None
-    _event_loop_exiting: bool = False
+    # The event stream.
+    _event: _EventDetails = _EventDetails()
 
     def __init__(self, cfg: ArloCfg, log: ArloLogger, bg: ArloBackground):
 
@@ -113,9 +118,15 @@ class ArloBackEnd:
             self.debug("failed to log in")
         return
 
-    def _event_dispatcher(self, response):
+    def _event_run_callbacks(self, response):
+        """Run registered call backs.
 
-        # get message type(s) and id(s)
+        I'm trying to keep this as generic as possible... but it needs some
+        smarts to figure out where to send responses - the packets from Arlo
+        are anything but consistent...
+        See docs/packets for and idea of what we're parsing.
+        """
+
         responses = []
         resource = response.get("resource", "")
 
@@ -127,13 +138,6 @@ class ArloBackEnd:
                 + ",message="
                 + str(err.get("message", "XXX"))
             )
-
-        #
-        # I'm trying to keep this as generic as possible... but it needs some
-        # smarts to figure out where to send responses - the packets from Arlo
-        # are anything but consistent...
-        # See docs/packets for and idea of what we're parsing.
-        #
 
         # Answer for async ping. Note and finish.
         # Packet type #1
@@ -231,38 +235,13 @@ class ArloBackEnd:
             for cb in cbs:
                 self._bg.run(cb, resource=resource, event=response)
 
-    def _event_connected_handler(self):
-        with self._lock:
-            self._event_stream_connected = True
-            self._lock.notify_all()
-        self.debug("event connected")
-        return {
-            "devices": self.devices()
-        }
+    def _event_notify_waiting(self, response):
+        """Check if this event satifies a waiting post() call.
 
-    def _event_reconnected_handler(self):
-        self.debug("event re-connected")
-        self.devices()
+        We match a respone to a request and copy the response to it. When done
+        signal the post to continue.
+        """
 
-    def _event_response_handler(self, response):
-
-        # Debugging.
-        if self._dump_file is not None:
-            with open(self._dump_file, "a") as dump:
-                time_stamp = now_strftime("%Y-%m-%d %H:%M:%S.%f")
-                dump.write(
-                    "{}: {}\n".format(
-                        time_stamp, pprint.pformat(response, indent=2)
-                    )
-                )
-        self.vdebug(
-            "packet-in=\n{}".format(pprint.pformat(response, indent=2))
-        )
-
-        # Run the dispatcher to set internal state and run callbacks.
-        self._event_dispatcher(response)
-
-        # is there a notify/post waiting for this response? If so, signal to waiting entity.
         tid = response.get("transId", None)
         resource = response.get("resource", None)
         device_id = response.get("from", None)
@@ -298,16 +277,57 @@ class ArloBackEnd:
                             self._requests[request] = response
                             self._lock.notify_all()
 
+    def _event_response_handler(self, response):
+
+        # Debugging.
+        if self._dump_file is not None:
+            with open(self._dump_file, "a") as dump:
+                time_stamp = now_strftime("%Y-%m-%d %H:%M:%S.%f")
+                dump.write(
+                    "{}: {}\n".format(
+                        time_stamp, pprint.pformat(response, indent=2)
+                    )
+                )
+        self.vdebug(
+            "packet-in=\n{}".format(pprint.pformat(response, indent=2))
+        )
+
+        # Run the dispatcher to set internal state and run callbacks.
+        self._event_run_callbacks(response)
+        
+        # Notify any waiting post() calls.
+        self._event_notify_waiting(response)
+
+    def _event_connected_handler(self):
+        with self._lock:
+            self._event.stream_connected = True
+            self._lock.notify_all()
+        self.debug("event connected")
+        return {
+            "devices": self.devices()
+        }
+
+    def _event_reconnected_handler(self):
+        self.debug("event re-connected")
+        self.devices()
+
     def _event_reconnect(self):
-        self._event_stream.stop()
+        self._event.stream.stop()
 
     def _event_loop_stop(self):
-        self._event_loop_exiting = True
+        self._event.loop_exiting = True
 
     def _event_loop(self):
+        """The event stream loop.
+
+        This is run inside its own thread. It's currently done inside the
+        `backend` directltly to simplify things.
+        XXX is simplifying?
+        XXX move to async one day...
+        """
         self.debug("re-logging in")
 
-        while not self._event_loop_exiting:
+        while not self._event.loop_exiting:
 
             # say we're starting
             if self._dump_file is not None:
@@ -316,14 +336,19 @@ class ArloBackEnd:
                     dump.write("{}: {}\n".format(time_stamp, "event_thread start"))
 
             # login again if not first iteration, this will also create a new session
+            login_count = 0
+            wait_time = 5
             while not self._logged_in:
                 with self._lock:
-                    self._lock.wait(5)
+                    self._lock.wait(wait_time)
+                # While testing; hold off for an hour if too many failures.
+                if login_count > 3:
+                    wait_time = 360
                 self.debug("re-logging in")
                 self._logged_in = self._login() and self._session_finalize()
 
             self.debug("starting event device")
-            self._event_stream.run()
+            self._event.stream.run()
             self.debug("exited event device")
 
             # clear down and signal out
@@ -334,32 +359,6 @@ class ArloBackEnd:
 
             # restart login...
             self._logged_in = False
-
-    def _new_update_user_info(self, body):
-        """Update session details from the packet body passed.
-
-        What we grab is:
-         - token
-         - our usedID
-         - when the token expires
-
-        What we create is:
-         - token converted to base64
-         - our web id
-         - our subscription id
-        """
-
-        # If we have this we have to drop down a level.
-        if "accessToken" in body:
-            body = body["accessToken"]
-
-        self._req.details.token = body["token"]
-        self._req.details.user_id = body["userId"]
-        self._req.details.token_expires_in = body["expiresIn"]
-
-        self._req.details.token64 = to_b64(self._req.details.token)
-        self._req.details.web_id = self._req.details.user_id + "_web"
-        self._req.details.sub_id = "subscriptions/" + self._req.details.web_id
 
     def _auth_post(self, path, params=None, headers=None, raw=False, timeout=None, cookies=None):
         return self._req.request_tuple(
@@ -686,7 +685,7 @@ class ArloBackEnd:
     def _auth_revalidate_token(self) -> _AuthState:
         """See if we can skip auth by re-using the old token.
         """
-        self.debug("auth: testing trust")
+        self.debug("auth: revalidating token")
 
         # We haven't logged in at all yet.
         if self._req.details.token64 is None:
@@ -925,22 +924,22 @@ class ArloBackEnd:
 
     def start_monitoring(self):
         # Build event details...
-        self._event_stream = ArloEvent(self._cfg, self._log, self._bg, self._req.details,
+        self._event.stream = ArloEvent(self._cfg, self._log, self._bg, self._req.details,
                                        self._event_response_handler,
                                        self._event_connected_handler,
                                        self._event_reconnected_handler)
-        self._event_stream.setup()
+        self._event.stream.setup()
 
-        self._event_stream_connected = False
-        self._event_loop_thread = threading.Thread(
+        self._event.stream_connected = False
+        self._event.loop_thread = threading.Thread(
             name="ArloEventStream", target=self._event_loop, args=()
         )
-        self._event_loop_thread.daemon = True
+        self._event.loop_thread.daemon = True
 
         with self._lock:
-            self._event_loop_thread.start()
+            self._event.loop_thread.start()
             count = 0
-            while not self._event_stream_connected and count < 30:
+            while not self._event.stream_connected and count < 30:
                 self.debug("waiting for stream up")
                 self._lock.wait(1)
                 count += 1
@@ -960,8 +959,8 @@ class ArloBackEnd:
     def logout(self):
         self.debug("trying to logout")
         self._event_loop_stop()
-        if self._event_stream is not None:
-            self._event_stream.stop()
+        if self._event.stream is not None:
+            self._event.stream.stop()
         self.put(LOGOUT_PATH)
 
     def notify(self, device_id, xcloud_id, body, timeout=None, wait_for=None):
@@ -995,7 +994,6 @@ class ArloBackEnd:
             tid = self._start_transaction()
             self._notify(device_id, xcloud_id, body=body, trans_id=tid)
             return self._wait_for_transaction(tid, timeout)
-            # return self._notify_and_get_event(base, body, timeout=timeout)
         elif wait_for == "response":
             self.vdebug("notify+response running")
             return self._notify(device_id, xcloud_id, body=body)
@@ -1070,7 +1068,7 @@ class ArloBackEnd:
             wait_for = "resource" if self._cfg.synchronous_mode else "response"
 
         if wait_for == "resource":
-            self.vdebug("notify+resource running")
+            self.vdebug("post+resource running")
             if tid is None:
                 tid = list(params.keys())[0]
             tid = self._start_transaction(tid)
@@ -1123,7 +1121,7 @@ class ArloBackEnd:
         return self.get(DEVICES_PATH + "?t={}".format(time_to_arlotime()))
 
     def ev_inject(self, response):
-        self._event_dispatcher(response)
+        self._event_run_callbacks(response)
 
     def debug(self, msg):
         self._log.debug(f"backend: {msg}")
