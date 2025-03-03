@@ -9,24 +9,6 @@ from .constant import (
     BLANK_IMAGE,
     DEVICES_PATH,
     FAST_REFRESH_INTERVAL,
-    MODEL_ESSENTIAL_SPOTLIGHT,
-    MODEL_ESSENTIAL_XL_SPOTLIGHT,
-    MODEL_ESSENTIAL_INDOOR,
-    MODEL_ESSENTIAL_INDOOR_GEN2_2K,
-    MODEL_ESSENTIAL_INDOOR_GEN2_HD,
-    MODEL_PRO_3_FLOODLIGHT,
-    MODEL_PRO_4,
-    MODEL_PRO_5,
-    MODEL_WIRED_VIDEO_DOORBELL,
-    MODEL_WIRED_VIDEO_DOORBELL_GEN2_HD,
-    MODEL_WIRED_VIDEO_DOORBELL_GEN2_2K,
-    MODEL_ESSENTIAL_VIDEO_DOORBELL,
-    MODEL_GO,
-    MODEL_GO_2,
-    MODEL_ESSENTIAL_XL_OUTDOOR_GEN2_2K,
-    MODEL_ESSENTIAL_XL_OUTDOOR_GEN2_HD,
-    MODEL_ESSENTIAL_OUTDOOR_GEN2_2K,
-    MODEL_ESSENTIAL_OUTDOOR_GEN2_HD,
     PING_CAPABILITY,
     SLOW_REFRESH_INTERVAL,
     TOTAL_BELLS_KEY,
@@ -36,21 +18,23 @@ from .constant import (
     LOCATIONS_EMERGENCY_PATH,
     VALID_DEVICE_STATES,
 )
+from .base_station import ArloBaseStation
+from .camera import ArloCamera
 from .core import ArloCore
 from .core.backend import ArloBackEnd
 from .core.background import ArloBackground
 from .core.cfg import ArloCfg
 from .core.logger import ArloLogger
 from .core.storage import ArloStorage
-from .camera import ArloCamera
-from .base_station import ArloBaseStation
 from .doorbell import ArloDoorBell
 from .light import ArloLight
-from .media import ArloMediaLibrary
 from .location import ArloLocation
-from .sensor import ArloSensor
-from .utils import time_to_arlotime
+from .media import ArloMediaLibrary
 from .objects import ArloObjects
+from .sensor import ArloSensor
+from .types import ArloTypes
+from .utils import time_to_arlotime
+
 
 __version__ = "0.8.0.18"
 
@@ -168,15 +152,13 @@ class PyArlo:
 
         # Now load the config.
         self._core.cfg = ArloCfg(self._core.log, **kwargs)
-        # return
 
         # Create storage/scratch directory.
-        if self._core.cfg.save_state or self._core.cfg.dump or self._core.cfg.save_session:
-            try:
-                if not os.path.exists(self._core.cfg.storage_dir):
-                    os.mkdir(self._core.cfg.storage_dir)
-            except Exception:
-                self.warning(f"Problem creating {self._core.cfg.storage_dir}")
+        try:
+            if not os.path.exists(self._core.cfg.storage_dir):
+                os.mkdir(self._core.cfg.storage_dir)
+        except Exception:
+            self.warning(f"Problem creating {self._core.cfg.storage_dir}")
 
         # Create remaining core components.
         self._core.bg = ArloBackground(self._core.log)
@@ -184,8 +166,7 @@ class PyArlo:
         self._core.be = ArloBackEnd(self._core.cfg, self._core.log, self._core.bg)
 
         # Fill out the object store.
-        # The lists are created clear but we need to add in the media library.
-        # XXX remove ml from here?
+        # The lists are created empty but we need to add in the media library.
         self._objs.ml = ArloMediaLibrary(self._core, self._objs)
 
         # Failed to login, then stop now!
@@ -211,74 +192,14 @@ class PyArlo:
         # Get devices, fill local db, and create device instance.
         self.info("pyaarlo starting")
         self._started = False
+
+        # Get locations if needed.
         if self._core.be.multi_location:
             self._refresh_locations()
+
+        # Build Arlo objects.
         self._refresh_devices()
-
-        for device in self._devices:
-            dname = device.get("deviceName")
-            dtype = device.get("deviceType")
-            device_state = device.get("state", "unknown").lower()
-            if device_state not in VALID_DEVICE_STATES:
-                self.info(f"skipping {dname}: state is {device_state}")
-                continue
-
-            # This needs it's own code now... Does no parent indicate a base station???
-            if (
-                dtype == "basestation"
-                or dtype == "arlobridge"
-                or dtype.lower() == 'hub'
-                or device.get("modelId") == "ABC1000"
-                or device.get("modelId").startswith(MODEL_GO)
-                or dtype == "arloq"
-                or dtype == "arloqs"
-            ):
-                self._objs.base_stations.append(ArloBaseStation(dname, self._core, self._objs, device))
-
-            # Newer devices can connect directly to wifi and can be its own base station,
-            # it can also be assigned to a real base station
-            if device.get("modelId").startswith((
-                    MODEL_WIRED_VIDEO_DOORBELL,
-                    MODEL_PRO_3_FLOODLIGHT,
-                    MODEL_PRO_4,
-                    MODEL_PRO_5,
-                    MODEL_ESSENTIAL_SPOTLIGHT,
-                    MODEL_ESSENTIAL_XL_SPOTLIGHT,
-                    MODEL_ESSENTIAL_INDOOR,
-                    MODEL_ESSENTIAL_INDOOR_GEN2_2K,
-                    MODEL_ESSENTIAL_INDOOR_GEN2_HD,
-                    MODEL_ESSENTIAL_XL_OUTDOOR_GEN2_2K,
-                    MODEL_ESSENTIAL_XL_OUTDOOR_GEN2_HD,
-                    MODEL_ESSENTIAL_OUTDOOR_GEN2_2K,
-                    MODEL_ESSENTIAL_OUTDOOR_GEN2_HD,
-                    MODEL_WIRED_VIDEO_DOORBELL_GEN2_HD,
-                    MODEL_WIRED_VIDEO_DOORBELL_GEN2_2K,
-                    MODEL_ESSENTIAL_VIDEO_DOORBELL,
-                    MODEL_GO_2
-            )):
-                parent_id = device.get("parentId", None)
-                if parent_id is None or parent_id == device.get("deviceId", None):
-                    self._objs.base_stations.append(ArloBaseStation(dname, self._core, self._objs, device))
-
-            if (
-                dtype == "camera"
-                or dtype == "arloq"
-                or dtype == "arloqs"
-                or device.get("modelId").startswith((
-                    MODEL_GO,
-                    MODEL_WIRED_VIDEO_DOORBELL,
-                    MODEL_WIRED_VIDEO_DOORBELL_GEN2_HD,
-                    MODEL_WIRED_VIDEO_DOORBELL_GEN2_2K,
-                    MODEL_ESSENTIAL_VIDEO_DOORBELL
-                ))
-            ):
-                self._objs.cameras.append(ArloCamera(dname, self._core, self._objs, device))
-            if dtype == "doorbell":
-                self._objs.doorbells.append(ArloDoorBell(dname, self._core, self._objs, device))
-            if dtype == "lights":
-                self._objs.lights.append(ArloLight(dname, self._core, self._objs, device))
-            if dtype == "sensors":
-                self._objs.sensors.append(ArloSensor(dname, self._core, self._objs, device))
+        self._build_objects()
 
         # Save out unchanging stats!
         self._core.st.set(["ARLO", TOTAL_CAMERAS_KEY], len(self._objs.cameras), prefix="aarlo")
@@ -288,48 +209,22 @@ class PyArlo:
         # Subscribe to events.
         self._core.be.start_monitoring()
 
-        self.debug(f"ob2={self._objs.cameras}")
-        self.debug(f"ob2={self._objs.ml}")
-
         # Now ping the bases.
         self._ping_bases()
 
-        # Initial config and state retrieval.
-        if self._core.cfg.synchronous_mode:
-            # Synchronous; run them one after the other
-            self.debug("getting initial settings")
-            self._refresh_bases(initial=True)
-            self._refresh_modes()
-            self._refresh_ambient_sensors()
-            self._refresh_doorbells()
-            self._objs.ml.load()
-            self._refresh_camera_thumbnails(True)
-            self._refresh_camera_media(True)
-            self._initial_refresh_done()
-        else:
-            # Asynchronous; queue them to run one after the other
-            self.debug("queueing initial settings")
-            self._core.bg.run(self._refresh_bases, initial=True)
-            self._core.bg.run(self._refresh_modes)
-            self._core.bg.run(self._refresh_ambient_sensors)
-            self._core.bg.run(self._refresh_doorbells)
-            self._core.bg.run(self._objs.ml.load)
-            self._core.bg.run(self._refresh_camera_thumbnails, wait=False)
-            self._core.bg.run(self._refresh_camera_media, wait=False)
-            self._core.bg.run(self._initial_refresh_done)
+        # Start initial refresh and, if needed, wait for it to finish.
+        self._initial_refresh(wait=self._core.cfg.synchronous_mode)
+        if self._core.cfg.synchronous_mode or self._core.cfg.wait_for_initial_setup:
+            with self._lock:
+                while not self._started:
+                    self.debug("waiting for initial setup...")
+                    self._lock.wait(1)
+            self.debug("initial setup finished...")
 
         # Register house keeping cron jobs.
         self.debug("registering cron jobs")
         self._core.bg.run_every(self._fast_refresh, FAST_REFRESH_INTERVAL)
         self._core.bg.run_every(self._slow_refresh, SLOW_REFRESH_INTERVAL)
-
-        # Wait for initial refresh
-        if self._core.cfg.wait_for_initial_setup:
-            with self._lock:
-                while not self._started:
-                    self.debug("waiting for initial setup...")
-                    self._lock.wait(1)
-            self.debug("setup finished...")
 
     def __repr__(self):
         # Representation string of object.
@@ -341,8 +236,42 @@ class PyArlo:
     def _v3_modes(self):
         return self.cfg.mode_api.lower() == "v3"
 
+    def _build_objects(self):
+        """Convert devices into Arlo objects.
+        """
+        for device in self._devices:
+
+            # Do we need to bother with this device?
+            device_name = device.get("deviceName")
+            device_state = device.get("state", "unknown").lower()
+            if device_state not in VALID_DEVICE_STATES:
+                self.info(f"skipping {device_name}: state is {device_state}")
+                continue
+
+            # Grab some more basic information.
+            device_type = device.get("deviceType")
+            model_id = device.get("modelId")
+
+            # Check the type and create the appropriate object. Some devices
+            # will create more than one object.
+            if ArloTypes.is_a_base_station(device_type, model_id):
+                self._objs.base_stations.append(ArloBaseStation(device_name, self._core, self._objs, device))
+            if ArloTypes.can_be_own_base_station(model_id):
+                parent_id = device.get("parentId", None)
+                if parent_id is None or parent_id == device.get("deviceId", None):
+                    self._objs.base_stations.append(ArloBaseStation(device_name, self._core, self._objs, device))
+            if ArloTypes.is_a_camera(device_type, model_id):
+                self._objs.cameras.append(ArloCamera(device_name, self._core, self._objs, device))
+            if device_type == "doorbell":
+                self._objs.doorbells.append(ArloDoorBell(device_name, self._core, self._objs, device))
+            if device_type == "lights":
+                self._objs.lights.append(ArloLight(device_name, self._core, self._objs, device))
+            if device_type == "sensors":
+                self._objs.sensors.append(ArloSensor(device_name, self._core, self._objs, device))
+
     def _refresh_devices(self):
         """Read in the devices list.
+
         This returns all devices known to the Arlo system. The newer devices
         include state information - battery levels etc - while the old devices
         don't. We update what we can.
@@ -478,10 +407,15 @@ class PyArlo:
         self._core.bg.run(self._refresh_bases, initial=False)
         self._core.bg.run(self._refresh_ambient_sensors)
 
-    def _initial_refresh(self):
-        self.debug("initial refresh")
+    def _initial_refresh(self, wait: bool):
+        self.debug(f"initial refresh, wait={wait}")
         self._core.bg.run(self._refresh_bases, initial=True)
+        self._core.bg.run(self._refresh_modes)
         self._core.bg.run(self._refresh_ambient_sensors)
+        self._core.bg.run(self._refresh_doorbells)
+        self._core.bg.run(self._objs.ml.load)
+        self._core.bg.run(self._refresh_camera_thumbnails, wait=wait)
+        self._core.bg.run(self._refresh_camera_media, wait=wait)
         self._core.bg.run(self._initial_refresh_done)
 
     def _initial_refresh_done(self):
