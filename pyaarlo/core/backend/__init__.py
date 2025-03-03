@@ -109,14 +109,20 @@ class ArloBackEnd:
         # Restore the persistent session information.
         self._req.load()
         if self._req.details.device_id is None:
-            self.debug("created new user ID")
+            self._debug("created new user ID")
             self._req.details.device_id = str(uuid.uuid4())
 
         # Start the login
         self._logged_in = self._login() and self._session_finalize()
         if not self._logged_in:
-            self.debug("failed to log in")
+            self._debug("failed to log in")
         return
+
+    def _debug(self, msg):
+        self._log.debug(f"backend: {msg}")
+
+    def _vdebug(self, msg):
+        self._log.vdebug(f"backend: {msg}")
 
     def _event_run_callbacks(self, response):
         """Run registered call backs.
@@ -142,14 +148,14 @@ class ArloBackEnd:
         # Answer for async ping. Note and finish.
         # Packet type #1
         if resource.startswith("subscriptions/"):
-            self.vdebug("packet: async ping response " + resource)
+            self._vdebug("packet: async ping response " + resource)
             return
 
         # These is a base station mode response. Find base station ID and
         # forward response.
         # Packet type #2
         if resource == "activeAutomations":
-            self.debug("packet: base station mode response")
+            self._debug("packet: base station mode response")
             for device_id in response:
                 if device_id != "resource":
                     responses.append((device_id, resource, response[device_id]))
@@ -157,7 +163,7 @@ class ArloBackEnd:
         # Mode update response
         # XXX these might be deprecated
         elif "states" in response:
-            self.debug("packet: mode update")
+            self._debug("packet: mode update")
             device_id = response.get("from", None)
             if device_id is not None:
                 responses.append((device_id, "states", response["states"]))
@@ -166,7 +172,7 @@ class ArloBackEnd:
         # things like motion detection or temperature changes.
         # Packet type #3
         elif [x for x in self._resource_types if resource.startswith(x + "/")]:
-            self.debug("packet: device update")
+            self._debug("packet: device update")
             device_id = resource.split("/")[1]
             responses.append((device_id, resource, response))
 
@@ -174,9 +180,9 @@ class ArloBackEnd:
         # and pass directly to the referenced devices.
         # Packet type #4
         elif resource == 'devices':
-            self.debug("packet: base and child statuses")
+            self._debug("packet: base and child statuses")
             for device_id in response.get('devices', {}):
-                self.debug(f"DEVICES={device_id}")
+                self._debug(f"DEVICES={device_id}")
                 props = response['devices'][device_id]
                 responses.append((device_id, resource, props))
 
@@ -221,12 +227,12 @@ class ArloBackEnd:
             if device_id is not None:
                 responses.append((device_id, resource, response))
             else:
-                self.debug(f"unhandled response {resource} - {response}")
+                self._debug(f"unhandled response {resource} - {response}")
 
         # Now find something waiting for this/these.
         for device_id, resource, response in responses:
             cbs = []
-            self.debug("sending {} to {}".format(resource, device_id))
+            self._debug("sending {} to {}".format(resource, device_id))
             with self._lock:
                 if device_id and device_id in self._callbacks:
                     cbs.extend(self._callbacks[device_id])
@@ -259,7 +265,7 @@ class ArloBackEnd:
             if resource:
                 # Historical. We are looking for a straight matching resource.
                 if resource in self._requests:
-                    self.vdebug("{} found by text!".format(resource))
+                    self._vdebug("{} found by text!".format(resource))
                     self._requests[resource] = response
                     self._lock.notify_all()
 
@@ -268,10 +274,10 @@ class ArloBackEnd:
                     # deviceid matching a regex.
                     if device_id:
                         resource = "{}:{}".format(resource, device_id)
-                        self.vdebug("{} bounded device!".format(resource))
+                        self._vdebug("{} bounded device!".format(resource))
                     for request in self._requests:
                         if re.match(request, resource):
-                            self.vdebug(
+                            self._vdebug(
                                 "{} found by regex {}!".format(resource, request)
                             )
                             self._requests[request] = response
@@ -288,7 +294,7 @@ class ArloBackEnd:
                         time_stamp, pprint.pformat(response, indent=2)
                     )
                 )
-        self.vdebug(
+        self._vdebug(
             "packet-in=\n{}".format(pprint.pformat(response, indent=2))
         )
 
@@ -302,13 +308,13 @@ class ArloBackEnd:
         with self._lock:
             self._event.stream_connected = True
             self._lock.notify_all()
-        self.debug("event connected")
+        self._debug("event connected")
         return {
             "devices": self.devices()
         }
 
     def _event_reconnected_handler(self):
-        self.debug("event re-connected")
+        self._debug("event re-connected")
         self.devices()
 
     def _event_reconnect(self):
@@ -325,7 +331,7 @@ class ArloBackEnd:
         XXX is simplifying?
         XXX move to async one day...
         """
-        self.debug("re-logging in")
+        self._debug("re-logging in")
 
         while not self._event.loop_exiting:
 
@@ -344,12 +350,12 @@ class ArloBackEnd:
                 # While testing; hold off for an hour if too many failures.
                 if login_count > 3:
                     wait_time = 360
-                self.debug("re-logging in")
+                self._debug("re-logging in")
                 self._logged_in = self._login() and self._session_finalize()
 
-            self.debug("starting event device")
+            self._debug("starting event device")
             self._event.stream.run()
-            self.debug("exited event device")
+            self._debug("exited event device")
 
             # clear down and signal out
             with self._lock:
@@ -385,7 +391,7 @@ class ArloBackEnd:
         Then look at the user config and figure out which one is best
         suited for the operation.
         """
-        self.debug("auth: finding factor id")
+        self._debug("auth: finding factor id")
 
         # Get a list of factors to use.
         code, factors = self._auth_get(
@@ -423,16 +429,16 @@ class ArloBackEnd:
         then sets a cookie we can provide with startAuth later to skip the 2fa
         stage.
         """
-        self.debug("auth: trusting")
+        self._debug("auth: trusting")
 
         # If we have already paired we don't do it again.
         if not self._auth.needs_pairing:
-            self.debug("auth: no pairing required")
+            self._debug("auth: no pairing required")
             return _AuthState.SUCCESS
 
         # If we have no browser code there is nothing to pair.
         if self._auth.browser_code is None:
-            self.debug("auth: pairing postponed")
+            self._debug("auth: pairing postponed")
             return _AuthState.SUCCESS
 
         # Start the pairing.
@@ -449,7 +455,7 @@ class ArloBackEnd:
             return _AuthState.SUCCESS
 
         # We did it.
-        self.debug("auth: pairing succeeded")
+        self._debug("auth: pairing succeeded")
         return _AuthState.SUCCESS
 
     def _auth_validate(self) -> _AuthState:
@@ -457,7 +463,7 @@ class ArloBackEnd:
 
         Make sure the token we have is still good.
         """
-        self.debug("auth: validating")
+        self._debug("auth: validating")
 
         # Update the token in the header to the new token.
         self._auth.headers["Authorization"] = self._req.details.token64
@@ -485,13 +491,13 @@ class ArloBackEnd:
 
          finishAuth will give us a new token.
         """
-        self.debug("auth: start new auth")
+        self._debug("auth: start new auth")
 
         # Find a factor ID to use
         self._auth.factor_id = self._auth_find_factor_id()
         if self._auth.factor_id is None:
             return _AuthState.FAILED
-        self.debug(f"using factor id {self._auth.factor_id}")
+        self._debug(f"using factor id {self._auth.factor_id}")
 
         # Set up tfa. Call it now so it can capture state before we start
         # the authentication proper. For example, capture the current state
@@ -537,7 +543,7 @@ class ArloBackEnd:
         tries = 1
         while True:
             # finish authentication
-            self.debug(f"finishing auth attempt #{tries}")
+            self._debug(f"finishing auth attempt #{tries}")
             code, body = self._auth_post(
                 AUTH_FINISH_PATH,
                 payload,
@@ -574,7 +580,7 @@ class ArloBackEnd:
         Send back the factor id that was passed. We have a cookie - browser_trust_* -
         that binds us to the id. If this works we move on to token validation.
         """
-        self.debug("auth: start trusted auth")
+        self._debug("auth: start trusted auth")
 
         self._auth_options(AUTH_START_PATH, self._auth.headers)
         code, body = self._auth_post(
@@ -610,7 +616,7 @@ class ArloBackEnd:
 
         If we are already trusted we can skip pairing.
         """
-        self.debug("auth: current factor id")
+        self._debug("auth: current factor id")
 
         # Retrieve current factor ID. If we have previously trusted this
         # "browser" we will be able to skip the 2fa section.
@@ -652,7 +658,7 @@ class ArloBackEnd:
             # We still have a curve to try? Grab a connection using it.
             if self._auth.curves:
                 curve = self._auth.curves.pop(0)
-                self.debug(f"auth: CloudFlare curve set to: {curve}")
+                self._debug(f"auth: CloudFlare curve set to: {curve}")
                 self._req.details.connection = cloudscraper.create_scraper(
                     # browser={
                     #     'browser': 'chrome',
@@ -669,14 +675,14 @@ class ArloBackEnd:
             # Do we still have attempts left? Refill the curves and try the
             # next one.
             if self._auth.attempt < 4:
-                self.debug(f"auth: login attempt #{self._auth.attempt}")
+                self._debug(f"auth: login attempt #{self._auth.attempt}")
                 self._auth.attempt += 1
                 self._auth.curves = self._cfg.ecdh_curves
-                self.debug(f"auth: login attempt #{self._auth.attempt - 1}, curves={self._auth.curves}")
+                self._debug(f"auth: login attempt #{self._auth.attempt - 1}, curves={self._auth.curves}")
                 continue
 
             # We've failed...
-            self.debug("auth: failed")
+            self._debug("auth: failed")
             self._req.details.connection = None
             break
 
@@ -685,17 +691,17 @@ class ArloBackEnd:
     def _auth_revalidate_token(self) -> _AuthState:
         """See if we can skip auth by re-using the old token.
         """
-        self.debug("auth: revalidating token")
+        self._debug("auth: revalidating token")
 
         # We haven't logged in at all yet.
         if self._req.details.token64 is None:
-            self.debug("auth: nothing to test")
+            self._debug("auth: nothing to test")
             return _AuthState.LOGIN
 
         # The current token has expired.
-        self.debug(f"now={int(time.time())}, expires={int(self._req.details.token_expires_in - 300)}")
+        self._debug(f"now={int(time.time())}, expires={int(self._req.details.token_expires_in - 300)}")
         if self._req.details.token_expires_in - 300 < time.time():
-            self.debug("auth: login expired")
+            self._debug("auth: login expired")
             return _AuthState.LOGIN
 
         while self._auth_get_connection():
@@ -708,7 +714,7 @@ class ArloBackEnd:
             # Try the current token.
             state = self._auth_validate()
             if state != _AuthState.FAILED:
-                self.debug("auth: testing ok")
+                self._debug("auth: testing ok")
                 return _AuthState.SUCCESS
 
             # Don't try too hard.
@@ -724,7 +730,7 @@ class ArloBackEnd:
         This is when username and password get used. In an attempt to bypass
         cloudlfare issues it will try several different curve options.
         """
-        self.debug("auth: logging in")
+        self._debug("auth: logging in")
 
         while self._auth_get_connection():
 
@@ -776,7 +782,7 @@ class ArloBackEnd:
     def _auth_starting(self) -> _AuthState:
         """Clear auth state to a known starting point.
         """
-        self.debug("auth: starting")
+        self._debug("auth: starting")
 
         self._req.load_cookies()
         self._req.details.user_agent = self._cfg.user_agent_string()
@@ -796,7 +802,7 @@ class ArloBackEnd:
         # for a factor-id.
         if self._auth.state != _AuthState.STARTING:
             self._auth.state = _AuthState.STARTING
-            self.debug("auth: restarting")
+            self._debug("auth: restarting")
 
         while self._auth.state != _AuthState.SUCCESS and self._auth.state != _AuthState.FAILED:
             if self._auth.state == _AuthState.STARTING:
@@ -816,7 +822,7 @@ class ArloBackEnd:
             if self._auth.state == _AuthState.TRUST_BROWSER:
                 self._auth.state = self._auth_trust_browser()
 
-        self.debug(f"auth: login exit state: {self._auth.state}")
+        self._debug(f"auth: login exit state: {self._auth.state}")
         if self._auth.state != _AuthState.SUCCESS:
             return False
 
@@ -831,7 +837,7 @@ class ArloBackEnd:
     def _session_connection(self) -> bool:
         """Make sure the headers are set up for the non-auth phase.
         """
-        self.debug("session: fixing connection")
+        self._debug("session: fixing connection")
 
         self._req.details.connection.headers.update(self._req.headers())
         return True
@@ -843,7 +849,7 @@ class ArloBackEnd:
          - is multilocation on
          - the backend we are using
         """
-        self.debug("session: getting v3 details")
+        self._debug("session: getting v3 details")
 
         v3_session = self.get(SESSION_PATH)
         if v3_session is None:
@@ -852,12 +858,12 @@ class ArloBackEnd:
 
         # Multi-location is on?
         self._multi_location = v3_session.get('supportsMultiLocation', False)
-        self.debug(f"multilocation is {self._multi_location}")
+        self._debug(f"multilocation is {self._multi_location}")
 
         # If Arlo provides an MQTT URL key use it to set the backend.
         if MQTT_URL_KEY in v3_session:
             self._cfg.update_mqtt_from_url(v3_session[MQTT_URL_KEY])
-            self.debug(f"back={self._cfg.event_backend};url={self._cfg.mqtt_host}:{self._cfg.mqtt_port}")
+            self._debug(f"back={self._cfg.event_backend};url={self._cfg.mqtt_host}:{self._cfg.mqtt_port}")
 
         # Always good if the v3 read works.
         return True
@@ -895,7 +901,7 @@ class ArloBackEnd:
     def _start_transaction(self, tid=None):
         if tid is None:
             tid = self.gen_trans_id()
-        self.vdebug("starting transaction-->{}".format(tid))
+        self._vdebug("starting transaction-->{}".format(tid))
         with self._lock:
             self._requests[tid] = None
         return tid
@@ -906,7 +912,7 @@ class ArloBackEnd:
         mnow = time.monotonic()
         mend = mnow + timeout
 
-        self.vdebug("finishing transaction-->{}".format(tid))
+        self._vdebug("finishing transaction-->{}".format(tid))
         with self._lock:
             try:
                 while mnow < mend and self._requests[tid] is None:
@@ -914,9 +920,9 @@ class ArloBackEnd:
                     mnow = time.monotonic()
                 response = self._requests.pop(tid)
             except KeyError as _e:
-                self.debug("got a key error")
+                self._debug("got a key error")
                 response = None
-        self.vdebug("finished transaction-->{}".format(tid))
+        self._vdebug("finished transaction-->{}".format(tid))
         return response
 
     def gen_trans_id(self, trans_type=TRANSID_PREFIX):
@@ -940,16 +946,16 @@ class ArloBackEnd:
             self._event.loop_thread.start()
             count = 0
             while not self._event.stream_connected and count < 30:
-                self.debug("waiting for stream up")
+                self._debug("waiting for stream up")
                 self._lock.wait(1)
                 count += 1
 
         # start logout daemon for sse clients
         if self._cfg.reconnect_every != 0:
-            self.debug("automatically reconnecting")
+            self._debug("automatically reconnecting")
             self._bg.run_every(self._event_reconnect, self._cfg.reconnect_every)
 
-        self.debug("stream up")
+        self._debug("stream up")
         return True
 
     @property
@@ -957,7 +963,7 @@ class ArloBackEnd:
         return self._logged_in
 
     def logout(self):
-        self.debug("trying to logout")
+        self._debug("trying to logout")
         self._event_loop_stop()
         if self._event.stream is not None:
             self._event.stream.stop()
@@ -990,15 +996,15 @@ class ArloBackEnd:
             wait_for = "event" if self._cfg.synchronous_mode else "nothing"
 
         if wait_for == "event":
-            self.vdebug("notify+event running")
+            self._vdebug("notify+event running")
             tid = self._start_transaction()
             self._notify(device_id, xcloud_id, body=body, trans_id=tid)
             return self._wait_for_transaction(tid, timeout)
         elif wait_for == "response":
-            self.vdebug("notify+response running")
+            self._vdebug("notify+response running")
             return self._notify(device_id, xcloud_id, body=body)
         else:
-            self.vdebug("notify+sent")
+            self._vdebug("notify+sent")
             self._bg.run(self._notify, device_id=device_id, xcloud_id=xcloud_id, body=body)
 
     def get(
@@ -1014,12 +1020,12 @@ class ArloBackEnd:
             cookies=None,
     ):
         if wait_for == "response":
-            self.vdebug("get+response running")
+            self._vdebug("get+response running")
             return self._req.request(
                 path, "GET", params, headers, stream, raw, timeout, host, cookies
             )
         else:
-            self.vdebug("get sent")
+            self._vdebug("get sent")
             self._bg.run(
                 self._req.request, path=path, method="GET", params=params, headers=headers, stream=stream, raw=raw, timeout=timeout, host=host
             )
@@ -1035,10 +1041,10 @@ class ArloBackEnd:
             cookies=None,
     ):
         if wait_for == "response":
-            self.vdebug("put+response running")
+            self._vdebug("put+response running")
             return self._req.request(path, "PUT", params, headers, False, raw, timeout, cookies)
         else:
-            self.vdebug("put sent")
+            self._vdebug("put sent")
             self._bg.run(
                 self._req.request, path=path, method="PUT", params=params, headers=headers, stream=False, raw=raw, timeout=timeout
             )
@@ -1068,17 +1074,17 @@ class ArloBackEnd:
             wait_for = "resource" if self._cfg.synchronous_mode else "response"
 
         if wait_for == "resource":
-            self.vdebug("post+resource running")
+            self._vdebug("post+resource running")
             if tid is None:
                 tid = list(params.keys())[0]
             tid = self._start_transaction(tid)
             self._req.request(path, "POST", params, headers, False, raw, timeout)
             return self._wait_for_transaction(tid, timeout)
         if wait_for == "response":
-            self.vdebug("post+response running")
+            self._vdebug("post+response running")
             return self._req.request(path, "POST", params, headers, False, raw, timeout)
         else:
-            self.vdebug("post sent")
+            self._vdebug("post sent")
             self._bg.run(
                 self._req.request, path=path, method="POST", params=params, headers=headers, stream=False, raw=raw, timeout=timeout
             )
@@ -1123,8 +1129,3 @@ class ArloBackEnd:
     def ev_inject(self, response):
         self._event_run_callbacks(response)
 
-    def debug(self, msg):
-        self._log.debug(f"backend: {msg}")
-
-    def vdebug(self, msg):
-        self._log.vdebug(f"backend: {msg}")
