@@ -22,9 +22,6 @@ from ...constant import (
     MQTT_URL_KEY,
     NOTIFY_PATH,
     SESSION_PATH,
-    TFA_CONSOLE_SOURCE,
-    TFA_IMAP_SOURCE,
-    TFA_REST_API_SOURCE,
     TRANSID_PREFIX,
 )
 from ...utils import now_strftime, time_to_arlotime, to_b64
@@ -33,7 +30,7 @@ from ..cfg import ArloCfg
 from ..logger import ArloLogger
 from .event import ArloEvent
 from .session import ArloSession
-from .tfa import Arlo2FAConsole, Arlo2FAImap, Arlo2FARestAPI, Arlo2FAPush
+from .tfa import ArloTFA
 
 
 class _AuthState(IntEnum):
@@ -57,10 +54,8 @@ class _AuthDetails:
     headers: dict[str, str] | None = None
     browser_code = None
     factor_id: str | None = None
-    factor_type: str | None = None
     needs_pairing: bool = False
-    tfa_type: str | None = None
-    tfa_handler: Arlo2FAConsole | Arlo2FAPush | Arlo2FAImap | Arlo2FARestAPI | None = None
+    tfa_handler: ArloTFA | None = None
     attempt: int = 4
     curves: list[str] = []
 
@@ -340,54 +335,6 @@ class ArloBackEnd:
             # restart login...
             self._logged_in = False
 
-    def _tfa_start(self):
-        """Determine which tfa mechanism to use and set up the handlers if needed.
-
-        We have these options:
-        - CONSOLE; input is typed in, message is usually sent by SMS or EMAIL and
-          user has to type it
-        - IMAP; code is sent by email and automtically read by pyaarlo
-        - REST_API; deprecated...
-        - PUSH; user has to accept a prompt on their Arlo app
-
-        PUSH is odd because the code doesn't retrieve an otp, we have to wait for
-        finishAuth to return a 200.
-        """
-
-        # Set some sane defaults.
-        self._auth.tfa_type = self._cfg.tfa_source
-        self._auth.factor_type = "BROWSER"
-
-        # Pick the correct handler.
-        if self._auth.tfa_type == TFA_CONSOLE_SOURCE:
-            self._auth.tfa_handler = Arlo2FAConsole(self._cfg, self._log)
-        elif self._auth.tfa_type == TFA_IMAP_SOURCE:
-            self._auth.tfa_handler = Arlo2FAImap(self._cfg, self._log)
-        elif self._auth.tfa_type == TFA_REST_API_SOURCE:
-            self._auth.tfa_handler = Arlo2FARestAPI(self._cfg, self._log)
-        else:
-            self._auth.tfa_handler = Arlo2FAPush(self._cfg, self._log)
-            self._auth.factor_type = ""
-
-        # Make sure it's ready.
-        self._auth.tfa_handler.start()
-
-    def _tfa_get_code(self) -> str | None:
-        """Get the "otp" from the tfa source.
-
-        This returns one of 3 things:
-         - a 6 digit one-time-pin code
-         - None; meaning the tfa failed
-         - an empty string which indicates "finishAuth" does the waiting
-        """
-        return self._auth.tfa_handler.get()
-
-    def _tfa_stop(self):
-        """Call any stop functionality need by the handler.
-        """
-        self._auth.tfa_handler.stop()
-        self._auth.tfa_handler = None
-
     def _new_update_user_info(self, body):
         """Update session details from the packet body passed.
 
@@ -550,20 +497,20 @@ class ArloBackEnd:
         # Set up tfa. Call it now so it can capture state before we start
         # the authentication proper. For example, capture the current state
         # of an inbox before emails are sent.
-        self._tfa_start()
+        self._auth.tfa_handler = ArloTFA(self._cfg, self._log)
 
         # Start authentication to send out code. Stop if this fails.
         self._auth_options(AUTH_START_PATH, self._auth.headers)
         code, body = self._auth_post(
             AUTH_START_PATH, {
                 "factorId": self._auth.factor_id,
-                "factorType": self._auth.factor_type,
+                "factorType": self._auth.tfa_handler.factor_type,
                 "userId": self._req.details.user_id
             },
             self._auth.headers
         )
         if code != 200:
-            self._tfa_stop()
+            self._auth.tfa_handler.stop()
             self._log.error(f"login failed: new start failed1: {code} - {body}")
             return _AuthState.FAILED
 
@@ -572,8 +519,8 @@ class ArloBackEnd:
 
         # Get otp.
         # XXX this can be a retry?
-        otp = self._tfa_get_code()
-        self._tfa_stop()
+        otp = self._auth.tfa_handler.code()
+        self._auth.tfa_handler.stop()
 
         if otp is None:
             self._log.error(f"login failed: 2fa: code retrieval failed")

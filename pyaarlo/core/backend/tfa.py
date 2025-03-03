@@ -1,15 +1,23 @@
+from __future__ import annotations
+
 import email
 import imaplib
 import re
-import time
-import ssl
 import requests
+import ssl
+import time
 
 from ..cfg import ArloCfg
 from ..logger import ArloLogger
 
+from ...constant import (
+    TFA_CONSOLE_SOURCE,
+    TFA_IMAP_SOURCE,
+    TFA_REST_API_SOURCE,
+)
 
-class _Arlo2FABase:
+
+class _TFABase:
     """Base  class for 2fa components.
     """
 
@@ -22,11 +30,20 @@ class _Arlo2FABase:
         self._log = log
         self._prefix = prefix
 
-    def debug(self, msg):
+    def _debug(self, msg):
         self._log.debug(f"{self._prefix}: {msg}")
 
+    def start(self) -> bool:
+        return True
 
-class Arlo2FAConsole(_Arlo2FABase):
+    def get(self) -> str | None:
+        return None
+
+    def stop(self):
+        pass
+
+
+class _TFAConsole(_TFABase):
     """2FA authentication via console.
     Accepts input from console and returns that for 2FA.
     """
@@ -35,18 +52,18 @@ class Arlo2FAConsole(_Arlo2FABase):
         super().__init__(cfg, log, "2fa-console")
 
     def start(self):
-        self.debug("starting")
+        self._debug("starting")
         return True
 
     def get(self):
-        self.debug("checking")
+        self._debug("checking")
         return input("Enter Code: ")
 
     def stop(self):
-        self.debug("stopping")
+        self._debug("stopping")
 
 
-class Arlo2FAPush(_Arlo2FABase):
+class _TFAPush(_TFABase):
     """2FA authentication via console.
     Dummy for PUSH support. Always returns an empty code.
     """
@@ -55,18 +72,18 @@ class Arlo2FAPush(_Arlo2FABase):
         super().__init__(cfg, log, "2fa-push")
 
     def start(self):
-        self.debug("starting")
+        self._debug("starting")
         return True
 
     def get(self):
-        self.debug("checking")
+        self._debug("checking")
         return ""
 
     def stop(self):
-        self.debug("stopping")
+        self._debug("stopping")
 
 
-class Arlo2FAImap(_Arlo2FABase):
+class _TFAImap(_TFABase):
     """2FA authentication via IMAP
     Connects to IMAP server and waits for email from Arlo with 2FA code in it.
 
@@ -81,7 +98,7 @@ class Arlo2FAImap(_Arlo2FABase):
         self._new_ids = None
 
     def start(self):
-        self.debug("starting")
+        self._debug("starting")
 
         # clean up
         if self._imap is not None:
@@ -93,7 +110,7 @@ class Arlo2FAImap(_Arlo2FABase):
             if cipher_list != "":
                 ctx = ssl.create_default_context()
                 ctx.set_ciphers(cipher_list)
-                self.debug(f"imap is using custom ciphers {cipher_list}")
+                self._debug(f"imap is using custom ciphers {cipher_list}")
             else:
                 ctx = None
 
@@ -104,31 +121,31 @@ class Arlo2FAImap(_Arlo2FABase):
                 self._cfg.tfa_username, self._cfg.tfa_password
             )
             if res.lower() != "ok":
-                self.debug("imap login failed")
+                self._debug("imap login failed")
                 return False
             res, status = self._imap.select(mailbox='INBOX', readonly=True)
             if res.lower() != "ok":
-                self.debug("imap select failed")
+                self._debug("imap select failed")
                 return False
             res, self._old_ids = self._imap.search(
                 None, "FROM", "do_not_reply@arlo.com"
             )
             if res.lower() != "ok":
-                self.debug("imap search failed")
+                self._debug("imap search failed")
                 return False
         except Exception as e:
             self._log.error(f"imap connection failed{str(e)}")
             return False
 
         self._new_ids = self._old_ids
-        self.debug("old-ids={}".format(self._old_ids))
+        self._debug("old-ids={}".format(self._old_ids))
         if res.lower() == "ok":
             return True
 
         return False
 
     def get(self):
-        self.debug("checking")
+        self._debug("checking")
 
         # give tfa_total_timeout seconds for email to arrive
         start = time.time()
@@ -146,9 +163,9 @@ class Arlo2FAImap(_Arlo2FABase):
                 res, self._new_ids = self._imap.search(
                     None, "FROM", "do_not_reply@arlo.com"
                 )
-                self.debug("new-ids={}".format(self._new_ids))
+                self._debug("new-ids={}".format(self._new_ids))
                 if self._new_ids == self._old_ids:
-                    self.debug("no change in emails")
+                    self._debug("no change in emails")
                     continue
 
                 # New message. Reverse so we look at the newest one first.
@@ -163,7 +180,7 @@ class Arlo2FAImap(_Arlo2FABase):
 
                     # New message. Look at all the parts and try to grab the code, if we catch an exception
                     # just move onto the next part.
-                    self.debug("new-msg={}".format(msg_id))
+                    self._debug("new-msg={}".format(msg_id))
                     res, parts = self._imap.fetch(msg_id, "(BODY.PEEK[])")
                     # res, parts = self._imap.fetch(msg_id, "(RFC822)")
 
@@ -177,10 +194,10 @@ class Arlo2FAImap(_Arlo2FABase):
                                         # match code in email, this might need some work if the email changes
                                         code = re.match(r"^\W+(\d{6})\W*$", line.decode())
                                         if code is not None:
-                                            self.debug(f"code={code.group(1)}")
+                                            self._debug(f"code={code.group(1)}")
                                             return code.group(1)
                         except Exception as e:
-                            self.debug(f"trying next part {str(e)}")
+                            self._debug(f"trying next part {str(e)}")
 
                 # Update old so we don't keep trying new.
                 # Yahoo can lose ids so we extend the old list.
@@ -194,7 +211,7 @@ class Arlo2FAImap(_Arlo2FABase):
         return None
 
     def stop(self):
-        self.debug("stopping")
+        self._debug("stopping")
 
         self._imap.close()
         self._imap.logout()
@@ -203,7 +220,7 @@ class Arlo2FAImap(_Arlo2FABase):
         self._new_ids = None
 
 
-class Arlo2FARestAPI(_Arlo2FABase):
+class _TFARestAPI(_TFABase):
     """2FA authentication via rest API.
     Queries web site until code appears
     """
@@ -212,12 +229,12 @@ class Arlo2FARestAPI(_Arlo2FABase):
         super().__init__(cfg, log, "2fa-rest-api")
 
     def start(self):
-        self.debug("starting")
+        self._debug("starting")
         if self._cfg.tfa_host is None or self._cfg.tfa_password is None:
-            self.debug("invalid config")
+            self._debug("invalid config")
             return False
 
-        self.debug("clearing")
+        self._debug("clearing")
         response = requests.get(
             "{}/clear?email={}&token={}".format(
                 self._cfg.tfa_host_with_scheme("https"),
@@ -227,12 +244,12 @@ class Arlo2FARestAPI(_Arlo2FABase):
             timeout=10,
         )
         if response.status_code != 200:
-            self.debug("possible problem clearing")
+            self._debug("possible problem clearing")
 
         return True
 
     def get(self):
-        self.debug("checking")
+        self._debug("checking")
 
         # give tfa_total_timeout seconds for email to arrive
         start = time.time()
@@ -245,7 +262,7 @@ class Arlo2FARestAPI(_Arlo2FABase):
                 return None
 
             # Try for the token.
-            self.debug("checking")
+            self._debug("checking")
             response = requests.get(
                 "{}/get?email={}&token={}".format(
                     self._cfg.tfa_host_with_scheme("https"),
@@ -257,10 +274,70 @@ class Arlo2FARestAPI(_Arlo2FABase):
             if response.status_code == 200:
                 code = response.json().get("data", {}).get("code", None)
                 if code is not None:
-                    self.debug("code={}".format(code))
+                    self._debug("code={}".format(code))
                     return code
 
-            self.debug("retrying")
+            self._debug("retrying")
 
     def stop(self):
-        self.debug("stopping")
+        self._debug("stopping")
+
+
+class ArloTFA:
+    """Arlo Two Factor Authentication handler.
+
+    This is created as needed. We currentl have these options:
+    - CONSOLE; input is typed in, message is usually sent by SMS or EMAIL and
+      user has to type it
+    - IMAP; code is sent by email and automtically read by pyaarlo
+    - REST_API; deprecated...
+    - PUSH; user has to accept a prompt on their Arlo app
+
+    PUSH is odd because the code doesn't retrieve an otp, we have to wait for
+    finishAuth to return a 200.
+    """
+
+    _handler: _TFABase | None = None
+    _type: str | None = None
+    _factor_type: str = "BROWSER"
+    
+    def __init__(self, cfg: ArloCfg, log: ArloLogger):
+        """Determine which tfa mechanism to use and set up the handlers if needed.
+        """
+
+        self._type = cfg.tfa_source
+        if self._type == TFA_CONSOLE_SOURCE:
+            self._handler = _TFAConsole(cfg, log)
+        elif self._type == TFA_IMAP_SOURCE:
+            self._handler = _TFAImap(cfg, log)
+        elif self._type == TFA_REST_API_SOURCE:
+            self._handler = _TFARestAPI(cfg, log)
+        else:
+            self._handler = _TFAPush(cfg, log)
+            self._factor_type = ""
+    
+        self._handler.start()
+    
+    def code(self) -> str | None:
+        """Get the "otp" from the tfa source.
+    
+        This returns one of 3 things:
+         - a 6 digit one-time-pin code
+         - None; meaning the tfa failed
+         - an empty string which indicates "finishAuth" does the waiting
+        """
+        return self._handler.get()
+    
+    @property
+    def type(self) -> str | None:
+        return self._type
+    
+    @property
+    def factor_type(self) -> str:
+        return self._factor_type
+    
+    def stop(self):
+        self._handler.stop()
+        self._handler = None
+        self._type = None
+
