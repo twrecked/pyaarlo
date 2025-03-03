@@ -350,7 +350,7 @@ class ArloBackEnd:
                 # While testing; hold off for an hour if too many failures.
                 if login_count > 3:
                     wait_time = 360
-                self._debug("re-logging in")
+                self._debug(f"re-logging in with time={wait_time}")
                 self._logged_in = self._login() and self._session_finalize()
 
             self._debug("starting event device")
@@ -1124,7 +1124,7 @@ class ArloBackEnd:
         pass
 
     def devices(self):
-        return self.get(DEVICES_PATH + "?t={}".format(time_to_arlotime()))
+        return self.get(f"{DEVICES_PATH}?t={time_to_arlotime()}")
 
     def ev_inject(self, response):
         self._event_run_callbacks(response)

@@ -1,13 +1,15 @@
+from __future__ import annotations
+
 import base64
 import datetime
 import os
 import pprint
 import threading
 import time
+from typing import Any
 
 from .constant import (
     BLANK_IMAGE,
-    DEVICES_PATH,
     FAST_REFRESH_INTERVAL,
     PING_CAPABILITY,
     SLOW_REFRESH_INTERVAL,
@@ -140,6 +142,21 @@ class PyArlo:
     _core: ArloCore = ArloCore
     _objs: ArloObjects = ArloObjects
 
+    _lock: threading.Condition = threading.Condition()
+    _blank_image: bytes = base64.standard_b64decode(BLANK_IMAGE)
+    _started: bool = False
+
+    # Last seen devices.
+    _devices: list[Any] | None = None
+
+    # When to refresh stuff.
+    # - today; certain things run at the start of a new day
+    # - refresh_devices_at; every few hours we can refresh the device list.
+    # - refresh_modes_at; every few minutes we can refresh the mode list.
+    _today: datetime.date
+    _refresh_devices_at: float
+    _refresh_modes_at: float
+
     def __init__(self, **kwargs):
         """Constructor for the PyArlo object.
         """
@@ -173,25 +190,15 @@ class PyArlo:
         if not self._core.be.is_connected:
             return
 
-        self._lock = threading.Condition()
-
-        # On day flip we do extra work, record today.
+        # Set up refreshes.
         self._today = datetime.date.today()
-
-        # Every few hours we can refresh the device list.
         self._refresh_devices_at = time.monotonic() + self._core.cfg.refresh_devices_every
-
-        # Every few minutes we can refresh the mode list.
         self._refresh_modes_at = time.monotonic() + self._core.cfg.refresh_modes_every
-
-        # default blank image when waiting for camera image to appear
-        self._blank_image = base64.standard_b64decode(BLANK_IMAGE)
 
         # Slow piece.
         # Get locations for multi location sites.
         # Get devices, fill local db, and create device instance.
         self.info("pyaarlo starting")
-        self._started = False
 
         # Get locations if needed.
         if self._core.be.multi_location:
@@ -276,10 +283,9 @@ class PyArlo:
         include state information - battery levels etc - while the old devices
         don't. We update what we can.
         """
-        url = DEVICES_PATH + "?t={}".format(time_to_arlotime())
-        self._devices = self._core.be.get(url)
+        self._devices = self._core.be.devices()
         if not self._devices:
-            self.warning("No devices returned from " + url)
+            self.warning("No devices returned")
             self._devices = []
         self.vdebug(f"devices={pprint.pformat(self._devices)}")
         
