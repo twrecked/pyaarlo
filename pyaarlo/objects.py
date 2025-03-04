@@ -12,12 +12,11 @@ if TYPE_CHECKING:
     from .sensor import ArloSensor
 
 
-# noinspection PyUnresolvedReferences
 class ArloObjects:
     """The list of objects we know about.
 
-    This relies on the future annotations to work. It allows us to break
-    the linkage.
+    XXX This introduces a circular dependency because some objects need to
+        know about other objects.  I'll think of a way to break this.
     """
     base_stations: list[ArloBaseStation] = []
     cameras: list[ArloCamera] = []

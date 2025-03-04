@@ -70,8 +70,9 @@ class ArloCapabilities:
      - move the knowledge into one place, hopefully making it easier to edit
      - reduce some of the clutter in the object clases
 
-    XXX work on the dependancies, TYPING is a work around, I'd like something neater
-        We may be stuck with this for now.
+    XXX This introduces a circular dependency because objects need to know
+        capabilites and capabilities need to know about objects. I'll think
+        of a way to break this.
     """
 
     @staticmethod
