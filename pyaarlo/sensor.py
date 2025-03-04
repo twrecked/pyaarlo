@@ -1,9 +1,7 @@
 
 from .constant import (
     ALS_STATE_KEY,
-    BATTERY_KEY,
     CONTACT_STATE_KEY,
-    MOTION_DETECTED_KEY,
     MOTION_STATE_KEY,
     TAMPER_STATE_KEY,
     TEMPERATURE_KEY,

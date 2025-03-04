@@ -1,10 +1,8 @@
 import pprint
 
 from .constant import (
-    BATTERY_KEY,
     BRIGHTNESS_KEY,
     LAMP_STATE_KEY,
-    MOTION_DETECTED_KEY
 )
 from .capabilities import ArloCapabilities
 from .core import ArloCore
