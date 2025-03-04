@@ -1,5 +1,14 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .backend import ArloBackEnd
+    from .background import ArloBackground
+    from .cfg import ArloCfg
+    from .logger import ArloLogger
+    from .storage import ArloStorage
+
 
 # noinspection PyUnresolvedReferences
 class ArloCore:

@@ -86,6 +86,7 @@ from .core import ArloCore
 from .child_device import ArloChildDevice
 from .objects import ArloObjects
 from .utils import http_get, http_get_img, the_epoch
+from .capabilities import ArloCapabilities
 
 
 class ArloCamera(ArloChildDevice):

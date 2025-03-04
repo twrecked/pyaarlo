@@ -38,6 +38,7 @@ class ArloDevice(ArloObject):
         self._parent_id = attrs.get("parentId", None)
 
         # Activities. Used by camera for now but made available to all.
+        # XXX maybe not...
         self._activities = {}
 
         # Build initial values. These can be at the top level or in the
