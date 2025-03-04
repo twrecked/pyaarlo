@@ -178,7 +178,7 @@ def anonymize_from_string(obj):
     # get device list
     keys = ['deviceId', 'uniqueId', 'userId', 'xCloudId']
     valuables = {}
-    for device in _arlo._devices:
+    for device in _arlo.devices:
         for key in keys:
             value = device.get(key, None)
             if value and value not in valuables:
