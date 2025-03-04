@@ -166,7 +166,7 @@ class ArloDevice(ArloObject):
         with self._lock:
             self._attr_cbs_.append((attr, cb))
 
-    def has_capability(self, cap):
+    def has_capability(self, cap) -> bool:
         """Is the device capable of performing activity cap:.
 
         Used to determine if devices can perform certain actions, like motion or audio detection.

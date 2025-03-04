@@ -3,40 +3,22 @@ import time
 from datetime import datetime, timedelta
 
 from .constant import (
-    AIR_QUALITY_KEY,
     AUTOMATION_PATH,
     CONNECTION_KEY,
     DEFAULT_MODES,
     DEFINITIONS_PATH,
-    HUMIDITY_KEY,
     MODE_ID_TO_NAME_KEY,
     MODE_IS_SCHEDULE_KEY,
     MODE_KEY,
     MODE_NAME_TO_ID_KEY,
     MODE_UPDATE_INTERVAL,
     MODEL_BABY,
-    MODEL_ESSENTIAL_OUTDOOR_GEN2_2K,
-    MODEL_ESSENTIAL_OUTDOOR_GEN2_HD,
-    MODEL_ESSENTIAL_SPOTLIGHT,
-    MODEL_ESSENTIAL_VIDEO_DOORBELL,
-    MODEL_ESSENTIAL_XL_OUTDOOR_GEN2_2K,
-    MODEL_ESSENTIAL_XL_OUTDOOR_GEN2_HD,
-    MODEL_ESSENTIAL_XL_SPOTLIGHT,
     MODEL_GO,
-    MODEL_PRO_3_FLOODLIGHT,
-    MODEL_PRO_4,
-    MODEL_PRO_5,
-    MODEL_WIRED_VIDEO_DOORBELL,
-    MODEL_WIRED_VIDEO_DOORBELL_GEN2_2K,
-    MODEL_WIRED_VIDEO_DOORBELL_GEN2_HD,
-    PING_CAPABILITY,
     RATLS_DOWNLOAD_PATH,
     RATLS_LIBRARY_PATH,
-    RESOURCE_CAPABILITY,
     RESTART_PATH,
     SCHEDULE_KEY,
     SIREN_STATE_KEY,
-    TEMPERATURE_KEY,
     TIMEZONE_KEY,
 )
 from .core import ArloCore
@@ -45,6 +27,8 @@ from .media import ArloMediaLibrary, ArloVideo
 from .objects import ArloObjects
 from .ratls import ArloRatls
 from .utils import time_to_arlotime
+from .capabilities import ArloCapabilities
+
 
 day_of_week = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su", "Mo"]
 
@@ -567,65 +551,10 @@ class ArloBaseStation(ArloDevice):
             return "unavailable"
         return "available"
 
-    def has_capability(self, cap):
-        if cap in (TEMPERATURE_KEY, HUMIDITY_KEY, AIR_QUALITY_KEY):
-            if self.model_id.startswith(MODEL_BABY):
-                return True
-        if cap in (SIREN_STATE_KEY,):
-            if (
-                self.model_id.startswith(("VMB400", "VMB450"))
-                or self.model_id == MODEL_GO
-            ):
-                return True
-
-        if cap in (PING_CAPABILITY,):
-
-            # Always true for these devices.
-            if self.model_id.startswith(MODEL_BABY):
-                return True
-            if self.model_id.startswith(MODEL_WIRED_VIDEO_DOORBELL):
-                return True
-
-            # Don't ping these devices ever.
-            if self.model_id.startswith((
-                    MODEL_ESSENTIAL_OUTDOOR_GEN2_2K,
-                    MODEL_ESSENTIAL_OUTDOOR_GEN2_HD,
-                    MODEL_ESSENTIAL_SPOTLIGHT,
-                    MODEL_ESSENTIAL_VIDEO_DOORBELL,
-                    MODEL_ESSENTIAL_XL_OUTDOOR_GEN2_2K,
-                    MODEL_ESSENTIAL_XL_OUTDOOR_GEN2_HD,
-                    MODEL_ESSENTIAL_XL_SPOTLIGHT,
-                    MODEL_PRO_3_FLOODLIGHT,
-                    MODEL_PRO_4,
-                    MODEL_PRO_5,
-                    MODEL_WIRED_VIDEO_DOORBELL_GEN2_2K,
-                    MODEL_WIRED_VIDEO_DOORBELL_GEN2_HD,
-            )):
-                return False
-
-            # We have to be careful pinging some base stations because it can rapidly
-            # drain the battery power. Don't ping if:
-            # - it is a device that acts as its own base station
-            # - it does not have a power supply or charger connected
-            # - it is using WiFi directly rather than an Arlo base station
-            if self.is_own_parent:
-                if not self.is_corded and not self.has_charger:
-                    if self.using_wifi:
-                        return False
-
-            # All others, then ping.
-            return True
-
-        if cap in (RESOURCE_CAPABILITY,):
-            # Not all devices need (or want) to get their resources queried.
-            if self.model_id.startswith((
-                    MODEL_ESSENTIAL_VIDEO_DOORBELL,
-                    MODEL_ESSENTIAL_SPOTLIGHT,
-                    MODEL_ESSENTIAL_XL_SPOTLIGHT,
-            )):
-                return False
-            return True
-        return super().has_capability(cap)
+    def has_capability(self, cap) -> bool:
+        supports = ArloCapabilities.check_base_station_supports(self, cap)
+        self.debug(f"supports {cap} is {supports}")
+        return supports
 
     def build_ratls(self, public=False):
         self._ratls = ArloRatls(self._core, self, public=public)

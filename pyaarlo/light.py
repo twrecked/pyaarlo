@@ -6,6 +6,7 @@ from .constant import (
     LAMP_STATE_KEY,
     MOTION_DETECTED_KEY
 )
+from .capabilities import ArloCapabilities
 from .core import ArloCore
 from .child_device import ArloChildDevice
 from .objects import ArloObjects
@@ -91,7 +92,7 @@ class ArloLight(ArloChildDevice):
         )
         return True
 
-    def has_capability(self, cap):
-        if cap in (MOTION_DETECTED_KEY, BATTERY_KEY):
-            return True
-        return super().has_capability(cap)
+    def has_capability(self, cap) -> bool:
+        supports = ArloCapabilities.check_light_supports(self, cap)
+        self.debug(f"supports {cap} is {supports}")
+        return supports

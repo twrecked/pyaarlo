@@ -69,20 +69,23 @@ class ArloCapabilities:
     They have been moved into this umbrella class to:
      - move the knowledge into one place, hopefully making it easier to edit
      - reduce some of the clutter in the object clases
+
+    XXX work on the dependancies, TYPING is a work around, I'd like something neater
+        We may be stuck with this for now.
     """
 
     @staticmethod
-    def _device_has(_device: ArloDevice, cap: str) -> bool:
+    def _check_device_supports(_device: ArloDevice, cap: str) -> bool:
         if cap in (CONNECTION_KEY,):
             return True
         return False
 
     @staticmethod
-    def _child_device_has(child_device: ArloChildDevice, cap: str) -> bool:
-        return ArloCapabilities._device_has(child_device, cap)
+    def _check_child_supports(child_device: ArloChildDevice, cap: str) -> bool:
+        return ArloCapabilities._check_device_supports(child_device, cap)
 
     @staticmethod
-    def base_station_has(base_station: ArloBaseStation, cap: str):
+    def check_base_station_supports(base_station: ArloBaseStation, cap: str) -> bool:
         if cap in (TEMPERATURE_KEY, HUMIDITY_KEY, AIR_QUALITY_KEY):
             if base_station.model_id.startswith(MODEL_BABY):
                 return True
@@ -140,7 +143,7 @@ class ArloCapabilities:
             )):
                 return False
             return True
-        return ArloCapabilities._device_has(base_station, cap)
+        return ArloCapabilities._check_device_supports(base_station, cap)
 
     @staticmethod
     def check_camera_supports(camera: ArloCamera, cap: str) -> bool:
@@ -249,10 +252,10 @@ class ArloCapabilities:
                 return False
             if camera.device_type in ("arloq", "arloqs"):
                 return False
-        return ArloCapabilities._child_device_has(camera, cap)
+        return ArloCapabilities._check_child_supports(camera, cap)
 
     @staticmethod
-    def doorbell_has(doorbell: ArloDoorBell, cap: str):
+    def check_doorbell_supports(doorbell: ArloDoorBell, cap: str) -> bool:
         # Video Doorbells appear as both ArloCameras and ArloDoorBells, where
         # capabilities double up - eg, motion detection - we provide the
         # capability at the camera level.
@@ -260,17 +263,17 @@ class ArloCapabilities:
             return not doorbell.is_video_doorbell
         if cap in (BUTTON_PRESSED_KEY, SILENT_MODE_KEY):
             return True
-        return ArloCapabilities._child_device_has(doorbell, cap)
+        return ArloCapabilities._check_child_supports(doorbell, cap)
 
     @staticmethod
-    def sensor_has(_sensor: ArloSensor, cap: str):
+    def check_sensor_supports(_sensor: ArloSensor, cap: str) -> bool:
         if cap in (ALS_STATE_KEY, BATTERY_KEY, CONTACT_STATE_KEY, MOTION_DETECTED_KEY,
                    TAMPER_STATE_KEY, TEMPERATURE_KEY):
             return True
         return False
 
     @staticmethod
-    def light_has(light: ArloLight, cap: str ):
+    def check_light_supports(light: ArloLight, cap: str) -> bool:
         if cap in (MOTION_DETECTED_KEY, BATTERY_KEY):
             return True
-        return ArloCapabilities._child_device_has(light, cap)
+        return ArloCapabilities._check_child_supports(light, cap)

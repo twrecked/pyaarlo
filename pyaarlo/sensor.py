@@ -9,6 +9,7 @@ from .constant import (
     TEMPERATURE_KEY,
     WATER_STATE_KEY,
 )
+from .capabilities import ArloCapabilities
 from .core import ArloCore
 from .child_device import ArloChildDevice
 from .objects import ArloObjects
@@ -60,8 +61,7 @@ class ArloSensor(ArloChildDevice):
     def temperature(self):
         return self._load(TEMPERATURE_KEY, None)
 
-    def has_capability(self, cap):
-        if cap in (ALS_STATE_KEY, BATTERY_KEY, CONTACT_STATE_KEY, MOTION_DETECTED_KEY,
-                   TAMPER_STATE_KEY, TEMPERATURE_KEY):
-            return True
-        return False
+    def has_capability(self, cap) -> bool:
+        supports = ArloCapabilities.check_sensor_supports(self, cap)
+        self.debug(f"supports {cap} is {supports}")
+        return supports

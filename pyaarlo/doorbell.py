@@ -14,6 +14,7 @@ from .constant import (
     SILENT_MODE_KEY,
     SIREN_STATE_KEY,
 )
+from .capabilities import ArloCapabilities
 from .core import ArloCore
 from .child_device import ArloChildDevice
 from .objects import ArloObjects
@@ -100,15 +101,10 @@ class ArloDoorBell(ArloChildDevice):
             MODEL_ESSENTIAL_VIDEO_DOORBELL
         ))
 
-    def has_capability(self, cap):
-        # Video Doorbells appear as both ArloCameras and ArloDoorBells, where
-        # capabilities double up - eg, motion detection - we provide the
-        # capability at the camera level.
-        if cap in (MOTION_DETECTED_KEY, BATTERY_KEY, SIGNAL_STR_KEY, CONNECTION_KEY):
-            return not self.is_video_doorbell
-        if cap in (BUTTON_PRESSED_KEY, SILENT_MODE_KEY):
-            return True
-        return super().has_capability(cap)
+    def has_capability(self, cap) -> bool:
+        supports = ArloCapabilities.check_doorbell_supports(self, cap)
+        self.debug(f"supports {cap} is {supports}")
+        return supports
 
     def update_silent_mode(self):
         """Requests the latest silent mode settings.

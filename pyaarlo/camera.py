@@ -6,22 +6,17 @@ import zlib
 
 from .constant import (
     ACTIVITY_STATE_KEY,
-    AIR_QUALITY_KEY,
     AUDIO_ANALYTICS_KEY,
-    AUDIO_DETECTED_KEY,
     AUDIO_POSITION_KEY,
     AUDIO_TRACK_KEY,
-    BATTERY_KEY,
     BLANK_IMAGE,
     BRIGHTNESS_KEY,
     CAPTURED_TODAY_KEY,
-    CONNECTION_KEY,
     CRY_DETECTION_KEY,
     FLIP_KEY,
     FLOODLIGHT_BRIGHTNESS1_KEY,
     FLOODLIGHT_BRIGHTNESS2_KEY,
     FLOODLIGHT_KEY,
-    HUMIDITY_KEY,
     IDLE_SNAPSHOT_PATH,
     LAMP_STATE_KEY,
     LAST_CAPTURE_KEY,
@@ -36,33 +31,11 @@ from .constant import (
     LIGHT_BRIGHTNESS_KEY,
     LIGHT_MODE_KEY,
     MEDIA_COUNT_KEY,
-    MEDIA_PLAYER_KEY,
     MEDIA_PLAYER_RESOURCE_ID,
     MEDIA_UPLOAD_KEY,
     MEDIA_UPLOAD_KEYS,
     MIRROR_KEY,
     MODEL_BABY,
-    MODEL_ESSENTIAL_SPOTLIGHT,
-    MODEL_ESSENTIAL_XL_SPOTLIGHT,
-    MODEL_ESSENTIAL_INDOOR,
-    MODEL_ESSENTIAL_INDOOR_GEN2_2K,
-    MODEL_ESSENTIAL_INDOOR_GEN2_HD,
-    MODEL_ESSENTIAL_XL_OUTDOOR_GEN2_2K,
-    MODEL_ESSENTIAL_XL_OUTDOOR_GEN2_HD,
-    MODEL_ESSENTIAL_OUTDOOR_GEN2_2K,
-    MODEL_ESSENTIAL_OUTDOOR_GEN2_HD,
-    MODEL_PRO_2,
-    MODEL_PRO_3,
-    MODEL_PRO_3_FLOODLIGHT,
-    MODEL_PRO_4,
-    MODEL_PRO_5,
-    MODEL_ULTRA,
-    MODEL_WIRED_VIDEO_DOORBELL,
-    MODEL_WIRED_VIDEO_DOORBELL_GEN2_HD,
-    MODEL_WIRED_VIDEO_DOORBELL_GEN2_2K,
-    MODEL_ESSENTIAL_VIDEO_DOORBELL,
-    MODEL_GO,
-    MOTION_DETECTED_KEY,
     MOTION_SENS_KEY,
     NIGHTLIGHT_KEY,
     POWER_SAVE_KEY,
@@ -72,7 +45,6 @@ from .constant import (
     RECORD_START_PATH,
     RECORD_STOP_PATH,
     RECORDING_STOPPED_KEY,
-    SIGNAL_STR_KEY,
     SIREN_STATE_KEY,
     SNAPSHOT_KEY,
     SPOTLIGHT_BRIGHTNESS_KEY,
@@ -80,7 +52,6 @@ from .constant import (
     STREAM_SNAPSHOT_KEY,
     STREAM_SNAPSHOT_PATH,
     STREAM_START_PATH,
-    TEMPERATURE_KEY,
 )
 from .core import ArloCore
 from .child_device import ArloChildDevice
@@ -1472,110 +1443,7 @@ class ArloCamera(ArloChildDevice):
             }
         )
 
-    def has_capability(self, cap):
-        if cap in (BATTERY_KEY,):
-            if self.model_id.startswith((
-                    MODEL_ESSENTIAL_INDOOR,
-                    MODEL_ESSENTIAL_INDOOR_GEN2_2K,
-                    MODEL_ESSENTIAL_INDOOR_GEN2_HD,
-            )):
-                return False
-            else:
-                return True
-        if cap in (MOTION_DETECTED_KEY, SIGNAL_STR_KEY):
-            return True
-        if cap in (LAST_CAPTURE_KEY, CAPTURED_TODAY_KEY, RECENT_ACTIVITY_KEY):
-            return True
-        if cap in (AUDIO_DETECTED_KEY,):
-            if self.model_id.startswith((
-                    MODEL_ESSENTIAL_SPOTLIGHT,
-                    MODEL_ESSENTIAL_XL_SPOTLIGHT,
-                    MODEL_ESSENTIAL_INDOOR,
-                    MODEL_ESSENTIAL_INDOOR_GEN2_2K,
-                    MODEL_ESSENTIAL_INDOOR_GEN2_HD,
-                    MODEL_ESSENTIAL_XL_OUTDOOR_GEN2_2K,
-                    MODEL_ESSENTIAL_XL_OUTDOOR_GEN2_HD,
-                    MODEL_ESSENTIAL_OUTDOOR_GEN2_2K,
-                    MODEL_ESSENTIAL_OUTDOOR_GEN2_HD,
-                    MODEL_PRO_2,
-                    MODEL_PRO_3,
-                    MODEL_PRO_3_FLOODLIGHT,
-                    MODEL_PRO_4,
-                    MODEL_PRO_5,
-                    MODEL_ULTRA,
-                    MODEL_GO,
-                    MODEL_BABY,
-            )):
-                return True
-            if self.device_type.startswith("arloq"):
-                return True
-        if cap in (SIREN_STATE_KEY,):
-            if self.model_id.startswith((
-                    MODEL_ESSENTIAL_SPOTLIGHT,
-                    MODEL_ESSENTIAL_XL_SPOTLIGHT,
-                    MODEL_ESSENTIAL_INDOOR,
-                    MODEL_ESSENTIAL_INDOOR_GEN2_2K,
-                    MODEL_ESSENTIAL_INDOOR_GEN2_HD,
-                    MODEL_ESSENTIAL_XL_OUTDOOR_GEN2_2K,
-                    MODEL_ESSENTIAL_XL_OUTDOOR_GEN2_HD,
-                    MODEL_ESSENTIAL_OUTDOOR_GEN2_2K,
-                    MODEL_ESSENTIAL_OUTDOOR_GEN2_HD,
-                    MODEL_PRO_3,
-                    MODEL_PRO_3_FLOODLIGHT,
-                    MODEL_PRO_4,
-                    MODEL_PRO_5,
-                    MODEL_ULTRA,
-                    MODEL_WIRED_VIDEO_DOORBELL_GEN2_HD,
-                    MODEL_WIRED_VIDEO_DOORBELL_GEN2_2K,
-                    MODEL_ESSENTIAL_VIDEO_DOORBELL,
-            )):
-                return True
-        if cap in (SPOTLIGHT_KEY,):
-            if self.model_id.startswith((
-                    MODEL_ESSENTIAL_SPOTLIGHT,
-                    MODEL_ESSENTIAL_XL_SPOTLIGHT,
-                    MODEL_ESSENTIAL_XL_OUTDOOR_GEN2_2K,
-                    MODEL_ESSENTIAL_XL_OUTDOOR_GEN2_HD,
-                    MODEL_ESSENTIAL_OUTDOOR_GEN2_2K,
-                    MODEL_ESSENTIAL_OUTDOOR_GEN2_HD,
-                    MODEL_PRO_3,
-                    MODEL_PRO_4,
-                    MODEL_PRO_5,
-                    MODEL_ULTRA
-            )):
-                return True
-        if cap in (TEMPERATURE_KEY, HUMIDITY_KEY, AIR_QUALITY_KEY):
-            if self.model_id.startswith(MODEL_BABY):
-                return True
-        if cap in (MEDIA_PLAYER_KEY, NIGHTLIGHT_KEY, CRY_DETECTION_KEY):
-            if self.model_id.startswith(MODEL_BABY):
-                return True
-        if cap in (FLOODLIGHT_KEY,):
-            if self.model_id.startswith(MODEL_PRO_3_FLOODLIGHT):
-                return True
-        if cap in (CONNECTION_KEY,):
-            # These devices are their own base stations so don't re-add connection key.
-            if self.parent_id == self.device_id and self.model_id.startswith((
-                    MODEL_BABY,
-                    MODEL_PRO_3_FLOODLIGHT,
-                    MODEL_PRO_4,
-                    MODEL_PRO_5,
-                    MODEL_ESSENTIAL_SPOTLIGHT,
-                    MODEL_ESSENTIAL_XL_SPOTLIGHT,
-                    MODEL_ESSENTIAL_XL_OUTDOOR_GEN2_2K,
-                    MODEL_ESSENTIAL_XL_OUTDOOR_GEN2_HD,
-                    MODEL_ESSENTIAL_OUTDOOR_GEN2_2K,
-                    MODEL_ESSENTIAL_OUTDOOR_GEN2_HD,
-                    MODEL_WIRED_VIDEO_DOORBELL,
-                    MODEL_WIRED_VIDEO_DOORBELL_GEN2_HD,
-                    MODEL_WIRED_VIDEO_DOORBELL_GEN2_2K,
-                    MODEL_ESSENTIAL_VIDEO_DOORBELL,
-                    MODEL_ESSENTIAL_INDOOR,
-                    MODEL_ESSENTIAL_INDOOR_GEN2_2K,
-                    MODEL_ESSENTIAL_INDOOR_GEN2_HD,
-                    MODEL_GO,
-            )):
-                return False
-            if self.device_type in ("arloq", "arloqs"):
-                return False
-        return super().has_capability(cap)
+    def has_capability(self, cap) -> bool:
+        supports = ArloCapabilities.check_camera_supports(self, cap)
+        self.debug(f"supports {cap} is {supports}")
+        return supports
