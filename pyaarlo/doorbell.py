@@ -2,10 +2,6 @@ from .constant import (
     BUTTON_PRESSED_KEY,
     CHIMES_KEY,
     CONNECTION_KEY,
-    MODEL_WIRED_VIDEO_DOORBELL,
-    MODEL_WIRED_VIDEO_DOORBELL_GEN2_HD,
-    MODEL_WIRED_VIDEO_DOORBELL_GEN2_2K,
-    MODEL_ESSENTIAL_VIDEO_DOORBELL,
     MOTION_DETECTED_KEY,
     SILENT_MODE_ACTIVE_KEY,
     SILENT_MODE_CALL_KEY,
@@ -92,12 +88,9 @@ class ArloDoorBell(ArloChildDevice):
 
     @property
     def is_video_doorbell(self):
-        return self.model_id.startswith((
-            MODEL_WIRED_VIDEO_DOORBELL,
-            MODEL_WIRED_VIDEO_DOORBELL_GEN2_HD,
-            MODEL_WIRED_VIDEO_DOORBELL_GEN2_2K,
-            MODEL_ESSENTIAL_VIDEO_DOORBELL
-        ))
+        supports = ArloCapabilities.check_doorbell_supports_video(self)
+        self.debug(f"supports video is {supports}")
+        return supports
 
     def has_capability(self, cap) -> bool:
         supports = ArloCapabilities.check_doorbell_supports(self, cap)

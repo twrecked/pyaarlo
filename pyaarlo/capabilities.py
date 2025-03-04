@@ -256,12 +256,21 @@ class ArloCapabilities:
         return ArloCapabilities._check_child_supports(camera, cap)
 
     @staticmethod
+    def check_doorbell_supports_video(doorbell: ArloDoorBell) -> bool:
+        return doorbell.model_id.startswith((
+            MODEL_WIRED_VIDEO_DOORBELL,
+            MODEL_WIRED_VIDEO_DOORBELL_GEN2_HD,
+            MODEL_WIRED_VIDEO_DOORBELL_GEN2_2K,
+            MODEL_ESSENTIAL_VIDEO_DOORBELL
+        ))
+
+    @staticmethod
     def check_doorbell_supports(doorbell: ArloDoorBell, cap: str) -> bool:
         # Video Doorbells appear as both ArloCameras and ArloDoorBells, where
         # capabilities double up - eg, motion detection - we provide the
         # capability at the camera level.
         if cap in (MOTION_DETECTED_KEY, BATTERY_KEY, SIGNAL_STR_KEY, CONNECTION_KEY):
-            return not doorbell.is_video_doorbell
+            return not ArloCapabilities.check_doorbell_supports_video(doorbell)
         if cap in (BUTTON_PRESSED_KEY, SILENT_MODE_KEY):
             return True
         return ArloCapabilities._check_child_supports(doorbell, cap)
