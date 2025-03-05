@@ -1,4 +1,3 @@
-from unidecode import unidecode
 
 from .constant import (
     BATTERY_KEY,
@@ -52,15 +51,6 @@ class ArloDevice(ArloObject):
             value = props.get(key, None)
             if value is not None:
                 self._save(key, value)
-
-    @property
-    def entity_id(self):
-        if self._core.cfg.serial_ids:
-            return self.device_id
-        elif self._core.cfg.no_unicode_squash:
-            return self.name.lower().replace(" ", "_")
-        else:
-            return unidecode(self.name.lower().replace(" ", "_"))
 
     @property
     def resource_id(self):

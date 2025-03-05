@@ -182,13 +182,14 @@ class PyArlo:
         self._core.st = ArloStorage(self._core.cfg, self._core.log)
         self._core.be = ArloBackEnd(self._core.cfg, self._core.log, self._core.bg)
 
+        # Try to connect.
+        self._core.be.connect()
+        if not self._core.be.is_connected:
+            return
+
         # Fill out the object store.
         # The lists are created empty but we need to add in the media library.
         self._objs.ml = ArloMediaLibrary(self._core, self._objs)
-
-        # Failed to login, then stop now!
-        if not self._core.be.is_connected:
-            return
 
         # Set up refreshes.
         self._today = datetime.date.today()

@@ -80,6 +80,7 @@ class ArloBackEnd:
     _lock: threading.Condition = threading.Condition()
 
     # These affect how we talk to the backend.
+    _logged_in: bool = False
     _multi_location: bool = False
 
     # This holds the request state.
@@ -111,12 +112,6 @@ class ArloBackEnd:
         if self._req.details.device_id is None:
             self._debug("created new user ID")
             self._req.details.device_id = str(uuid.uuid4())
-
-        # Start the login
-        self._logged_in = self._login() and self._session_finalize()
-        if not self._logged_in:
-            self._debug("failed to log in")
-        return
 
     def _debug(self, msg):
         self._log.debug(f"backend: {msg}")
@@ -927,6 +922,13 @@ class ArloBackEnd:
 
     def gen_trans_id(self, trans_type=TRANSID_PREFIX):
         return trans_type + "!" + str(uuid.uuid4())
+
+    def connect(self):
+        # Start the login
+        self._logged_in = self._login() and self._session_finalize()
+        if not self._logged_in:
+            self._debug("failed to log in")
+        return
 
     def start_monitoring(self):
         # Build event details...
