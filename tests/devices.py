@@ -1,4 +1,7 @@
 
+# A list of test devices to parse.
+# Copied directly from packets returned from Arlo.
+
 BASE_STATION_02 = {
     'allowedMqttTopics': ['d/BASE-STATION-02-XCLOUD-ID/out/basestation/#',
                           'd/BASE-STATION-02-XCLOUD-ID/out/wifi/#',
