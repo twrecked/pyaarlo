@@ -1,5 +1,5 @@
 import logging
-from pyaarlo.cfg import ArloCfg
+from pyaarlo import ArloCfg
 
 
 _LOGGER = logging.getLogger("pyaarlo")
