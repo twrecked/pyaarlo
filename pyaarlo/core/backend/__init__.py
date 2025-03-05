@@ -930,7 +930,7 @@ class ArloBackEnd:
             self._debug("failed to log in")
         return
 
-    def start_monitoring(self):
+    def start(self):
         # Build event details...
         self._event.stream = ArloEvent(self._cfg, self._log, self._bg, self._req.details,
                                        self._event_response_handler,
@@ -964,8 +964,8 @@ class ArloBackEnd:
     def is_connected(self):
         return self._logged_in
 
-    def logout(self):
-        self._debug("trying to logout")
+    def stop(self):
+        self._debug("trying to stop")
         self._event_loop_stop()
         if self._event.stream is not None:
             self._event.stream.stop()

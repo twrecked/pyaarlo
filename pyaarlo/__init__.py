@@ -215,7 +215,7 @@ class PyArlo:
         self._core.st.set(["ARLO", TOTAL_LIGHTS_KEY], len(self._objs.lights), prefix="aarlo")
 
         # Subscribe to events.
-        self._core.be.start_monitoring()
+        self._core.be.start()
 
         # Now ping the bases.
         self._ping_bases()
@@ -431,13 +431,13 @@ class PyArlo:
             self._started = True
             self._lock.notify_all()
 
-    def stop(self, logout=False):
+    def stop(self, stop_backend=False):
         """Stop connection to Arlo and, optionally, logout."""
         self._core.st.save()
         self._core.bg.stop()
         self._objs.ml.stop()
-        if logout:
-            self._core.be.logout()
+        if stop_backend:
+            self._core.be.stop()
 
     @property
     def entity_id(self):
