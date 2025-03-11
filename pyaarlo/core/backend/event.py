@@ -9,7 +9,7 @@ import requests
 import ssl
 import traceback
 from enum import IntEnum
-from typing import Any
+from typing import Any, Union
 
 from ...constant import (
     MQTT_HOST,
@@ -32,32 +32,23 @@ class _EventState(IntEnum):
 
 class _EventSession:
 
-    cfg: ArloCfg
-    log: ArloLogger
-    details: ArloSessionDetails
-    eventhandler: Any
-    connecthandler: Any
-    reconnecthandler: Any
-
     def __init__(self, cfg: ArloCfg, log: ArloLogger, details: ArloSessionDetails,
                  event_handler: Any = None, connect_handler: Any = None, reconnect_handler: Any = None) -> None:
-        self.cfg = cfg
-        self.log = log
-        self.details = details
-        self.event_handler = event_handler
-        self.connect_handler = connect_handler
-        self.reconnect_handler = reconnect_handler
+        self.cfg: ArloCfg = cfg
+        self.log: ArloLogger = log
+
+        self.details: ArloSessionDetails = details
+        self.event_handler: Any = event_handler
+        self.connect_handler: Any = connect_handler
+        self.reconnect_handler: Any = reconnect_handler
 
 
 class _MQTT:
 
-    _session: _EventSession
-
-    _client: mqtt.Client | None
-    _client_id: str | None
-
     def __init__(self, session: _EventSession):
-        self._session = session
+        self._session: _EventSession = session
+        self._client: Union[mqtt.Client, None] = None
+        self._client_id: Union[str, None] = None
 
     def _debug(self, msg):
         self._session.log.debug(f"{msg}")
@@ -166,12 +157,9 @@ class _MQTT:
 
 class _SSE:
 
-    _session: _EventSession
-
-    _stream: SSEClient
-
     def __init__(self, session: _EventSession):
-        self._session = session
+        self._session: _EventSession = session
+        self._stream: Union[SSEClient, None] = None
 
     def _debug(self, msg):
         self._session.log.debug(f"sse: {msg}")
@@ -192,7 +180,7 @@ class _SSE:
             # Fudge timeout for requests library.
             timeout = self._session.cfg.stream_timeout
             self._debug(f"starting stream with {timeout} timeout")
-            if timeout is 0:
+            if timeout == 0:
                 timeout = None
             self._stream = SSEClient(
                 self._session.log,
@@ -259,17 +247,13 @@ class ArloEvent:
     a class doing the real work.
     """
 
-    _session: _EventSession
-    _bg: ArloBackground
-
-    _state: _EventState = _EventState.STARTING
-    _session: _EventSession | None = None
-    _device: _MQTT | _SSE | None = None
-
     def __init__(self, cfg: ArloCfg, log: ArloLogger, bg: ArloBackground, details: ArloSessionDetails,
                  event_handler: Any = None, connect_handler: Any = None, reconnect_handler: Any = None):
-        self._session = _EventSession(cfg, log, details, event_handler, connect_handler, reconnect_handler)
-        self._bg = bg
+        self._bg: ArloBackground = bg
+
+        self._session: _EventSession = _EventSession(cfg, log, details, event_handler, connect_handler, reconnect_handler)
+        self._state: _EventState = _EventState.STARTING
+        self._device: Union[_MQTT, _SSE, None] = None
 
     def _debug(self, msg):
         self._session.log.debug(f"event: {msg}")

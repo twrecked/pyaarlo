@@ -9,19 +9,16 @@ from .logger import ArloLogger
 
 class ArloStorage:
     
-    _cfg: ArloCfg
-    _log: ArloLogger
-    _state_file: str
-    _lock: threading.Lock = threading.Lock()
-    # XXX is _db dict[str, str]
-
     def __init__(self, cfg: ArloCfg, log: ArloLogger):
-        self._cfg = cfg
-        self._log = log
-        self._state_file = self._cfg.state_file
+        self._cfg: ArloCfg = cfg
+        self._log: ArloLogger = log
+
+        self._state_file: str = self._cfg.state_file
+        self._lock: threading.Lock = threading.Lock()
         self._db = {}
-        # self._lock = threading.Lock()
+
         self.load()
+
         self._log.debug("storage: created")
 
     def _ekey(self, key):

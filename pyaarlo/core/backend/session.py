@@ -5,7 +5,9 @@ import pprint
 import uuid
 import threading
 import cloudscraper
+
 from http.cookiejar import LWPCookieJar
+from typing import Dict, Union
 
 from ...constant import (
     ORIGIN_HOST,
@@ -29,49 +31,39 @@ class ArloSessionDetails:
      - the connection
      - cookies
     """
-    # Session objects.
-    device_id: str | None = None
-    user_id: str | None = None
-    web_id: str | None = None
-    sub_id: str | None = None
-    token: str | None = None
-    token64: str | None = None
-    token_expires_in: int | None = None
-    user_agent: str | None = None
-    headers: dict[str, str]
-    auth_headers: dict[str, str]
-
-    # Connection Objects.
-    connection: cloudscraper.CloudScraper | None = None
-    cookies: LWPCookieJar | None = None
+    def __init__(self):
+        self.device_id: Union[str, None] = None
+        self.user_id: Union[str, None] = None
+        self.web_id: Union[str, None] = None
+        self.sub_id: Union[str, None] = None
+        self.token: Union[str, None] = None
+        self.token64: Union[str, None] = None
+        self.token_expires_in: Union[int, None] = None
+        self.user_agent: Union[str, None] = None
+        self.headers: Dict[str, str] = {}
+        self.auth_headers: Dict[str, str] = {}
+    
+        # Connection Objects.
+        self.connection: Union[cloudscraper.CloudScraper, None] = None
+        self.cookies: Union[LWPCookieJar, None] = None
 
 
 class ArloSession:
     """Helper class for ArloSessionDetails
     """
-    # Session details.
-    details: ArloSessionDetails
-
-    # Core objects.
-    _cfg: ArloCfg | None = None
-    _log: ArloLogger | None = None
-
-    # Internal state/fields for the object.
-    _lock = threading.Lock()
-    _save_info: dict[str, {str, str}] | None = {}
-    _save_enabled: bool = True
-    _save_filename: str | None = None
-    _save_username: str | None = None
 
     def __init__(self, cfg: ArloCfg, log: ArloLogger):
-        self.details = ArloSessionDetails()
+        self._cfg: ArloCfg = cfg
+        self._log: ArloLogger = log
 
-        self._cfg = cfg
-        self._log = log
+        self.details: ArloSessionDetails = ArloSessionDetails()
 
+        self._lock: threading.Lock = threading.Lock()
         self._save_enabled = cfg.save_session
         self._save_filename = cfg.session_file
         self._save_username = cfg.username
+        self._save_info: Union[Dict[str, Dict[str, str]], None] = None
+
 
     def _debug(self, msg: str):
         self._log.debug(f"session: {msg}")
@@ -100,8 +92,8 @@ class ArloSession:
 
         try:
             with open(self._save_filename, "rb") as dump:
-                ArloSession._save_info = pickle.load(dump)
-                session_info: dict[str, {str, str}] | None = ArloSession._save_info.get(self._save_username, None)
+                self._save_info = pickle.load(dump)
+                session_info: Union[Dict[str, str], None] = ArloSession._save_info.get(self._save_username, None)
                 if session_info is not None:
                     # Read in values.
                     self.details.device_id = session_info["device_id"]
@@ -125,7 +117,7 @@ class ArloSession:
     def save(self):
         try:
             with open(self._save_filename, "wb") as dump:
-                ArloSession._save_info[self._save_username] = {
+                self._save_info[self._save_username] = {
                     "device_id": self.details.device_id,
                     "user_id": self.details.user_id,
                     "web_id": self.details.web_id,
@@ -134,8 +126,8 @@ class ArloSession:
                     "expires_in": str(self.details.token_expires_in),
                 }
                 # noinspection PyTypeChecker
-                pickle.dump(ArloSession._save_info, dump)
-                self._debug(f"save session_info={ArloSession._save_info}")
+                pickle.dump(self._save_info, dump)
+                self._debug(f"save session_info={self._save_info}")
         except Exception as e:
             self._debug(f"session file not written {str(e)}")
 
@@ -152,7 +144,7 @@ class ArloSession:
             pass
         self._debug(f"loading cookies={self.details.cookies}")
 
-    def auth_headers(self) -> dict[str, str]:
+    def auth_headers(self) -> Dict[str, str]:
         """Build headers needed for authentication phase.
 
         This list was determined by packet inspection when logging onto the
@@ -195,7 +187,7 @@ class ArloSession:
 
         return self.details.auth_headers
 
-    def headers(self) -> dict[str, str]:
+    def headers(self) -> Dict[str, str]:
         """Build headers needed for post-authentication phase.
 
         This list was determined by packet inspection when logging onto the

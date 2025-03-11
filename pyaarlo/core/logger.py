@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 
+from typing import Union
+
 
 _LOGGER = logging.getLogger("pyaarlo")
 
@@ -11,11 +13,11 @@ class ArloLogger:
 
     And instance is created very early on and passed to all sub-components.
     """
-    _last_error: str | None = None
-    _verbose_debug: bool = False
 
     def __init__(self, verbose: bool = False):
-        self._verbose_debug = verbose
+        self._verbose_debug: bool = verbose
+        self._last_error: Union[str, None] = None
+
         self.debug("logger created")
         self.vdebug("verbose debug enabled")
 
@@ -24,7 +26,7 @@ class ArloLogger:
         _LOGGER.error(msg)
 
     @property
-    def last_error(self) -> str | None:
+    def last_error(self) -> Union[str, None]:
         """Return the last reported error.
         """
         return self._last_error

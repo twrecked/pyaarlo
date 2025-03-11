@@ -7,6 +7,8 @@ import requests
 import ssl
 import time
 
+from typing import Union
+
 from ..cfg import ArloCfg
 from ..logger import ArloLogger
 
@@ -21,14 +23,11 @@ class _TFABase:
     """Base  class for 2fa components.
     """
 
-    _cfg: ArloCfg
-    _log: ArloLogger
-    _prefix: str = ""
-
     def __init__(self, cfg: ArloCfg, log: ArloLogger, prefix: str):
-        self._cfg = cfg
-        self._log = log
-        self._prefix = prefix
+        self._cfg: ArloCfg = cfg
+        self._log: ArloLogger = log
+
+        self._prefix: str = prefix
 
     def _debug(self, msg):
         self._log.debug(f"{self._prefix}: {msg}")
@@ -36,7 +35,7 @@ class _TFABase:
     def start(self) -> bool:
         return True
 
-    def get(self) -> str | None:
+    def get(self) -> Union[str, None]:
         return None
 
     def stop(self):
@@ -297,15 +296,14 @@ class ArloTFA:
     finishAuth to return a 200.
     """
 
-    _handler: _TFABase | None = None
-    _type: str | None = None
-    _factor_type: str = "BROWSER"
-    
+
     def __init__(self, cfg: ArloCfg, log: ArloLogger):
         """Determine which tfa mechanism to use and set up the handlers if needed.
         """
+        self._type: str = cfg.tfa_source
 
-        self._type = cfg.tfa_source
+        self._handler: Union[_TFABase, None] = None
+        self._factor_type: str = "BROWSER"
         if self._type == TFA_CONSOLE_SOURCE:
             self._handler = _TFAConsole(cfg, log)
         elif self._type == TFA_IMAP_SOURCE:
@@ -318,7 +316,7 @@ class ArloTFA:
     
         self._handler.start()
     
-    def code(self) -> str | None:
+    def code(self) -> Union[str, None]:
         """Get the "otp" from the tfa source.
     
         This returns one of 3 things:
@@ -329,7 +327,7 @@ class ArloTFA:
         return self._handler.get()
     
     @property
-    def type(self) -> str | None:
+    def type(self) -> Union[str, None]:
         return self._type
     
     @property

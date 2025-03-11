@@ -7,16 +7,16 @@ from .logger import ArloLogger
 
 class ArloBackgroundWorker(threading.Thread):
     
-    _log: ArloLogger
-    _id: int = 0
-    _stop_thread: bool = False
-    
     def __init__(self, log: ArloLogger):
         super().__init__()
-        
-        self._log = log
-        self._lock = threading.Condition()
+
+        self._log: ArloLogger = log
+
+        self._lock: threading.Condition = threading.Condition()
+        self._id: int = 0
+        self._stop_thread: bool = False
         self._queue = {}
+
         self._log.debug("background: worker started")
 
     def _next_id(self):
@@ -106,13 +106,13 @@ class ArloBackgroundWorker(threading.Thread):
 
 class ArloBackground:
 
-    _worker: ArloBackgroundWorker
-
     def __init__(self, log: ArloLogger):
-        self._worker = ArloBackgroundWorker(log)
+        self._worker: ArloBackgroundWorker = ArloBackgroundWorker(log)
+
         self._worker.name = "ArloBackgroundWorker"
         self._worker.daemon = True
         self._worker.start()
+
         log.debug("background: created")
 
     def _run(self, bg_cb, prio, **kwargs):

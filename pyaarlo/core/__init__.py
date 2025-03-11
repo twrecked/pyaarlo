@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import Union, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .backend import ArloBackEnd
@@ -10,7 +10,6 @@ if TYPE_CHECKING:
     from .storage import ArloStorage
 
 
-# noinspection PyUnresolvedReferences
 class ArloCore:
     """These are the core functionality of Arlo.
 
@@ -29,8 +28,9 @@ class ArloCore:
     conciously-uncoupling from them.
     """
 
-    be: ArloBackEnd | None = None
-    bg: ArloBackground | None = None
-    cfg: ArloCfg | None = None
-    log: ArloLogger | None = None
-    st: ArloStorage | None = None
+    def __init__(self):
+        self.be: Union[ArloBackEnd, None] = None
+        self.bg: Union[ArloBackground, None] = None
+        self.cfg: Union[ArloCfg, None] = None
+        self.log: Union[ArloLogger, None] = None
+        self.st: Union[ArloStorage, None] = None

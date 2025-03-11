@@ -6,7 +6,9 @@ import threading
 import time
 import uuid
 import cloudscraper
+
 from enum import IntEnum
+from typing import Dict, List, Union
 
 from ...constant import (
     AUTH_FINISH_PATH,
@@ -50,62 +52,54 @@ class _AuthState(IntEnum):
 class _AuthDetails:
     """This hold the authentication state.
     """
-    state: _AuthState = _AuthState.STARTING
-    headers: dict[str, str] | None = None
-    browser_code = None
-    factor_id: str | None = None
-    needs_pairing: bool = False
-    tfa_handler: ArloTFA | None = None
-    attempt: int = 4
-    curves: list[str] = []
+    def __init__(self):
+        self.state: _AuthState = _AuthState.STARTING
+        self.headers: Union[Dict[str, str], None] = None
+        self.browser_code = None
+        self.factor_id: Union[str, None] = None
+        self.needs_pairing: bool = False
+        self.tfa_handler: Union[ArloTFA, None] = None
+        self.attempt: int = 4
+        self.curves: List[str] = []
 
 
 class _EventDetails:
     """This tracks the event stream state.
     """
-    loop_exiting: bool = False
-    loop_thread: threading.Thread | None = None
-    stream: ArloEvent | None = None
-    stream_connected: bool = False
+    def __init__(self):
+        self.loop_exiting: bool = False
+        self.loop_thread: Union[threading.Thread, None] = None
+        self.stream: Union[ArloEvent, None] = None
+        self.stream_connected: bool = False
 
 
 # include token and session details
 class ArloBackEnd:
 
-    _cfg: ArloCfg
-    _log: ArloLogger
-    _bg: ArloBackground
-
-    # Exclusive access.
-    _lock: threading.Condition = threading.Condition()
-
-    # These affect how we talk to the backend.
-    _logged_in: bool = False
-    _multi_location: bool = False
-
-    # This holds the request state.
-    _req: ArloSession | None = None
-
-    # This holds the auth details and state.
-    _auth: _AuthDetails = _AuthDetails()
-
-    # The event stream.
-    _event: _EventDetails = _EventDetails()
-
     def __init__(self, cfg: ArloCfg, log: ArloLogger, bg: ArloBackground):
+        self._cfg: ArloCfg = cfg
+        self._log: ArloLogger = log
+        self._bg: ArloBackground = bg
 
-        self._cfg = cfg
-        self._log = log
-        self._bg = bg
+        # These affect how we talk to the backend.
+        self._logged_in: bool = False
+        self._multi_location: bool = False
 
+        # This holds the request state.
+        self._req: ArloSession = ArloSession(cfg, log)
+
+        # This holds the auth details and state.
+        self._auth: _AuthDetails = _AuthDetails()
+
+        # The event stream.
+        self._event: _EventDetails = _EventDetails()
+
+        # Remaining state variables.
+        self._lock: threading.Condition = threading.Condition()
         self._dump_file = self._cfg.dump_file
-
         self._requests = {}
         self._callbacks = {}
         self._resource_types = DEFAULT_RESOURCES
-
-        # Create state..
-        self._req = ArloSession(cfg, log)
 
         # Restore the persistent session information.
         self._req.load()
@@ -380,7 +374,7 @@ class ArloBackEnd:
             path, "OPTIONS", None, headers, False, False, timeout, self._cfg.auth_host, authpost=True
         )
 
-    def _auth_find_factor_id(self) -> str | None:
+    def _auth_find_factor_id(self) -> Union[str, None]:
         """Get list of suitable 2fa options.
 
         Then look at the user config and figure out which one is best

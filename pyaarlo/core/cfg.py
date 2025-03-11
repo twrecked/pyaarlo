@@ -6,7 +6,7 @@ import os
 import re
 import random
 
-from typing import Any
+from typing import Any, Dict
 from urllib.parse import urlparse
 
 from ..constant import (
@@ -33,10 +33,6 @@ class ArloCfg:
     is passed in a kwarg and parsed out by the property methods.
     """
 
-    _log: ArloLogger
-    _kw: dict[str, Any]
-    _update_backend: bool = False
-    _storage_dir: str
 
     def __init__(self, log: ArloLogger, **kwargs):
         """The constructor.
@@ -44,9 +40,11 @@ class ArloCfg:
         Args:
             kwargs (kwargs): Configuration options.
         """
-        self._log = log
-        self._kw = kwargs
-        self._debug("loaded")
+        self._log: ArloLogger = log
+
+        self._kw: Dict[str, Any] = kwargs
+        self._update_backend: bool = False
+        self._storage_dir: str
 
         # Determine storage location, this is platform specific.
         strplatform = platform.system()
@@ -57,6 +55,9 @@ class ArloCfg:
             self._storage_dir = self._kw.get("storage_dir", os.path.join(termux_dir, ".aarlo"))
         else:
             self._storage_dir = self._kw.get("storage_dir", "/tmp/.aarlo")
+
+        self._debug("loaded")
+
 
     def _remove_scheme(self, host):
         bits = host.split("://")
