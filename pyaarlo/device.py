@@ -120,27 +120,6 @@ class ArloDevice(ArloObject):
         """
         return self._parent_id == self.device_id
 
-    def attribute(self, attr, default=None):
-        """Return the value of attribute attr.
-
-        PyArlo stores its state in key/value pairs. This returns the value associated with the key.
-
-        See PyArlo for a non-exhaustive list of attributes.
-
-        :param attr: Attribute to look up.
-        :type attr: str
-        :param default: value to return if not found.
-        :return: The value associated with attribute or `default` if not found.
-        """
-        value = self._load(attr, None)
-        if value is None:
-            value = self._attrs.get(attr, None)
-        if value is None:
-            value = self._attrs.get("properties", {}).get(attr, None)
-        if value is None:
-            value = default
-        return value
-
     def add_attr_callback(self, attr, cb):
         """Add an callback to be triggered when an attribute changes.
 
