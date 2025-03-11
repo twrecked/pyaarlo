@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import base64
 import datetime
-import os
 import pprint
 import threading
 import time
-from typing import Any
+from typing import Any, List, Union
 
 from .constant import (
     BLANK_IMAGE,
@@ -139,43 +138,21 @@ class PyArlo:
     You can use the attribute `*` to register for all events.
     """
 
-    _core: ArloCore = ArloCore
-    _objs: ArloObjects = ArloObjects
-
-    _lock: threading.Condition = threading.Condition()
     _blank_image: bytes = base64.standard_b64decode(BLANK_IMAGE)
-    _started: bool = False
-
-    # Last seen devices.
-    _devices: list[Any] | None = None
-
-    # When to refresh stuff.
-    # - today; certain things run at the start of a new day
-    # - refresh_devices_at; every few hours we can refresh the device list.
-    # - refresh_modes_at; every few minutes we can refresh the mode list.
-    _today: datetime.date
-    _refresh_devices_at: float
-    _refresh_modes_at: float
 
     def __init__(self, **kwargs):
         """Constructor for the PyArlo object.
         """
+        self._core: ArloCore = ArloCore()
+        self._objs: ArloObjects = ArloObjects()
 
-        # Get logger initialised.
+        ## Fill out the core object.
+        # Get logger initialised and get version out.
         self._core.log = ArloLogger(kwargs.get("verbose_debug", False))
-
-        # Get version out early.
         self._core.log.info(f"pyarlo {__version__} starting...")
 
         # Now load the config.
         self._core.cfg = ArloCfg(self._core.log, **kwargs)
-
-        # Create storage/scratch directory.
-        try:
-            if not os.path.exists(self._core.cfg.storage_dir):
-                os.mkdir(self._core.cfg.storage_dir)
-        except Exception:
-            self.warning(f"Problem creating {self._core.cfg.storage_dir}")
 
         # Create remaining core components.
         self._core.bg = ArloBackground(self._core.log)
@@ -187,14 +164,19 @@ class PyArlo:
         if not self._core.be.is_connected:
             return
 
-        # Fill out the object store.
+        ## Fill out the object store.
         # The lists are created empty but we need to add in the media library.
         self._objs.ml = ArloMediaLibrary(self._core, self._objs)
 
+        # State
+        self._lock: threading.Condition = threading.Condition()
+        self._started: bool = False
+        self._devices: Union[List[Any], None] = None
+
         # Set up refreshes.
-        self._today = datetime.date.today()
-        self._refresh_devices_at = time.monotonic() + self._core.cfg.refresh_devices_every
-        self._refresh_modes_at = time.monotonic() + self._core.cfg.refresh_modes_every
+        self._today: datetime.date = datetime.date.today()
+        self._refresh_devices_at: float = time.monotonic() + self._core.cfg.refresh_devices_every
+        self._refresh_modes_at: float = time.monotonic() + self._core.cfg.refresh_modes_every
 
         # Slow piece.
         # Get locations for multi location sites.

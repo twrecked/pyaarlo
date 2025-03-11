@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import List, Union, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .base_station import ArloBaseStation
@@ -18,11 +18,12 @@ class ArloObjects:
     XXX This introduces a circular dependency because some objects need to
         know about other objects.  I'll think of a way to break this.
     """
-    base_stations: list[ArloBaseStation] = []
-    cameras: list[ArloCamera] = []
-    locations: list[ArloLocation] = []
-    lights: list[ArloLight] = []
-    doorbells: list[ArloDoorBell] = []
-    sensors: list[ArloSensor] = []
-
-    ml: ArloMediaLibrary | None = None
+    def __init__(self):
+        self.base_stations: List[ArloBaseStation] = []
+        self.cameras: List[ArloCamera] = []
+        self.locations: List[ArloLocation] = []
+        self.lights: List[ArloLight] = []
+        self.doorbells: List[ArloDoorBell] = []
+        self.sensors: List[ArloSensor] = []
+    
+        self.ml: Union[ArloMediaLibrary, None] = None

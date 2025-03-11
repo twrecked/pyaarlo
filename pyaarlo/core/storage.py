@@ -1,5 +1,6 @@
 import fnmatch
 import pickle
+import os
 import pprint
 import threading
 
@@ -17,9 +18,19 @@ class ArloStorage:
         self._lock: threading.Lock = threading.Lock()
         self._db = {}
 
+        self._create_storage_directory()
         self.load()
 
         self._log.debug("storage: created")
+
+    def _create_storage_directory(self):
+        """Create storage area.
+        """
+        try:
+            if not os.path.exists(self._cfg.storage_dir):
+                os.mkdir(self._cfg.storage_dir)
+        except Exception as _e:
+            self._log.warning(f"Problem creating {self._cfg.storage_dir}")
 
     def _ekey(self, key):
         return key if not isinstance(key, list) else "/".join(key)

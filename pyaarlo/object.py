@@ -27,16 +27,12 @@ class ArloObject:
     or unique_id for this Object so we create one.
     """
 
-    _name: str
-    _core: ArloCore
-    _objs: ArloObjects
-
     def __init__(self, name: str, core: ArloCore, objs: ArloObjects,
                  attrs, id, type, uid=None):
-        self._name = name
-        self._core = core
-        self._objs = objs
+        self._core: ArloCore = core
+        self._objs: ArloObjects = objs
         
+        self._name: str = name
         self._attrs = attrs
         self._id = id
         self._type = type
