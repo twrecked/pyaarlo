@@ -93,31 +93,30 @@ class ArloSession:
         try:
             with open(self._save_filename, "rb") as dump:
                 self._save_info = pickle.load(dump)
-                session_info: Union[Dict[str, str], None] = ArloSession._save_info.get(self._save_username, None)
-                if session_info is not None:
-                    # Read in values.
-                    self.details.device_id = session_info["device_id"]
-                    self.details.user_id = session_info["user_id"]
-                    self.details.web_id = session_info["web_id"]
-                    self.details.sub_id = session_info["sub_id"]
-                    self.details.token = session_info["token"]
-                    self.details.token_expires_in = int(session_info["expires_in"])
-                    # Build remaining.
-                    self.details.token64 = to_b64(self.details.token)
-                    self._debug(f"load saved={ArloSession._save_info}")
-                    self._debug(f"load toke64={self.details.token64}")
-                else:
-                    self._debug("load failed")
+
+                # Read in values.
+                self.details.device_id = self._save_info["device_id"]
+                self.details.user_id = self._save_info["user_id"]
+                self.details.web_id = self._save_info["web_id"]
+                self.details.sub_id = self._save_info["sub_id"]
+                self.details.token = self._save_info["token"]
+                self.details.token_expires_in = int(self._save_info["expires_in"])
+                # Build remaining.
+                self.details.token64 = to_b64(self.details.token)
+                self._debug(f"load saved={self._save_info}")
+                self._debug(f"load toke64={self.details.token64}")
+
         except Exception:
             self._debug("session file not read")
-            ArloSession._save_info = {
+            self._save_info = {
                 "version": "2",
             }
 
     def save(self):
         try:
             with open(self._save_filename, "wb") as dump:
-                self._save_info[self._save_username] = {
+                self._save_info = {
+                    "version": "2",
                     "device_id": self.details.device_id,
                     "user_id": self.details.user_id,
                     "web_id": self.details.web_id,
