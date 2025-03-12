@@ -947,9 +947,9 @@ class ArloBackEnd:
                 count += 1
 
         # start logout daemon for sse clients
-        if self._cfg.reconnect_every != 0:
-            self._debug("automatically reconnecting")
-            self._bg.run_every(self._event_reconnect, self._cfg.reconnect_every)
+        # if self._cfg.reconnect_every != 0:
+        #     self._debug("automatically reconnecting")
+        #     self._bg.run_every(self._event_reconnect, self._cfg.reconnect_every)
 
         self._debug("stream up")
         return True
@@ -964,6 +964,18 @@ class ArloBackEnd:
         if self._event.stream is not None:
             self._event.stream.stop()
         self.put(LOGOUT_PATH)
+
+    def check_token(self):
+        """See if the token nearing its timeout.
+
+        If so, restart the event loop.
+        """
+        remaining = int(self._req.details.token_expires_in) - int(time.time())
+        self._vdebug(f"check-token: now={int(time.time())}, expires={int(self._req.details.token_expires_in - 300)}")
+        if self._req.details.token_expires_in - 300 < time.time():
+            self._debug(f"check-token: token is expiring in {remaining} seconds, reconnecting")
+            self._event_reconnect()
+        self._debug(f"check-token: token still good for {remaining} seconds")
 
     def notify(self, device_id, xcloud_id, body, timeout=None, wait_for=None):
         """Send in a notification.

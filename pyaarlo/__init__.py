@@ -27,10 +27,12 @@ from .core.background import ArloBackground
 from .core.cfg import ArloCfg
 from .core.logger import ArloLogger
 from .core.storage import ArloStorage
+from .device import ArloDevice
 from .doorbell import ArloDoorBell
 from .light import ArloLight
 from .location import ArloLocation
 from .media import ArloMediaLibrary
+from .object import ArloObject
 from .objects import ArloObjects
 from .sensor import ArloSensor
 from .types import ArloTypes
@@ -354,6 +356,9 @@ class PyArlo:
         self._core.bg.run(self._core.st.save)
         self._ping_bases()
 
+        # See if the backend need to reconnect.
+        self._core.be.check_token()
+
         # do we need to reload the modes?
         if self._core.cfg.refresh_modes_every != 0:
             now = time.monotonic()
@@ -465,177 +470,228 @@ class PyArlo:
         return self._objs.ml
 
     @property
-    def is_connected(self):
-        """Returns `True` if the object is connected to the Arlo servers, `False` otherwise."""
+    def is_connected(self) -> bool:
+        """Returns True if this Arlo instance is connected to the servers, False otherwise.
+        """
         return self._core.be.is_connected
 
     @property
-    def cameras(self):
-        """List of registered cameras.
-
-        :return: a list of cameras.
-        :rtype: list(ArloCamera)
+    def cameras(self) -> List[ArloCamera]:
+        """Returns the list of cameras known to Arlo.
         """
         return self._objs.cameras
 
     @property
-    def doorbells(self):
-        """List of registered doorbells.
-
-        :return: a list of doorbells.
-        :rtype: list(ArloDoorBell)
+    def doorbells(self) -> List[ArloDoorBell]:
+        """Returns the list of doorbells known to Arlo.
         """
         return self._objs.doorbells
 
     @property
-    def lights(self):
-        """List of registered lights.
-
-        :return: a list of lights.
-        :rtype: list(ArloLight)
+    def lights(self) -> List[ArloLight]:
+        """Returns the list of base lights known to Arlo.
         """
         return self._objs.lights
 
     @property
-    def base_stations(self):
-        """List of base stations..
-
-        :return: a list of base stations.
-        :rtype: list(ArloBase)
+    def base_stations(self) -> List[ArloBaseStation]:
+        """Returns the list of base stations known to Arlo.
         """
         return self._objs.base_stations
 
     @property
-    def locations(self):
-        """List of locations..
-
-        :return: a list of locations.
-        :rtype: list(ArloLocation)
+    def locations(self) -> List[ArloLocation]:
+        """Returns the list of locations known to Arlo.
         """
         return self._objs.locations
 
     @property
-    def all_devices(self):
-        return self.cameras + self.doorbells + self.lights + self.base_stations + self.locations
-
-    @property
-    def sensors(self):
+    def sensors(self) -> List[ArloSensor]:
+        """Returns the list of sensors known to Arlo.
+        """
         return self._objs.sensors
 
     @property
-    def blank_image(self):
-        """Return a binary representation of a blank image.
+    def all_devices(self) -> List[ArloDevice]:
+        return self.cameras + self.doorbells + self.lights + self.base_stations + self.sensors
 
-        :return: A bytes representation of a blank image.
-        :rtype: bytearray
+    @property
+    def all_objects(self) -> List[ArloObject]:
+        return self.all_devices + self.locations
+
+    @property
+    def blank_image(self):
+        """Returns the blank image associated with the Arlo cameras.
         """
         return self._blank_image
 
-    def lookup_camera_by_id(self, device_id):
-        """Return the camera referenced by `device_id`.
+    def lookup_camera_by_id(self, device_id: str) -> Union[ArloCamera, None]:
+        """Retrieves an ArloCamera object from the internal camera list based on its device ID.
 
-        :param device_id: The camera device to look for
-        :return: A camera object or 'None' on failure.
-        :rtype: ArloCamera
+        This method iterates through the `self._objs.cameras` list and returns the first
+        ArloCamera object whose `device_id` attribute matches the provided `device_id`.
+
+        Args:
+            device_id: The device ID of the camera to find.
+
+        Returns:
+            The ArloCamera object if found, otherwise None.
         """
-        camera = list(filter(lambda cam: cam.device_id == device_id, self.cameras))
-        if camera:
-            return camera[0]
-        return None
+        return next((c for c in self._objs.cameras if c.device_id == device_id), None)
 
-    def lookup_camera_by_name(self, name):
-        """Return the camera called `name`.
+    def lookup_camera_by_name(self, name: str) -> Union[ArloCamera, None]:
+        """Retrieves an ArloCamera object from the internal camera list based on its name.
 
-        :param name: The camera name to look for
-        :return: A camera object or 'None' on failure.
-        :rtype: ArloCamera
+        This method iterates through the `self._objs.cameras` list and returns the first
+        ArloCamera object whose `name` attribute matches the provided `name`.
+
+        Args:
+            name: The name of the camera to find.
+
+        Returns:
+            The ArloCamera object if found, otherwise None.
         """
-        camera = list(filter(lambda cam: cam.name == name, self.cameras))
-        if camera:
-            return camera[0]
-        return None
+        return next((c for c in self._objs.cameras if c.name == name), None)
 
-    def lookup_doorbell_by_id(self, device_id):
-        """Return the doorbell referenced by `device_id`.
+    def lookup_doorbell_by_id(self, device_id) -> Union[ArloDoorBell, None]:
+        """Retrieves an ArloDoorBell object from the internal doorbell list based on its device ID.
 
-        :param device_id: The doorbell device to look for
-        :return: A doorbell object or 'None' on failure.
-        :rtype: ArloDoorBell
+        This method iterates through the `self._objs.doorbells` list and returns the first
+        ArloDoorBell object whose `device_id` attribute matches the provided `device_id`.
+
+        Args:
+            device_id: The device ID of the doorbell to find.
+
+        Returns:
+            The ArloDoorBell object if found, otherwise None.
         """
-        doorbell = list(filter(lambda cam: cam.device_id == device_id, self.doorbells))
-        if doorbell:
-            return doorbell[0]
-        return None
+        return next((d for d in self._objs.doorbells if d.device_id == device_id), None)
 
-    def lookup_doorbell_by_name(self, name):
-        """Return the doorbell called `name`.
+    def lookup_doorbell_by_name(self, name) -> Union[ArloDoorBell, None]:
+        """Retrieves an ArloDoorBell object from the internal doorbell list based on its name.
 
-        :param name: The doorbell name to look for
-        :return: A doorbell object or 'None' on failure.
-        :rtype: ArloDoorBell
+        This method iterates through the `self._objs.doorbells` list and returns the first
+        ArloDoorBell object whose `name` attribute matches the provided `name`.
+
+        Args:
+            name: The name of the doorbell to find.
+
+        Returns:
+            The ArloDoorBell object if found, otherwise None.
         """
-        doorbell = list(filter(lambda cam: cam.name == name, self.doorbells))
-        if doorbell:
-            return doorbell[0]
-        return None
+        return next((d for d in self._objs.doorbells if d.name == name), None)
 
-    def lookup_light_by_id(self, device_id):
-        """Return the light referenced by `device_id`.
+    def lookup_light_by_id(self, device_id) -> Union[ArloLight, None]:
+        """Retrieves an ArloLight object from the internal light list based on its device ID.
 
-        :param device_id: The light device to look for
-        :return: A light object or 'None' on failure.
-        :rtype: ArloDoorBell
+        This method iterates through the `self._objs.lights` list and returns the first
+        ArloLight object whose `device_id` attribute matches the provided `device_id`.
+
+        Args:
+            device_id: The device ID of the light to find.
+
+        Returns:
+            The ArloLight object if found, otherwise None.
         """
-        light = list(filter(lambda cam: cam.device_id == device_id, self.lights))
-        if light:
-            return light[0]
-        return None
+        return next((l for l in self._objs.lights if l.device_id == device_id), None)
 
-    def lookup_light_by_name(self, name):
-        """Return the light called `name`.
+    def lookup_light_by_name(self, name) -> Union[ArloLight, None]:
+        """Retrieves an ArloLight object from the internal light list based on its name.
 
-        :param name: The light name to look for
-        :return: A light object or 'None' on failure.
-        :rtype: ArloDoorBell
+        This method iterates through the `self._objs.lights` list and returns the first
+        ArloLight object whose `name` attribute matches the provided `name`.
+
+        Args:
+            name: The name of the light to find.
+
+        Returns:
+            The ArloLight object if found, otherwise None.
         """
-        light = list(filter(lambda cam: cam.name == name, self.lights))
-        if light:
-            return light[0]
-        return None
+        return next((l for l in self._objs.lights if l.name == name), None)
 
-    def lookup_base_station_by_id(self, device_id):
-        """Return the base_station referenced by `device_id`.
+    def lookup_base_station_by_id(self, device_id) -> Union[ArloBaseStation, None]:
+        """Retrieves an ArloBaseStation object from the internal base station list based on its device ID.
 
-        :param device_id: The base_station device to look for
-        :return: A base_station object or 'None' on failure.
-        :rtype: ArloDoorBell
+        This method iterates through the `self._objs.base stations` list and returns the first
+        ArloBaseStation object whose `device_id` attribute matches the provided `device_id`.
+
+        Args:
+            device_id: The device ID of the base station to find.
+
+        Returns:
+            The ArloBaseStation object if found, otherwise None.
         """
-        base_station = list(filter(lambda cam: cam.device_id == device_id, self.base_stations))
-        if base_station:
-            return base_station[0]
-        return None
+        return next((b for b in self._objs.base_stations if b.device_id == device_id), None)
 
-    def lookup_base_station_by_name(self, name):
-        """Return the base_station called `name`.
+    def lookup_base_station_by_name(self, name) -> Union[ArloBaseStation, None]:
+        """Retrieves an ArloBaseStation object from the internal base station list based on its name.
 
-        :param name: The base_station name to look for
-        :return: A base_station object or 'None' on failure.
-        :rtype: ArloDoorBell
+        This method iterates through the `self._objs.base stations` list and returns the first
+        ArloBaseStation object whose `name` attribute matches the provided `name`.
+
+        Args:
+            name: The name of the base station to find.
+
+        Returns:
+            The ArloBaseStation object if found, otherwise None.
         """
-        base_station = list(filter(lambda cam: cam.name == name, self.base_stations))
-        if base_station:
-            return base_station[0]
-        return None
+        return next((b for b in self._objs.base_stations if b.name == name), None)
 
-    def lookup_device_by_id(self, device_id):
-        device = self.lookup_base_station_by_id(device_id)
-        if device is None:
-            device = self.lookup_camera_by_id(device_id)
-        if device is None:
-            device = self.lookup_doorbell_by_id(device_id)
-        if device is None:
-            device = self.lookup_light_by_id(device_id)
-        return device
+    def lookup_sensor_by_id(self, device_id) -> Union[ArloSensor, None]:
+        """Retrieves an ArloSensor object from the internal sensor list based on its device ID.
+
+        This method iterates through the `self._objs.base stations` list and returns the first
+        ArloSensor object whose `device_id` attribute matches the provided `device_id`.
+
+        Args:
+            device_id: The device ID of the sensor to find.
+
+        Returns:
+            The ArloSensor object if found, otherwise None.
+        """
+        return next((b for b in self._objs.sensors if b.device_id == device_id), None)
+
+    def lookup_sensor_by_name(self, name) -> Union[ArloSensor, None]:
+        """Retrieves an ArloSensor object from the internal sensor list based on its name.
+
+        This method iterates through the `self._objs.base stations` list and returns the first
+        ArloSensor object whose `name` attribute matches the provided `name`.
+
+        Args:
+            name: The name of the sensor to find.
+
+        Returns:
+            The ArloSensor object if found, otherwise None.
+        """
+        return next((b for b in self._objs.sensors if b.name == name), None)
+
+    def lookup_device_by_id(self, device_id) -> Union[ArloDevice, None]:
+        """Retrieves a device (base station, camera, doorbell, light or sensor) by its ID.
+        """
+        dev = self.lookup_base_station_by_id(device_id)
+        if dev is None:
+            dev = self.lookup_camera_by_id(device_id)
+        if dev is None:
+            dev = self.lookup_doorbell_by_id(device_id)
+        if dev is None:
+            dev = self.lookup_light_by_id(device_id)
+        if dev is None:
+            dev = self.lookup_sensor_by_id(device_id)
+        return dev
+
+    def lookup_device_by_name(self, name) -> Union[ArloDevice, None]:
+        """Retrieves a device (base station, camera, doorbell, light or sensor) by its name.
+        """
+        dev = self.lookup_base_station_by_name(name)
+        if dev is None:
+            dev = self.lookup_camera_by_name(name)
+        if dev is None:
+            dev = self.lookup_doorbell_by_name(name)
+        if dev is None:
+            dev = self.lookup_light_by_name(name)
+        if dev is None:
+            dev = self.lookup_sensor_by_name(name)
+        return dev
 
     def inject_response(self, response):
         """Inject a test packet into the event stream.
