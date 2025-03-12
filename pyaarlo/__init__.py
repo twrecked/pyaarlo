@@ -612,7 +612,7 @@ class PyArlo:
     def lookup_base_station_by_id(self, device_id) -> Union[ArloBaseStation, None]:
         """Retrieves an ArloBaseStation object from the internal base station list based on its device ID.
 
-        This method iterates through the `self._objs.base stations` list and returns the first
+        This method iterates through the `self._objs.base_stations` list and returns the first
         ArloBaseStation object whose `device_id` attribute matches the provided `device_id`.
 
         Args:
@@ -626,7 +626,7 @@ class PyArlo:
     def lookup_base_station_by_name(self, name) -> Union[ArloBaseStation, None]:
         """Retrieves an ArloBaseStation object from the internal base station list based on its name.
 
-        This method iterates through the `self._objs.base stations` list and returns the first
+        This method iterates through the `self._objs.base_stations` list and returns the first
         ArloBaseStation object whose `name` attribute matches the provided `name`.
 
         Args:
@@ -640,7 +640,7 @@ class PyArlo:
     def lookup_sensor_by_id(self, device_id) -> Union[ArloSensor, None]:
         """Retrieves an ArloSensor object from the internal sensor list based on its device ID.
 
-        This method iterates through the `self._objs.base stations` list and returns the first
+        This method iterates through the `self._objs.sensors` list and returns the first
         ArloSensor object whose `device_id` attribute matches the provided `device_id`.
 
         Args:
@@ -654,7 +654,7 @@ class PyArlo:
     def lookup_sensor_by_name(self, name) -> Union[ArloSensor, None]:
         """Retrieves an ArloSensor object from the internal sensor list based on its name.
 
-        This method iterates through the `self._objs.base stations` list and returns the first
+        This method iterates through the `self._objs.sensors` list and returns the first
         ArloSensor object whose `name` attribute matches the provided `name`.
 
         Args:
@@ -664,6 +664,34 @@ class PyArlo:
             The ArloSensor object if found, otherwise None.
         """
         return next((b for b in self._objs.sensors if b.name == name), None)
+
+    def lookup_location_by_id(self, device_id) -> Union[ArloLocation, None]:
+        """Retrieves an ArloLocation object from the internal location list based on its device ID.
+
+        This method iterates through the `self._objs.locations` list and returns the first
+        ArloLocation object whose `device_id` attribute matches the provided `device_id`.
+
+        Args:
+            device_id: The device ID of the location to find.
+
+        Returns:
+            The ArloLocation object if found, otherwise None.
+        """
+        return next((b for b in self._objs.locations if b.device_id == device_id), None)
+
+    def lookup_location_by_name(self, name) -> Union[ArloLocation, None]:
+        """Retrieves an ArloLocation object from the internal location list based on its name.
+
+        This method iterates through the `self._objs.locations` list and returns the first
+        ArloLocation object whose `name` attribute matches the provided `name`.
+
+        Args:
+            name: The name of the location to find.
+
+        Returns:
+            The ArloLocation object if found, otherwise None.
+        """
+        return next((b for b in self._objs.locations if b.name == name), None)
 
     def lookup_device_by_id(self, device_id) -> Union[ArloDevice, None]:
         """Retrieves a device (base station, camera, doorbell, light or sensor) by its ID.
@@ -691,6 +719,22 @@ class PyArlo:
             dev = self.lookup_light_by_name(name)
         if dev is None:
             dev = self.lookup_sensor_by_name(name)
+        return dev
+
+    def lookup_object_by_id(self, device_id) -> Union[ArloObject, None]:
+        """Retrieves a device (base station, camera, doorbell, light, sensor or location) by its ID.
+        """
+        obj = self.lookup_device_by_id(device_id)
+        if obj is None:
+            obj = self.lookup_location_by_id(device_id)
+        return obj
+
+    def lookup_object_by_name(self, name) -> Union[ArloObject, None]:
+        """Retrieves a device (base station, camera, doorbell, light, sensor or location) by its name.
+        """
+        dev = self.lookup_device_by_name(name)
+        if dev is None:
+            dev = self.lookup_location_by_id(name)
         return dev
 
     def inject_response(self, response):
