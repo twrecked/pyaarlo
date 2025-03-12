@@ -120,21 +120,6 @@ class ArloDevice(ArloObject):
         """
         return self._parent_id == self.device_id
 
-    def add_attr_callback(self, attr, cb):
-        """Add an callback to be triggered when an attribute changes.
-
-        Used to register callbacks to track device activity. For example, get a notification whenever
-        motion stop and starts.
-
-        See PyArlo for a non-exhaustive list of attributes.
-
-        :param attr: Attribute - eg `motionStarted` - to monitor.
-        :type attr: str
-        :param cb: Callback to run.
-        """
-        with self._lock:
-            self._attr_cbs_.append((attr, cb))
-
     def has_capability(self, cap) -> bool:
         """Is the device capable of performing activity cap:.
 
