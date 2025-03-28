@@ -513,10 +513,17 @@ class PyArlo:
 
     @property
     def all_devices(self) -> List[ArloDevice]:
+        """Return all known devices.
+
+        Note:
+            This does not include any locations.
+        """
         return self.cameras + self.doorbells + self.lights + self.base_stations + self.sensors
 
     @property
     def all_objects(self) -> List[ArloObject]:
+        """Return all known objects.
+        """
         return self.all_devices + self.locations
 
     @property
@@ -738,12 +745,22 @@ class PyArlo:
         return dev
 
     def inject_response(self, response):
-        """Inject a test packet into the event stream.
+        """Inject a raw JSON response (simulating a network packet) directly into the event stream.
 
-        **Note:** The method makes no effort to check the packet.
+        This method bypasses any validation or processing, allowing for direct injection of arbitrary
+        data. It's primarily intended for testing and simulation purposes.
 
-        :param response: packet to inject.
-        :type response: JSON data
+        Args:
+            response (dict or list): The JSON-compatible data structure (dictionary or list)
+                                     representing the response to inject.
+
+        Example:
+            inject_response({"type": "message", "content": "Hello, world!"})
+
+        Note:
+            - This method does not validate the structure or content of the `response`.
+            - Use with caution, as injecting malformed data can lead to unexpected behavior.
+            - The injected response is passed directly to the core event handling mechanism (`self._core.be.ev_inject`).
         """
         self.debug("injecting\n{}".format(pprint.pformat(response)))
         self._core.be.ev_inject(response)

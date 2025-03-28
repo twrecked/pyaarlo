@@ -632,8 +632,8 @@ class ArloBackEnd:
     def _auth_get_connection(self) -> bool:
         """Keep track of connection attempts and curve tries.
 
-        We make 3 attempts to login. Each attempt will try a different
-        CloudFlare curve. Once we login we use the working connection
+        We make 3 attempts to log in. Each attempt will try a different
+        CloudFlare curve. Once we log in we use the working connection
         for the next stage of the login.
 
         Note, these loops can be flipped if needed
@@ -664,7 +664,6 @@ class ArloBackEnd:
             # Do we still have attempts left? Refill the curves and try the
             # next one.
             if self._auth.attempt < 4:
-                self._debug(f"auth: login attempt #{self._auth.attempt}")
                 self._auth.attempt += 1
                 self._auth.curves = self._cfg.ecdh_curves
                 self._debug(f"auth: login attempt #{self._auth.attempt - 1}, curves={self._auth.curves}")
@@ -760,8 +759,7 @@ class ArloBackEnd:
             # Flag the failure.
             self._log.error(f"login failed: {code} - possible cloudflare issue")
 
-            # Wait before the next attempt.
-            # XXX this can be indented to wait after every curve
+            # Don't try too hard.
             time.sleep(3)
 
         # Here means we're out of retries so stop now.
@@ -818,7 +816,6 @@ class ArloBackEnd:
         # We are in a successful state so:
         #  - save the session for reloading
         #  - save the cookies for reloading
-        #  - set up the connection headers for the non-authentication phase
         self._req.save()
         self._req.save_cookies()
         return True
