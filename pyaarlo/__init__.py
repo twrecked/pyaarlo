@@ -487,12 +487,23 @@ class PyArlo(object):
             self._lock.notify_all()
 
     def stop(self, logout=False):
-        """Stop connection to Arlo and, optionally, logout."""
+        """Stop connection to Arlo and, optionally, logout.
+
+        Always stops the background worker, media library, and event stream
+        thread. If logout=True, also sends a logout request to the Arlo API
+        to invalidate the session.
+
+        Must be called before creating a new PyArlo instance in the same
+        process, otherwise ghost threads from the old instance will interfere
+        with the new connection. See https://github.com/twrecked/pyaarlo/issues/71
+        """
         self._st.save()
         self._bg.stop()
         self._ml.stop()
         if logout:
             self._be.logout()
+        else:
+            self._be.stop()
 
     @property
     def entity_id(self):
