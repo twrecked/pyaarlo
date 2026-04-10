@@ -482,6 +482,8 @@ class ArloBackEnd(object):
 
     def _event_stop_loop(self):
         self._stop_thread = True
+        with self._lock:
+            self._lock.notify_all()
 
     def _event_main(self):
         self.debug("re-logging in")
@@ -495,9 +497,11 @@ class ArloBackEnd(object):
                     dump.write("{}: {}\n".format(time_stamp, "event_thread start"))
 
             # login again if not first iteration, this will also create a new session
-            while not self._logged_in:
+            while not self._logged_in and not self._stop_thread:
                 with self._lock:
                     self._lock.wait(5)
+                if self._stop_thread:
+                    break
                 self.debug("re-logging in")
                 self._logged_in = self._login()
 
@@ -1159,14 +1163,31 @@ class ArloBackEnd(object):
     def is_connected(self):
         return self._logged_in
 
-    def logout(self):
-        self.debug("trying to logout")
+    def stop(self):
+        """Stop the event stream thread and wait for it to exit.
+
+        Without this, dropping a PyArlo reference leaves ghost threads
+        that hold stale connections and attempt their own re-logins,
+        interfering with any new PyArlo instance in the same process.
+        See https://github.com/twrecked/pyaarlo/issues/71
+        """
+        self.debug("stopping backend")
         self._event_stop_loop()
         if self._event_client is not None:
-            if self._use_mqtt:
-                self._event_client.disconnect()
-            else:
-                self._event_client.stop()
+            try:
+                if self._use_mqtt:
+                    self._event_client.disconnect()
+                else:
+                    self._event_client.stop()
+            except Exception:
+                pass
+        if self._event_thread is not None and self._event_thread.is_alive():
+            self._event_thread.join(timeout=10)
+
+    def logout(self):
+        """Stop the event stream and log out of the Arlo API."""
+        self.debug("trying to logout")
+        self.stop()
         self.put(LOGOUT_PATH)
 
     def notify(self, base, body, timeout=None, wait_for=None):
