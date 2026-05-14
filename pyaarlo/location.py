@@ -47,7 +47,15 @@ class ArloLocation(ArloSuper):
         return self._load([MODE_ID_TO_NAME_KEY, mode_id], None)
 
     def _name_to_id(self, mode_name):
-        return self._load([MODE_NAME_TO_ID_KEY, mode_name], None)
+        # Try exact match first
+        result = self._load([MODE_NAME_TO_ID_KEY, mode_name], None)
+        if result is not None:
+            return result
+        # Try case-insensitive match
+        for key, value in self._load_matching([MODE_NAME_TO_ID_KEY, "*"]):
+            if key.split("/")[-1].lower() == mode_name.lower():
+                return value
+        return None
 
     def _custom_uuid_for_device(self, device_id, mode_name_or_uuid):
         """Resolve a custom mode name or UUID to a UUID for a given device_id.
@@ -80,8 +88,11 @@ class ArloLocation(ArloSuper):
                 if not isinstance(mode_data, dict):
                     continue
                 name = mode_data.get("name", "")
-                # Skip internal sentinels
+                # For modes with empty or sentinel names (e.g. migrated V2 modes like
+                # "armed", "disarmed", "schedule"), use the key itself as the name.
                 if name in ("", "__DEFAULT_DISARMED__"):
+                    name = uuid
+                if not name:
                     continue
                 self.debug(f"custom mode: {device_id} {uuid}<=CM=>{name}")
                 self._save([CUSTOM_MODE_UUID_KEY, device_id, name], uuid)
@@ -188,7 +199,7 @@ class ArloLocation(ArloSuper):
             return
 
         # Need to change?
-        if self.mode == mode_id:
+        if self.mode.lower() == mode_id.lower():
             self.debug("no mode change needed")
             return
 
@@ -198,19 +209,22 @@ class ArloLocation(ArloSuper):
 
         # Build the PUT body — standard modes vs V3 custom modes
         custom_uuid = None
-        # First try with _device_ids
+        # First try with _device_ids (exact match)
         for device_id in self._device_ids:
             uuid = self._custom_uuid_for_device(device_id, mode_id)
             if uuid is not None:
                 custom_uuid = (device_id, uuid)
                 break
-        # If not found, search all device_ids in the custom mode cache
+        # If not found, search all device_ids in the custom mode cache (case-insensitive)
         if custom_uuid is None:
-            for key, uuid in self._load_matching([CUSTOM_MODE_UUID_KEY, "*", mode_id]):
+            for key, uuid in self._load_matching([CUSTOM_MODE_UUID_KEY, "*", "*"]):
                 # key format: customModeUuid/<device_id>/<mode_name>
                 parts = key.split("/")
-                if len(parts) >= 2:
+                if len(parts) >= 2 and parts[-1].lower() == mode_id.lower():
                     device_id = parts[-2]
+                    # strip userId prefix if present (e.g. "userId_deviceId" -> "deviceId")
+                    if "_" in device_id:
+                        device_id = device_id.split("_", 1)[-1]
                     custom_uuid = (device_id, uuid)
                     break
 

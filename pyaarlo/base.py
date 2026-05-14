@@ -145,8 +145,15 @@ class ArloBase(ArloDevice):
     def _event_handler(self, resource, event):
         self.debug(self.name + " BASE got " + resource)
 
+        # V3: feedNotification carries activeMode name — update MODE_KEY so
+        # hass-aarlo can reflect the correct state in the alarm control panel.
+        if resource == "feedNotification":
+            active_mode = event.get("activeMode", None)
+            if active_mode:
+                self._save_and_do_callbacks(MODE_KEY, active_mode)
+
         # modes on base station
-        if resource == "modes":
+        elif resource == "modes":
             props = event.get("properties", {})
 
             # list of modes - recheck?
@@ -154,11 +161,11 @@ class ArloBase(ArloDevice):
 
             # mode change?
             if "activeMode" in props:
-                self._save_and_do_callbacks(
-                    MODE_KEY, self._id_to_name(props["activeMode"])
-                )
+                mode_name = self._id_to_name(props["activeMode"])
+                self._save_and_do_callbacks(MODE_KEY, mode_name)
             elif "active" in props:
-                self._save_and_do_callbacks(MODE_KEY, self._id_to_name(props["active"]))
+                mode_name = self._id_to_name(props["active"])
+                self._save_and_do_callbacks(MODE_KEY, mode_name)
 
         # Base station mode change.
         # These come in per device and can arrive multiple times per state
@@ -260,7 +267,16 @@ class ArloBase(ArloDevice):
         :param mode_name: mode to use, as returned by available_modes:
         """
         if self._v3_modes:
-            self._arlo.debug(f"BaseStations don't have modes in v3")
+            # In V3, modes are managed at the location level — delegate to the
+            # corresponding location. gatewayDeviceIds may include a userId prefix
+            # (e.g. "userId_deviceId"), so we match by suffix.
+            for location in self._arlo.locations:
+                for gid in location.device_ids:
+                    if gid == self.device_id or gid.endswith("_" + self.device_id):
+                        self.debug(f"V3: delegating mode={mode_name} to location {location.name}")
+                        location.mode = mode_name
+                        return
+            self._arlo.debug(f"V3: no location found for base {self.device_id}, ignoring mode change")
             return
 
         # Actually passed a mode?
