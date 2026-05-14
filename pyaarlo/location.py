@@ -198,11 +198,21 @@ class ArloLocation(ArloSuper):
 
         # Build the PUT body — standard modes vs V3 custom modes
         custom_uuid = None
+        # First try with _device_ids
         for device_id in self._device_ids:
             uuid = self._custom_uuid_for_device(device_id, mode_id)
             if uuid is not None:
                 custom_uuid = (device_id, uuid)
                 break
+        # If not found, search all device_ids in the custom mode cache
+        if custom_uuid is None:
+            for key, uuid in self._load_matching([CUSTOM_MODE_UUID_KEY, "*", mode_id]):
+                # key format: customModeUuid/<device_id>/<mode_name>
+                parts = key.split("/")
+                if len(parts) >= 2:
+                    device_id = parts[-2]
+                    custom_uuid = (device_id, uuid)
+                    break
 
         if custom_uuid is not None:
             device_id, uuid = custom_uuid
@@ -217,6 +227,10 @@ class ArloLocation(ArloSuper):
             LOCATION_ACTIVEMODE_PATH_FORMAT.format(self._id) + f"&revision={mode_revision}",
             params=params,
             headers=self._extra_headers())
+
+        if data is None:
+            self._arlo.error("failed to set mode.")
+            return
 
         mode_revision = data.get("revision")
         self.vdebug(f"new-revision={mode_revision}")
@@ -233,6 +247,9 @@ class ArloLocation(ArloSuper):
         """Check and update the base's current mode."""
         data = self._arlo.be.get(LOCATION_ACTIVEMODE_PATH_FORMAT.format(self._id),
                                  headers=self._extra_headers())
+        if data is None:
+            self._arlo.error("failed to read active mode.")
+            return
         mode_id = self._resolve_active_mode(data.get("properties", {}))
         mode_revision = data.get("revision")
         self._save_and_do_callbacks(MODE_KEY, mode_id)

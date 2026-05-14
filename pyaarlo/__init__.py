@@ -417,6 +417,8 @@ class PyArlo(object):
             base.update_modes(initial)
             base.keep_ratls_open()
             base.update_states()
+        for location in self._locations:
+            location.update_modes(initial)
 
     def _refresh_modes(self):
         self.vdebug("refresh modes")
