@@ -134,11 +134,20 @@ class Arlo2FAImap:
                         try:
                             if isinstance(msg[1], bytes):
                                 for part in email.message_from_bytes(msg[1]).walk():
-                                    if part.get_content_type() != "text/html":
+                                    if part.get_content_type() not in ("text/plain", "text/html"):
                                         continue
-                                    for line in part.get_payload(decode=True).splitlines():
+                                    payload = part.get_payload(decode=True)
+                                    if not payload:
+                                        continue
+                                    charset = part.get_content_charset() or "utf-8"
+                                    try:
+                                        body_text = payload.decode(charset, errors="replace")
+                                    except Exception as e:
+                                        self.debug(f"decode failed: {e}")
+                                        continue
+                                    for line in body_text.splitlines():
                                         # match code in email, this might need some work if the email changes
-                                        code = re.match(r"^\W+(\d{6})\W*$", line.decode())
+                                        code = re.match(r"^\W*(\d{6})\W*$", line.strip())
                                         if code is not None:
                                             self.debug(f"code={code.group(1)}")
                                             return code.group(1)
