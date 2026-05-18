@@ -155,6 +155,9 @@ class ArloLocation(ArloSuper):
         """Check and update the base's current mode."""
         data = self._arlo.be.get(LOCATION_ACTIVEMODE_PATH_FORMAT.format(self._id),
                                  headers=self._extra_headers())
+        if data is None:
+            self._arlo.error("failed to read active mode.")
+            return
         mode_id = data.get("properties", {}).get('mode')
         mode_revision = data.get("revision")
         self._save_and_do_callbacks(MODE_KEY, mode_id)
