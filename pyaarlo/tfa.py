@@ -69,7 +69,9 @@ class Arlo2FAImap:
             if res.lower() != "ok":
                 self.debug("imap login failed")
                 return False
-            res, status = self._imap.select(mailbox='INBOX', readonly=True)
+            res, status = self._imap.select(
+                mailbox='INBOX', readonly=(not self._arlo.cfg.tfa_delete_after)
+                )
             if res.lower() != "ok":
                 self.debug("imap select failed")
                 return False
@@ -106,9 +108,22 @@ class Arlo2FAImap:
             try:
                 # grab new email ids
                 self._imap.check()
-                res, self._new_ids = self._imap.search(
-                    None, "FROM", "do_not_reply@arlo.com"
-                )
+
+                if self._arlo.cfg.tfa_grab_all:
+                    # Grab all to avoid indexing issues
+                    new_ids = []
+                    _, message_ids = self._imap.search(None, 'ALL')
+                    for msg_id in message_ids[0].split():
+                        _, data = self._imap.fetch(msg_id, '(BODY[HEADER.FIELDS (FROM)])')
+                        if b'do_not_reply@arlo.com' in data[0][1]:
+                            new_ids.append(msg_id)
+
+                    self._new_ids = [b' '.join(new_ids)]
+                else:
+                    res, self._new_ids = self._imap.search(
+                        None, "FROM", "do_not_reply@arlo.com"
+                    )
+
                 self.debug("new-ids={}".format(self._new_ids))
                 if self._new_ids == self._old_ids:
                     self.debug("no change in emails")
@@ -141,6 +156,9 @@ class Arlo2FAImap:
                                         code = re.match(r"^\W+(\d{6})\W*$", line.decode())
                                         if code is not None:
                                             self.debug(f"code={code.group(1)}")
+                                            # If tfa_delete_after is set to True, delete the email
+                                            if self._arlo.cfg.tfa_delete_after:
+                                                self.delete_email(msg_id)
                                             return code.group(1)
                         except Exception as e:
                             self.debug(f"trying next part {str(e)}")
@@ -155,6 +173,15 @@ class Arlo2FAImap:
                 return None
 
         return None
+
+    def delete_email(self, msg_id):
+        """Delete the specified email by ID"""
+        try:
+            self._imap.store(msg_id, '+FLAGS', '\\Deleted')
+            self._imap.expunge()
+            self.debug(f"Email {msg_id} deleted successfully.")
+        except Exception as e:
+            self._arlo.error(f"Failed to delete email {msg_id}: {str(e)}")
 
     def stop(self):
         self.debug("stopping")
