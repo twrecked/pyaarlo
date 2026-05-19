@@ -1,3 +1,8 @@
+0.8.0.20
+  Fix IMAP 2FA OTP extraction on Latin-1 / text-plain mail [thanks @paalkr]
+  Support V3 custom modes and location-based alarm panel [thanks @GuiPoM]
+  Fix stop() leaving ghost threads that block reconnection [thanks @Fernandosnulerin]
+  Fix AttributeError in update_mode when API returns None [thanks @primmer10590]
 0.8.0.19
   Update media.py to fix date issue.
 0.8.0.18
