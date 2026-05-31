@@ -160,6 +160,14 @@ class ArloCfg(object):
         return self._kw.get("user_agent", "arlo")
 
     @property
+    def http_backend(self):
+        return self._kw.get("http_backend", "curl_cffi")
+
+    @property
+    def curl_cffi_impersonate(self):
+        return self._kw.get("curl_cffi_impersonate", "chrome131")
+
+    @property
     def mode_api(self):
         return self._kw.get("mode_api", "auto")
 

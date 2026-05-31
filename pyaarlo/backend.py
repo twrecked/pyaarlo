@@ -11,7 +11,6 @@ import traceback
 import uuid
 import random
 
-import cloudscraper
 import paho.mqtt.client as mqtt
 import requests
 import requests.adapters
@@ -1065,6 +1064,21 @@ class ArloBackEnd(object):
             self._arlo.debug(f"back={self._arlo.cfg.event_backend};url={self._arlo.cfg.mqtt_host}:{self._arlo.cfg.mqtt_port}")
         return True
 
+    def _create_session(self, curve=None):
+        """Create the HTTP session using the configured backend."""
+        if self._arlo.cfg.http_backend == "curl_cffi":
+            from curl_cffi import requests as cffi_requests
+            self._session = cffi_requests.Session(impersonate=self._arlo.cfg.curl_cffi_impersonate)
+        else:
+            import cloudscraper
+            self._session = cloudscraper.create_scraper(
+                disableCloudflareV1=True,
+                ecdhCurve=curve,
+                debug=False,
+            )
+        if self._cookies is not None:
+            self._session.cookies = self._cookies
+
     def _login(self):
 
         # pickup user configured user agent
@@ -1073,30 +1087,27 @@ class ArloBackEnd(object):
         # we always login but and let the backend determine if we need to
         # use 2fa
         success = AuthResult.FAILED
-        for curve in self._arlo.cfg.ecdh_curves:
-            self.debug(f"CloudFlare curve set to: {curve}")
-            self._session = cloudscraper.create_scraper(
-                # browser={
-                #     'browser': 'chrome',
-                #     'platform': 'darwin',
-                #     'desktop': True,
-                #     'mobile': False,
-                # },
-                disableCloudflareV1=True,
-                ecdhCurve=curve,
-                debug=False,
-            )
-            self._session.cookies = self._cookies
-
-            # Try to authenticate. We retry if it was a cloud flare
-            # error or we failed to get the 2FA code.
+        if self._arlo.cfg.http_backend == "curl_cffi":
+            self._create_session()
             success = self._auth()
             if success == AuthResult.FAILED:
                 return False
-            if success == AuthResult.SUCCESS and self._validate() and self._pair_auth_code():
-                break
-            success = AuthResult.FAILED
-            self.debug("login failed, trying another ecdh_curve")
+            if success == AuthResult.SUCCESS and not (self._validate() and self._pair_auth_code()):
+                success = AuthResult.FAILED
+        else:
+            for curve in self._arlo.cfg.ecdh_curves:
+                self.debug(f"CloudFlare curve set to: {curve}")
+                self._create_session(curve=curve)
+
+                # Try to authenticate. We retry if it was a cloud flare
+                # error or we failed to get the 2FA code.
+                success = self._auth()
+                if success == AuthResult.FAILED:
+                    return False
+                if success == AuthResult.SUCCESS and self._validate() and self._pair_auth_code():
+                    break
+                success = AuthResult.FAILED
+                self.debug("login failed, trying another ecdh_curve")
 
         if success != AuthResult.SUCCESS:
             return False
