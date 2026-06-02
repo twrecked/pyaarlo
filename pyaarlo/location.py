@@ -259,7 +259,7 @@ class ArloLocation(ArloObject):
     def mode(self, id_or_name):
         """Set the location mode (sync wrapper).
         """
-        self._core.bg.run(self.set_mode, id_or_name=id_or_name)
+        self._core.tasks.run_now(self.set_mode, id_or_name=id_or_name)
 
     async def update_mode(self):
         """Check and update the base's current mode."""

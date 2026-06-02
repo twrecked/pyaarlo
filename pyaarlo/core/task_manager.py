@@ -1,0 +1,102 @@
+import asyncio
+import time
+import traceback
+from typing import Union, Callable, Dict, Any, Optional
+
+from .logger import ArloLogger
+
+
+class ArloTaskManager:
+    """An asyncio-based task manager that supports both sync and async callbacks."""
+
+    def __init__(self, log: ArloLogger):
+        self._log: ArloLogger = log
+        self._tasks: Dict[str, asyncio.Task] = {}
+        self._counter: int = 0
+        self._loop = asyncio.get_running_loop()
+        self._log.debug("tasks: manager created (asyncio-based)")
+
+    def _next_id(self) -> str:
+        self._counter += 1
+        return f"{self._counter}:{time.monotonic()}"
+
+    async def _execute_task(self, task_id: str, cb: Callable, args: Dict[str, Any]):
+        """Wraps the task execution to handle errors and cleanup."""
+        try:
+            if asyncio.iscoroutinefunction(cb):
+                await cb(**args)
+            else:
+                # Run sync callbacks in the default executor (thread pool)
+                await self._loop.run_in_executor(None, lambda: cb(**args))
+        except Exception as e:
+            self._log.error(
+                f"tasks: task-error={type(e).__name__}\n{traceback.format_exc()}"
+            )
+        finally:
+            self._tasks.pop(task_id, None)
+
+    async def _execute_delayed_task(self, task_id: str, seconds: float, cb: Callable, args: Dict[str, Any]):
+        """Wait for a specified delay before executing the task."""
+        await asyncio.sleep(seconds)
+        await self._execute_task(task_id, cb, args)
+
+    async def _execute_periodic_task(self, task_id: str, seconds: float, cb: Callable, args: Dict[str, Any]):
+        """Execute the task periodically."""
+        while True:
+            await asyncio.sleep(seconds)
+            # Periodic tasks shouldn't pop themselves from self._tasks until explicitly cancelled
+            try:
+                if asyncio.iscoroutinefunction(cb):
+                    await cb(**args)
+                else:
+                    await self._loop.run_in_executor(None, lambda: cb(**args))
+            except Exception as e:
+                self._log.error(
+                    f"tasks: periodic-task-error={type(e).__name__}\n{traceback.format_exc()}"
+                )
+
+    def _submit(self, coro) -> Union[asyncio.Task, asyncio.Future]:
+        """Safely submit a coroutine to the event loop from any thread."""
+        try:
+            # If we are in the thread running the loop, we can use create_task
+            if asyncio.get_running_loop() is self._loop:
+                return asyncio.create_task(coro)
+        except RuntimeError:
+            # No loop running in this thread
+            pass
+
+        # Otherwise, we must use run_coroutine_threadsafe to submit from an external thread
+        return asyncio.run_coroutine_threadsafe(coro, self._loop)
+
+    def run_now(self, task_cb, **kwargs) -> str:
+        """Executes a task immediately in the background."""
+        task_id = self._next_id()
+        self._tasks[task_id] = self._submit(self._execute_task(task_id, task_cb, kwargs))
+        return task_id
+
+    def run_in(self, task_cb, seconds, **kwargs) -> str:
+        """Executes a task after a specified delay."""
+        task_id = self._next_id()
+        self._tasks[task_id] = self._submit(self._execute_delayed_task(task_id, seconds, task_cb, kwargs))
+        return task_id
+
+    def run_every(self, task_cb, seconds, **kwargs) -> str:
+        """Executes a task repeatedly on a fixed interval."""
+        task_id = self._next_id()
+        self._tasks[task_id] = self._submit(self._execute_periodic_task(task_id, seconds, task_cb, kwargs))
+        return task_id
+
+    def cancel(self, to_delete: str) -> bool:
+        """Cancel a pending or periodic task by its ID."""
+        if to_delete is not None and to_delete in self._tasks:
+            task = self._tasks.pop(to_delete)
+            task.cancel()
+            return True
+        return False
+
+    def stop(self):
+        """Stop the task manager and cancel all managed tasks."""
+        for task_id in list(self._tasks.keys()):
+            self.cancel(task_id)
+
+

@@ -24,7 +24,7 @@ from .base_station import ArloBaseStation
 from .camera import ArloCamera
 from .core import ArloCore
 from .core.backend import ArloBackEnd
-from .core.background import ArloBackground
+from .core.task_manager import ArloTaskManager
 from .core.cfg import ArloCfg
 from .core.logger import ArloLogger
 from .core.storage import ArloStorage
@@ -168,9 +168,9 @@ class PyArlo:
         self._core.cfg = ArloCfg(self._core.log, **kwargs)
 
         # Create remaining core components.
-        self._core.bg = ArloBackground(self._core.log)
+        self._core.tasks = ArloTaskManager(self._core.log)
         self._core.st = ArloStorage(self._core.cfg, self._core.log)
-        self._core.be = ArloBackEnd(self._core.cfg, self._core.log, self._core.bg)
+        self._core.be = ArloBackEnd(self._core.cfg, self._core.log, self._core.tasks)
 
         # State
         self._devices: Union[List[Any], None] = None
@@ -221,12 +221,12 @@ class PyArlo:
             await self._initial_refresh(wait=self._core.cfg.synchronous_mode)
             self.debug("initial setup finished...")
         else:
-            self._core.bg.run(self._initial_refresh, wait=self._core.cfg.synchronous_mode)
+            self._core.tasks.run_now(self._initial_refresh, wait=self._core.cfg.synchronous_mode)
 
         # Register house keeping cron jobs.
         self.debug("registering cron jobs")
-        _ = self._core.bg.run_every(self._fast_refresh, FAST_REFRESH_INTERVAL)
-        _ = self._core.bg.run_every(self._slow_refresh, SLOW_REFRESH_INTERVAL)
+        _ = self._core.tasks.run_every(self._fast_refresh, FAST_REFRESH_INTERVAL)
+        _ = self._core.tasks.run_every(self._slow_refresh, SLOW_REFRESH_INTERVAL)
 
     @override
     def __repr__(self):
@@ -366,7 +366,7 @@ class PyArlo:
 
     async def _fast_refresh(self):
         self.vdebug("fast refresh")
-        self._core.bg.run(self._core.st.save)
+        self._core.tasks.run_now(self._core.st.save)
         self._ping_bases()
 
         # See if the backend need to reconnect.
@@ -381,7 +381,7 @@ class PyArlo:
             if now > self._refresh_modes_at:
                 self.debug("mode reload needed")
                 self._refresh_modes_at = now + self._core.cfg.refresh_modes_every
-                self._core.bg.run(self._refresh_modes)
+                self._core.tasks.run_now(self._refresh_modes)
         else:
             self.vdebug("no mode reload")
 
@@ -396,7 +396,7 @@ class PyArlo:
             if now > self._refresh_devices_at:
                 self.debug("device reload needed")
                 self._refresh_devices_at = now + self._core.cfg.refresh_devices_every
-                self._core.bg.run(self._refresh_devices)
+                self._core.tasks.run_now(self._refresh_devices)
         else:
             self.vdebug("no device reload")
 
@@ -406,13 +406,13 @@ class PyArlo:
         if self._today != today:
             self.debug("day changed to {}!".format(str(today)))
             self._today = today
-            self._core.bg.run(self._objs.ml.load)
-            self._core.bg.run(self._refresh_camera_media, wait=False)
+            self._core.tasks.run_now(self._objs.ml.load)
+            self._core.tasks.run_now(self._refresh_camera_media, wait=False)
 
     async def _slow_refresh(self):
         self.vdebug("slow refresh")
-        self._core.bg.run(self._refresh_bases, initial=False)
-        self._core.bg.run(self._refresh_ambient_sensors)
+        self._core.tasks.run_now(self._refresh_bases, initial=False)
+        self._core.tasks.run_now(self._refresh_ambient_sensors)
 
     async def _initial_refresh(self, wait: bool):
         self.debug(f"initial refresh, wait={wait}")
@@ -427,7 +427,7 @@ class PyArlo:
     async def stop(self, logout=False):
         """Stop connection to Arlo and, optionally, logout."""
         self._core.st.save()
-        self._core.bg.stop()
+        self._core.tasks.stop()
         self._objs.ml.stop()
         await self._core.be.stop(logout=logout)
 
@@ -459,8 +459,8 @@ class PyArlo:
         return self._core.cfg
 
     @property
-    def bg(self):
-        return self._core.bg
+    def tasks(self):
+        return self._core.tasks
 
     @property
     def st(self):
@@ -808,5 +808,11 @@ class PyArlo:
     def vdebug(self, msg: str) -> None:
         if self._core.log is not None:
             self._core.log.vdebug(msg)
+
+
+
+
+
+
 
 

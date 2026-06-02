@@ -27,7 +27,7 @@ from ...constant import (
     TRANSID_PREFIX,
 )
 from ...utils import now_strftime, time_to_arlotime, to_b64
-from ..background import ArloBackground
+from ..task_manager import ArloTaskManager
 from ..cfg import ArloCfg
 from ..logger import ArloLogger
 from .event import ArloEvent
@@ -76,10 +76,10 @@ class _EventDetails:
 # include token and session details
 class ArloBackEnd:
 
-    def __init__(self, cfg: ArloCfg, log: ArloLogger, bg: ArloBackground):
+    def __init__(self, cfg: ArloCfg, log: ArloLogger, tasks: ArloTaskManager):
         self._cfg: ArloCfg = cfg
         self._log: ArloLogger = log
-        self._bg: ArloBackground = bg
+        self._tasks: ArloTaskManager = tasks
 
         # These affect how we talk to the backend.
         self._logged_in: bool = False
@@ -227,7 +227,7 @@ class ArloBackEnd:
             if "all" in self._callbacks:
                 cbs.extend(self._callbacks["all"])
             for cb in cbs:
-                self._bg.run(cb, resource=resource, event=response)
+                self._tasks.run_now(cb, resource=resource, event=response)
 
     def _event_notify_waiting(self, response):
         """Check if this event satifies a waiting post() call.
@@ -1017,7 +1017,7 @@ class ArloBackEnd:
             return await self._notify(device_id, xcloud_id, body=body)
         else:
             self._vdebug("notify+sent")
-            self._bg.run(self._notify, device_id=device_id, xcloud_id=xcloud_id, body=body)
+            self._tasks.run_now(self._notify, device_id=device_id, xcloud_id=xcloud_id, body=body)
 
     async def get(
             self,
@@ -1038,7 +1038,7 @@ class ArloBackEnd:
             )
         else:
             self._vdebug("get sent")
-            self._bg.run(
+            self._tasks.run_now(
                 self._req.request, path=path, method="GET", params=params, headers=headers, stream=stream, raw=raw, timeout=timeout, host=host
             )
 
@@ -1057,7 +1057,7 @@ class ArloBackEnd:
             return await self._req.request(path, "PUT", params, headers, False, raw, timeout, cookies)
         else:
             self._vdebug("put sent")
-            self._bg.run(
+            self._tasks.run_now(
                 self._req.request, path=path, method="PUT", params=params, headers=headers, stream=False, raw=raw, timeout=timeout
             )
 
@@ -1086,7 +1086,7 @@ class ArloBackEnd:
             return await self._req.request(path, "POST", params, headers, False, raw, timeout)
         else:
             self._vdebug("post sent")
-            self._bg.run(
+            self._tasks.run_now(
                 self._req.request, path=path, method="POST", params=params, headers=headers, stream=False, raw=raw, timeout=timeout
             )
 

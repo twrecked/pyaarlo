@@ -50,8 +50,8 @@ class ArloDoorBell(ArloChildDevice):
             if len(props) == 1 and not self._has_motion_detect:
                 if props.get(CONNECTION_KEY, "") == "available":
                     self._save_and_do_callbacks(MOTION_DETECTED_KEY, True)
-                    self._core.bg.cancel(self._motion_time_job)
-                    self._motion_time_job = self._core.bg.run_in(
+                    self._core.tasks.cancel(self._motion_time_job)
+                    self._motion_time_job = self._core.tasks.run_in(
                         self._motion_stopped, self._core.cfg.db_motion_time
                     )
 
@@ -60,8 +60,8 @@ class ArloDoorBell(ArloChildDevice):
             # press.
             if BUTTON_PRESSED_KEY in props:
                 self._save_and_do_callbacks(BUTTON_PRESSED_KEY, True)
-                self._core.bg.cancel(self._ding_time_job)
-                self._ding_time_job = self._core.bg.run_in(
+                self._core.tasks.cancel(self._ding_time_job)
+                self._ding_time_job = self._core.tasks.run_in(
                     self._button_unpressed, self._core.cfg.db_ding_time
                 )
 
@@ -144,16 +144,16 @@ class ArloDoorBell(ArloChildDevice):
             self._save_and_do_callbacks(SILENT_MODE_KEY, silence_settings)
 
     def silence_off(self):
-        self._core.bg.run(self._silence, active=False, calls=False, chimes={})
+        self._core.tasks.run_now(self._silence, active=False, calls=False, chimes={})
 
     def silence_on(self):
-        self._core.bg.run(self._silence, active=True, calls=True, chimes=self._build_chimes(True))
+        self._core.tasks.run_now(self._silence, active=True, calls=True, chimes=self._build_chimes(True))
 
     def silence_chimes(self):
-        self._core.bg.run(self._silence, active=True, calls=False, chimes=self._build_chimes(True))
+        self._core.tasks.run_now(self._silence, active=True, calls=False, chimes=self._build_chimes(True))
 
     def silence_calls(self):
-        self._core.bg.run(self._silence, active=True, calls=True, chimes=self._build_chimes(False))
+        self._core.tasks.run_now(self._silence, active=True, calls=True, chimes=self._build_chimes(False))
 
     @property
     def is_silenced(self):

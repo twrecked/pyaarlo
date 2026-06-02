@@ -20,7 +20,7 @@ class ArloChildDevice(ArloDevice):
         self.vdebug("{}: child got {} event **".format(self.name, resource))
 
         if resource.endswith("/states"):
-            self._core.bg.run(self.base_station.update_mode)
+            self._core.tasks.run_now(self.base_station.update_mode)
             return
 
         # Pass event to lower level.

@@ -4,7 +4,7 @@ from typing import Union, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .backend import ArloBackEnd
-    from .background import ArloBackground
+    from .task_manager import ArloTaskManager
     from .cfg import ArloCfg
     from .logger import ArloLogger
     from .storage import ArloStorage
@@ -15,7 +15,7 @@ class ArloCore:
 
     They provide access to:
      - ArloBackEnd; how we speak to Arlo
-     - ArloBackground; how we queue jobs to run
+     - ArloTaskManager; how we queue tasks to run
      - ArloCfg; how we get configuration
      - ArloLogger; how we get logs
      - ArloStorage; how we get storage
@@ -30,7 +30,8 @@ class ArloCore:
 
     def __init__(self):
         self.be: Union[ArloBackEnd, None] = None
-        self.bg: Union[ArloBackground, None] = None
+        self.tasks: Union[ArloTaskManager, None] = None
         self.cfg: Union[ArloCfg, None] = None
         self.log: Union[ArloLogger, None] = None
         self.st: Union[ArloStorage, None] = None
+

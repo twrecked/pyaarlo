@@ -355,7 +355,7 @@ class ArloBaseStation(ArloDevice):
                             self.debug("trying again, but synchronous")
                             await _set_mode_v2_cb(attempt=attempt + 1)
                         else:
-                            self._core.bg.run(_set_mode_v2_cb, attempt=attempt + 1)
+                            self._core.tasks.run_now(_set_mode_v2_cb, attempt=attempt + 1)
                         return
 
                     self._core.log.error("Failed to set mode.")
@@ -391,12 +391,12 @@ class ArloBaseStation(ArloDevice):
     def mode(self, mode_name):
         """Set the base station mode (sync wrapper).
         """
-        self._core.bg.run(self.set_mode, mode_name=mode_name)
+        self._core.tasks.run_now(self.set_mode, mode_name=mode_name)
 
     async def update_mode(self):
         """Check and update the base's current mode."""
         now = time.monotonic()
-        # use bg worker's loop or handle locking if needed
+        # use task manager's loop or handle locking if needed
         self._last_update = now
 
         if not self._v3_modes:
@@ -562,7 +562,7 @@ class ArloBaseStation(ArloDevice):
             self._save_and_do_callbacks(CONNECTION_KEY, "available")
 
     def ping(self):
-        self._core.bg.run(self._ping_and_check_reply)
+        self._core.tasks.run_now(self._ping_and_check_reply)
 
     @property
     def state(self):

@@ -3,7 +3,7 @@ from unittest import TestCase
 from tests.devices import *
 from pyaarlo import (
     ArloBackEnd,
-    ArloBackground,
+    ArloTaskManager,
     ArloBaseStation,
     ArloCfg,
     ArloCore,
@@ -20,9 +20,9 @@ _core.log = ArloLogger(False)
 _core.cfg = ArloCfg(_core.log,
                     username="testing123"
                     )
-_core.bg = ArloBackground(_core.log)
+_core.tasks = ArloTaskManager(_core.log)
 _core.st = ArloStorage(_core.cfg, _core.log)
-_core.be = ArloBackEnd(_core.cfg, _core.log, _core.bg)
+_core.be = ArloBackEnd(_core.cfg, _core.log, _core.tasks)
 
 # Create empty objects.
 _objs = ArloObjects()
