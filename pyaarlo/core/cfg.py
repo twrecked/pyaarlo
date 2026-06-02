@@ -1,12 +1,10 @@
-from __future__ import annotations
-
 import platform
 import tempfile
 import os
 import re
 import random
 
-from typing import Dict, Union, cast
+from typing import cast
 from urllib.parse import urlparse, ParseResult
 
 from ..constant import (
@@ -34,7 +32,7 @@ class ArloCfg:
     """
 
 
-    def __init__(self, log: ArloLogger, **kwargs: Union[str, int, bool]):
+    def __init__(self, log: ArloLogger, **kwargs: str | int | bool):
         """The constructor.
 
         Args:
@@ -42,7 +40,7 @@ class ArloCfg:
         """
         self._log: ArloLogger = log
 
-        self._kw: Dict[str, Union[str, int, bool]] = kwargs
+        self._kw: dict[str, str | int | bool] = kwargs
         self._update_backend: bool = False
         self._storage_dir: str
 
@@ -111,7 +109,7 @@ class ArloCfg:
     def mqtt_port(self) -> int:
         return cast(int, self._kw.get("mqtt_port", DEFAULT_MQTT_PORT))
 
-    def update_mqtt_from_url(self, url: Union[str, ParseResult]):
+    def update_mqtt_from_url(self, url: str | ParseResult):
         if self._update_backend or self.event_backend == "auto":
             self._update_backend = True
             url = urlparse(cast(str, url))
@@ -181,7 +179,7 @@ class ArloCfg:
     def user_agent(self) -> str:
         return cast(str, self._kw.get("user_agent", "arlo"))
 
-    def user_agent_string(self, agent: Union[str, None] = None) -> str:
+    def user_agent_string(self, agent: str | None = None) -> str:
         """Map `agent` to a user agent string.
 
         `!real-string` will use the provided string as-is, used when passing user agent
@@ -302,7 +300,7 @@ class ArloCfg:
         return cast(bool, self._kw.get("save_state", True))
 
     @property
-    def state_file(self) -> Union[str, None]:
+    def state_file(self) -> str | None:
         if self.save_state:
             return self.storage_dir + "/" + self.name + ".pickle"
         return None
@@ -379,4 +377,5 @@ class ArloCfg:
     @property
     def send_source(self):
         return self._kw.get("send_source", False)
+
 

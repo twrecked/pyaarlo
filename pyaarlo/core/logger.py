@@ -1,8 +1,4 @@
-from __future__ import annotations
-
 import logging
-
-from typing import Union
 
 
 _LOGGER = logging.getLogger("pyaarlo")
@@ -16,7 +12,7 @@ class ArloLogger:
 
     def __init__(self, verbose: bool = False):
         self._verbose_debug: bool = verbose
-        self._last_error: Union[str, None] = None
+        self._last_error: str | None = None
 
         self.debug("logger created")
         self.vdebug("verbose debug enabled")
@@ -26,7 +22,7 @@ class ArloLogger:
         _LOGGER.error(msg)
 
     @property
-    def last_error(self) -> Union[str, None]:
+    def last_error(self) -> str | None:
         """Return the last reported error.
         """
         return self._last_error
@@ -43,3 +39,4 @@ class ArloLogger:
     def vdebug(self, msg: str) -> None:
         if self._verbose_debug:
             _LOGGER.debug(msg)
+

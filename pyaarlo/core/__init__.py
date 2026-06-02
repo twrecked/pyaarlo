@@ -1,6 +1,4 @@
-from __future__ import annotations
-
-from typing import Union, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .backend import ArloBackEnd
@@ -29,9 +27,10 @@ class ArloCore:
     """
 
     def __init__(self):
-        self.be: Union[ArloBackEnd, None] = None
-        self.tasks: Union[ArloTaskManager, None] = None
-        self.cfg: Union[ArloCfg, None] = None
-        self.log: Union[ArloLogger, None] = None
-        self.st: Union[ArloStorage, None] = None
+        self.be: ArloBackEnd | None = None
+        self.tasks: ArloTaskManager | None = None
+        self.cfg: ArloCfg | None = None
+        self.log: ArloLogger | None = None
+        self.st: ArloStorage | None = None
+
 

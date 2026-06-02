@@ -2,20 +2,20 @@ import fnmatch
 import pickle
 import os
 import pprint
-from typing import Union
+from typing import Any
 
 from .cfg import ArloCfg
 from .logger import ArloLogger
 
 
 class ArloStorage:
-    
+
     def __init__(self, cfg: ArloCfg, log: ArloLogger):
         self._cfg: ArloCfg = cfg
         self._log: ArloLogger = log
 
-        self._state_file: Union[str, None] = self._cfg.state_file
-        self._db = {}
+        self._state_file: str | None = self._cfg.state_file
+        self._db: dict[str, Any] = {}
 
         self._create_storage_directory()
         self.load()
@@ -31,11 +31,11 @@ class ArloStorage:
         except Exception as _e:
             self._log.warning(f"Problem creating {self._cfg.storage_dir}")
 
-    def _ekey(self, key):
+    def _ekey(self, key: str | list[str]) -> str:
         return key if not isinstance(key, list) else "/".join(key)
 
-    def _keys_matching(self, key):
-        mkeys = []
+    def _keys_matching(self, key: str | list[str]) -> list[str]:
+        mkeys: list[str] = []
         ekey = self._ekey(key)
         # Use a list copy of keys to be thread-safe against concurrent modifications
         for mkey in list(self._db.keys()):
@@ -61,30 +61,30 @@ class ArloStorage:
             except Exception:
                 self._log.warning("storage: file not written")
 
-    def file_name(self):
+    def file_name(self) -> str | None:
         return self._state_file
 
-    def get(self, key, default=None):
+    def get(self, key: str | list[str], default: Any = None) -> Any:
         ekey = self._ekey(key)
         return self._db.get(ekey, default)
 
-    def get_matching(self, key, default=None):
-        gets = []
+    def get_matching(self, key: str | list[str], default: Any = None) -> list[tuple[str, Any]]:
+        gets: list[tuple[str, Any]] = []
         for mkey in self._keys_matching(key):
             gets.append((mkey, self._db.get(mkey, default)))
         return gets
 
-    def keys_matching(self, key):
+    def keys_matching(self, key: str | list[str]) -> list[str]:
         return self._keys_matching(key)
 
-    def set(self, key, value, prefix=""):
+    def set(self, key: str | list[str], value: Any, prefix: str = "") -> Any:
         ekey = self._ekey(key)
         output = "set:" + ekey + "=" + str(value)
         self._log.vdebug(f"{prefix}: {output[:80]}")
         self._db[ekey] = value
         return value
 
-    def unset(self, key):
+    def unset(self, key: str | list[str]):
         ekey = self._ekey(key)
         if ekey in self._db:
             del self._db[ekey]
@@ -94,3 +94,6 @@ class ArloStorage:
 
     def dump(self):
         pprint.pprint(self._db.copy())
+
+
+
