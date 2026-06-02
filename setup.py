@@ -14,7 +14,7 @@ setup(
     version='0.9.0-alpha.1',
     packages=['pyaarlo'],
 
-    python_requires='>=3.9',
+    python_requires='>=3.10',
     install_requires=[
         'requests',
         'click',
@@ -52,10 +52,11 @@ setup(
         'License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)',
         'Operating System :: OS Independent',
         'Programming Language :: Python',
-        'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3.10',
         'Programming Language :: Python :: 3.11',
         'Programming Language :: Python :: 3.12',
+        'Programming Language :: Python :: 3.13',
+        'Programming Language :: Python :: 3.14',
         'Topic :: Software Development :: Libraries :: Python Modules'
     ],
 
