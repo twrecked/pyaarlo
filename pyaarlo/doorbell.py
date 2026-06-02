@@ -24,13 +24,11 @@ class ArloDoorBell(ArloChildDevice):
 
     def _motion_stopped(self):
         self._save_and_do_callbacks(MOTION_DETECTED_KEY, False)
-        with self._lock:
-            self._motion_time_job = None
+        self._motion_time_job = None
 
     def _button_unpressed(self):
         self._save_and_do_callbacks(BUTTON_PRESSED_KEY, False)
-        with self._lock:
-            self._ding_time_job = None
+        self._ding_time_job = None
 
     def _event_handler(self, resource, event):
         self.debug(self.name + " DOORBELL got one " + resource)
@@ -52,22 +50,20 @@ class ArloDoorBell(ArloChildDevice):
             if len(props) == 1 and not self._has_motion_detect:
                 if props.get(CONNECTION_KEY, "") == "available":
                     self._save_and_do_callbacks(MOTION_DETECTED_KEY, True)
-                    with self._lock:
-                        self._core.bg.cancel(self._motion_time_job)
-                        self._motion_time_job = self._core.bg.run_in(
-                            self._motion_stopped, self._core.cfg.db_motion_time
-                        )
+                    self._core.bg.cancel(self._motion_time_job)
+                    self._motion_time_job = self._core.bg.run_in(
+                        self._motion_stopped, self._core.cfg.db_motion_time
+                    )
 
             # For button presses we only get a buttonPressed notification, not
             # a "no longer pressed" notification - set a timer to turn off the
             # press.
             if BUTTON_PRESSED_KEY in props:
                 self._save_and_do_callbacks(BUTTON_PRESSED_KEY, True)
-                with self._lock:
-                    self._core.bg.cancel(self._ding_time_job)
-                    self._ding_time_job = self._core.bg.run_in(
-                        self._button_unpressed, self._core.cfg.db_ding_time
-                    )
+                self._core.bg.cancel(self._ding_time_job)
+                self._ding_time_job = self._core.bg.run_in(
+                    self._button_unpressed, self._core.cfg.db_ding_time
+                )
 
             # Save out chimes
             if CHIMES_KEY in props:

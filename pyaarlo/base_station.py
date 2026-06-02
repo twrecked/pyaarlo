@@ -160,13 +160,12 @@ class ArloBaseStation(ArloDevice):
         # re-fetch that information before testing the mode.
         elif resource == "states":
             now = time.monotonic()
-            with self._lock:
-                if now < self._last_update + MODE_UPDATE_INTERVAL:
-                    return
-                self._last_update = now
+            if now < self._last_update + MODE_UPDATE_INTERVAL:
+                return
+            self._last_update = now
             self.debug("state change")
-            self.update_modes()
-            self.update_mode()
+            await self.update_modes()
+            await self.update_mode()
 
         # mode change?
         elif resource == "activeAutomations":
@@ -174,7 +173,7 @@ class ArloBaseStation(ArloDevice):
 
         # schedule has changed, so reload
         elif resource == "automationRevisionUpdate":
-            self.update_modes()
+            await self.update_modes()
 
         # pass on to lower layer
         else:
