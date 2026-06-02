@@ -173,8 +173,6 @@ class PyArlo:
         self._core.be = ArloBackEnd(self._core.cfg, self._core.log, self._core.bg)
 
         # State
-        self._lock: asyncio.Condition = asyncio.Condition()
-        self._started: bool = False
         self._devices: Union[List[Any], None] = None
 
         # Set up refreshes.
@@ -219,16 +217,11 @@ class PyArlo:
         self._ping_bases()
 
         # Start initial refresh and, if needed, wait for it to finish.
-        self._initial_refresh(wait=self._core.cfg.synchronous_mode)
         if self._core.cfg.synchronous_mode or self._core.cfg.wait_for_initial_setup:
-            async with self._lock:
-                while not self._started:
-                    self.debug("waiting for initial setup...")
-                    try:
-                        await asyncio.wait_for(self._lock.wait(), timeout=1)
-                    except asyncio.TimeoutError:
-                        pass
+            await self._initial_refresh(wait=self._core.cfg.synchronous_mode)
             self.debug("initial setup finished...")
+        else:
+            self._core.bg.run(self._initial_refresh, wait=self._core.cfg.synchronous_mode)
 
         # Register house keeping cron jobs.
         self.debug("registering cron jobs")
@@ -421,22 +414,15 @@ class PyArlo:
         self._core.bg.run(self._refresh_bases, initial=False)
         self._core.bg.run(self._refresh_ambient_sensors)
 
-    def _initial_refresh(self, wait: bool):
+    async def _initial_refresh(self, wait: bool):
         self.debug(f"initial refresh, wait={wait}")
-        self._core.bg.run(self._refresh_bases, initial=True)
-        self._core.bg.run(self._refresh_modes)
-        self._core.bg.run(self._refresh_ambient_sensors)
-        self._core.bg.run(self._refresh_doorbells)
-        self._core.bg.run(self._objs.ml.load)
-        self._core.bg.run(self._refresh_camera_thumbnails, wait=wait)
-        self._core.bg.run(self._refresh_camera_media, wait=wait)
-        self._core.bg.run(self._initial_refresh_done)
-
-    async def _initial_refresh_done(self):
-        self.debug("initial refresh done")
-        async with self._lock:
-            self._started = True
-            self._lock.notify_all()
+        await self._refresh_bases(initial=True)
+        await self._refresh_modes()
+        await self._refresh_ambient_sensors()
+        await self._refresh_doorbells()
+        await self._objs.ml.load()
+        await self._refresh_camera_thumbnails(wait=wait)
+        await self._refresh_camera_media(wait=wait)
 
     async def stop(self, logout=False):
         """Stop connection to Arlo and, optionally, logout."""
@@ -822,3 +808,5 @@ class PyArlo:
     def vdebug(self, msg: str) -> None:
         if self._core.log is not None:
             self._core.log.vdebug(msg)
+
+
