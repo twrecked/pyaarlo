@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import asyncio
 import pickle
 import pprint
@@ -7,7 +5,7 @@ import uuid
 import traceback
 
 from http.cookiejar import LWPCookieJar
-from typing import Dict, Union, Any
+from typing import Any
 
 from ...constant import (
     ORIGIN_HOST,
@@ -24,7 +22,7 @@ from ..logger import ArloLogger
 class ArloSessionDetails:
     """This holds everything needed for the current RESTAPI session with Arlo.
 
-    It is built up during the authentication phase and remains constistent
+    It is built up during the authentication phase and remains unchanged
     during the non-authentication phase. It contains:
      - ids
      - tokens
@@ -32,20 +30,20 @@ class ArloSessionDetails:
      - cookies
     """
     def __init__(self):
-        self.device_id: Union[str, None] = None
-        self.user_id: Union[str, None] = None
-        self.web_id: Union[str, None] = None
-        self.sub_id: Union[str, None] = None
-        self.token: Union[str, None] = None
-        self.token64: Union[str, None] = None
-        self.token_expires_in: Union[int, None] = None
-        self.user_agent: Union[str, None] = None
-        self.headers: Dict[str, str] = {}
-        self.auth_headers: Dict[str, str] = {}
-    
+        self.device_id: str | None = None
+        self.user_id: str | None = None
+        self.web_id: str | None = None
+        self.sub_id: str | None = None
+        self.token: str | None = None
+        self.token64: str | None = None
+        self.token_expires_in: int | None = None
+        self.user_agent: str | None = None
+        self.headers: dict[str, str] = {}
+        self.auth_headers: dict[str, str] = {}
+
         # Connection Objects.
         self.connection: Any = None
-        self.cookies: Union[LWPCookieJar, None] = None
+        self.cookies: LWPCookieJar | None = None
 
 
 class ArloSession:
@@ -62,7 +60,7 @@ class ArloSession:
         self._save_enabled = cfg.save_session
         self._save_filename = cfg.session_file
         self._save_username = cfg.username
-        self._save_info: Union[Dict[str, Dict[str, str]], None] = None
+        self._save_info: dict[str, dict[str, str]] | None = None
 
 
     def _debug(self, msg: str):
@@ -143,7 +141,7 @@ class ArloSession:
             pass
         self._debug(f"loading cookies={self.details.cookies}")
 
-    def auth_headers(self) -> Dict[str, str]:
+    def auth_headers(self) -> dict[str, str]:
         """Build headers needed for authentication phase.
 
         This list was determined by packet inspection when logging onto the
@@ -186,7 +184,7 @@ class ArloSession:
 
         return self.details.auth_headers
 
-    def headers(self) -> Dict[str, str]:
+    def headers(self) -> dict[str, str]:
         """Build headers needed for post-authentication phase.
 
         This list was determined by packet inspection when logging onto the
@@ -376,4 +374,5 @@ class ArloSession:
         code, body = await self.request_tuple(path=path, method=method, params=params, headers=headers,
                                               stream=stream, raw=raw, timeout=timeout, host=host, authpost=authpost, cookies=cookies)
         return body
+
 
