@@ -1,5 +1,6 @@
 0.8.0.21
-  Add curl_cffi backend to bypass Cloudflare bot detection on Arlo API
+  Add extra_device_states option [thanks @bk86a]
+  Add curl_cffi backend to bypass Cloudflare bot detection on Arlo API [thanks @shouldbecommitted]
 0.8.0.20
   Fix IMAP 2FA OTP extraction on Latin-1 / text-plain mail [thanks @paalkr]
   Support V3 custom modes and location-based alarm panel [thanks @GuiPoM]

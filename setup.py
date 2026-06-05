@@ -21,6 +21,7 @@ setup(
         'pycryptodome',
         'unidecode',
         'cloudscraper>=1.2.71',
+        'curl_cffi',
         'paho-mqtt',
         'cryptography',
         'python-slugify'
