@@ -10,7 +10,7 @@ import requests
 import ssl
 import traceback
 from enum import IntEnum
-from typing import Any, Union, Callable, List, Dict
+from typing import Any, Callable, TypeAlias
 
 from ...constant import (
     MQTT_HOST,
@@ -23,47 +23,52 @@ from ..cfg import ArloCfg
 from ..logger import ArloLogger
 from .session import ArloSessionDetails
 
+EventHandler: TypeAlias = Callable[[dict[str, Any]], Any]
+ConnectHandler: TypeAlias = Callable[[], dict[str, Any]]
+ReconnectHandler: TypeAlias = Callable[[], Any]
+
 
 class _EventState(IntEnum):
-    STARTING = 0,
-    RUNNING = 1,
-    READY = 2,
+    STARTING = 0
+    RUNNING = 1
+    READY = 2
 
 
 class _EventSession:
 
     def __init__(self, cfg: ArloCfg, log: ArloLogger, details: ArloSessionDetails,
-                 event_handler: Callable[[Any], Any],
-                 connect_handler: Callable[[], Any],
-                 reconnect_handler: Callable[[], Any]) -> None:
+                 event_handler: EventHandler,
+                 connect_handler: ConnectHandler,
+                 reconnect_handler: ReconnectHandler) -> None:
         self.cfg: ArloCfg = cfg
         self.log: ArloLogger = log
 
         self.details: ArloSessionDetails = details
-        self.event_handler: Any = event_handler
-        self.connect_handler: Any = connect_handler
-        self.reconnect_handler: Any = reconnect_handler
+        self.event_handler: EventHandler = event_handler
+        self.connect_handler: ConnectHandler = connect_handler
+        self.reconnect_handler: ReconnectHandler = reconnect_handler
 
         # Capture the loop we are running in
+        self.loop: asyncio.AbstractEventLoop | None = None
         try:
             self.loop = asyncio.get_running_loop()
         except RuntimeError:
-            self.loop = None
+            pass
 
-    def dispatch_event(self, response: Any):
+    def dispatch_event(self, response: dict[str, Any]) -> None:
         """Dispatch event back to the async loop."""
         if self.loop:
-            asyncio.run_coroutine_threadsafe(self._async_event_handler(response), self.loop)
+            _ = asyncio.run_coroutine_threadsafe(self._async_event_handler(response), self.loop)
         else:
             self.event_handler(response)
 
-    async def _async_event_handler(self, response: Any):
+    async def _async_event_handler(self, response: dict[str, Any]) -> None:
         if asyncio.iscoroutinefunction(self.event_handler):
             await self.event_handler(response)
         else:
             self.event_handler(response)
 
-    def dispatch_connect(self) -> Dict[str, Any]:
+    def dispatch_connect(self) -> dict[str, Any]:
         """Dispatch connect signal and wait for result (needed by MQTT)."""
         if self.loop:
             future = asyncio.run_coroutine_threadsafe(self._async_connect_handler(), self.loop)
@@ -75,20 +80,20 @@ class _EventSession:
         else:
             return self.connect_handler()
 
-    async def _async_connect_handler(self):
+    async def _async_connect_handler(self) -> dict[str, Any]:
         if asyncio.iscoroutinefunction(self.connect_handler):
             return await self.connect_handler()
         else:
             return self.connect_handler()
 
-    def dispatch_reconnect(self):
+    def dispatch_reconnect(self) -> None:
         """Dispatch reconnect signal."""
         if self.loop:
-            asyncio.run_coroutine_threadsafe(self._async_reconnect_handler(), self.loop)
+            _ = asyncio.run_coroutine_threadsafe(self._async_reconnect_handler(), self.loop)
         else:
             self.reconnect_handler()
 
-    async def _async_reconnect_handler(self):
+    async def _async_reconnect_handler(self) -> None:
         if asyncio.iscoroutinefunction(self.reconnect_handler):
             await self.reconnect_handler()
         else:
@@ -97,10 +102,10 @@ class _EventSession:
 
 class _MQTT:
 
-    def __init__(self, session: _EventSession):
+    def __init__(self, session: _EventSession) -> None:
         self._session: _EventSession = session
-        self._client: Union[mqtt.Client, None] = None
-        self._client_id: Union[str, None] = None
+        self._client: mqtt.Client | None = None
+        self._client_id: str | None = None
 
     def _debug(self, msg: str) -> None:
         self._session.log.debug(f"{msg}")
@@ -108,27 +113,29 @@ class _MQTT:
     def _vdebug(self, msg: str) -> None:
         self._session.log.vdebug(f"{msg}")
 
-    def _subscribe_devices(self, devices: List[Dict[str, Any]]):
-        topics = []
+    def _subscribe_devices(self, devices: list[dict[str, Any]]) -> None:
+        topics: list[tuple[str, int]] = []
         for device in devices:
             for topic in device.get("allowedMqttTopics", []):
                 topics.append((topic, 0))
 
         self._debug("topics=\n{}".format(pprint.pformat(topics)))
-        self._client.subscribe(topics)
+        if self._client:
+            _ = self._client.subscribe(topics)
 
-    def _subscribe_basic(self):
+    def _subscribe_basic(self) -> None:
         # Make sure we are listening to library events and individual base
         # station events. This seems sufficient for now.
-        self._client.subscribe([
-            (f"u/{self._session.details.user_id}/in/userSession/connect", 0),
-            (f"u/{self._session.details.user_id}/in/userSession/disconnect", 0),
-            (f"u/{self._session.details.user_id}/in/library/add", 0),
-            (f"u/{self._session.details.user_id}/in/library/update", 0),
-            (f"u/{self._session.details.user_id}/in/library/remove", 0)
-        ])
+        if self._client:
+            _ = self._client.subscribe([
+                (f"u/{self._session.details.user_id}/in/userSession/connect", 0),
+                (f"u/{self._session.details.user_id}/in/userSession/disconnect", 0),
+                (f"u/{self._session.details.user_id}/in/library/add", 0),
+                (f"u/{self._session.details.user_id}/in/library/update", 0),
+                (f"u/{self._session.details.user_id}/in/library/remove", 0)
+            ])
 
-    def _on_connect(self, _client, _userdata, _flags, rc):
+    def _on_connect(self, _client: mqtt.Client, _userdata: Any, _flags: dict[str, Any], rc: int) -> None:
         # Subscribing in on_connect() means that if we lose the connection and
         # reconnect then subscriptions will be renewed.
         self._debug(f"connected={str(rc)}")
@@ -137,10 +144,10 @@ class _MQTT:
         if "devices" in connect_result:
             self._subscribe_devices(connect_result["devices"])
 
-    def _on_log(self, _client, _userdata, _level, msg):
+    def _on_log(self, _client: mqtt.Client, _userdata: Any, _level: int, msg: str) -> None:
         self._vdebug(f"log={str(msg)}")
 
-    def _on_message(self, _client, _userdata, msg):
+    def _on_message(self, _client: mqtt.Client, _userdata: Any, msg: mqtt.MQTTMessage) -> None:
         self._debug(f"topic={msg.topic}")
         try:
             response = json.loads(msg.payload.decode("utf-8"))
@@ -156,10 +163,11 @@ class _MQTT:
         except json.decoder.JSONDecodeError as e:
             self._debug("reopening: json error " + str(e))
 
-    def stop(self):
-        self._client.disconnect()
+    def stop(self) -> None:
+        if self._client:
+            _ = self._client.disconnect()
 
-    def run(self):
+    def run(self) -> None:
 
         try:
             self._debug("(re)starting mqtt event loop")
@@ -186,13 +194,15 @@ class _MQTT:
             self._client.tls_set_context(ssl_context)
             self._client.username_pw_set(f"{self._session.details.user_id}", self._session.details.token)
             self._client.ws_set_options(path=MQTT_PATH, headers=headers)
-            self._debug(f"host={self._session.cfg.mqtt_host}, "
-                        f"check={self._session.cfg.mqtt_hostname_check}, "
-                        f"transport={self._session.cfg.mqtt_transport}")
+            self._debug(
+                f"host={self._session.cfg.mqtt_host}, "
+                f"check={self._session.cfg.mqtt_hostname_check}, "
+                f"transport={self._session.cfg.mqtt_transport}"
+            )
 
             # Connect.
-            self._client.connect(self._session.cfg.mqtt_host, port=self._session.cfg.mqtt_port, keepalive=60)
-            self._client.loop_forever()
+            _ = self._client.connect(self._session.cfg.mqtt_host, port=self._session.cfg.mqtt_port, keepalive=60)
+            _ = self._client.loop_forever()
 
         except Exception as e:
             # self._log.warning('general exception ' + str(e))
@@ -202,24 +212,25 @@ class _MQTT:
                 )
             )
 
-    def update(self, **_kwargs: Dict[str, Any]):
+    def update(self, **_kwargs: Any) -> None:
         pass
 
 
 class _SSE:
 
-    def __init__(self, session: _EventSession):
+    def __init__(self, session: _EventSession) -> None:
         self._session: _EventSession = session
-        self._stream: Union[SSEClient, None] = None
+        self._stream: SSEClient | None = None
 
     def _debug(self, msg: str) -> None:
         self._session.log.debug(f"sse: {msg}")
 
-    def stop(self):
+    def stop(self) -> None:
         self._debug("stopping")
-        self._stream.stop()
+        if self._stream:
+            self._stream.stop()
 
-    def run(self):
+    def run(self) -> None:
         """Open and connect an SSE stream.
 
         It will wait for certain signals before moving into a connected
@@ -263,7 +274,7 @@ class _SSE:
 
                 # connected - yay!
                 if response.get("status", "") == "connected":
-                    self._session.dispatch_connect()
+                    _ = self._session.dispatch_connect()
                     continue
 
                 # pass on to general handler
@@ -284,7 +295,7 @@ class _SSE:
                 )
             )
 
-    def update(self, **_kwargs: Dict[str, Any]):
+    def update(self, **_kwargs: Any) -> None:
         pass
 
 
@@ -296,17 +307,17 @@ class ArloEvent:
     """
 
     def __init__(self, cfg: ArloCfg, log: ArloLogger, details: ArloSessionDetails,
-                 event_handler: Callable[[Any], None],
-                 connect_handler: Callable[[], Dict[str, Any]],
-                 reconnect_handler: Callable[[], None]):
+                 event_handler: EventHandler,
+                 connect_handler: ConnectHandler,
+                 reconnect_handler: ReconnectHandler) -> None:
         self._session: _EventSession = _EventSession(cfg, log, details, event_handler, connect_handler, reconnect_handler)
         self._state: _EventState = _EventState.STARTING
-        self._device: Union[_MQTT, _SSE, None] = None
+        self._device: _MQTT | _SSE | None = None
 
-    def _debug(self, msg):
+    def _debug(self, msg: str) -> None:
         self._session.log.debug(f"event: {msg}")
 
-    def setup(self):
+    def setup(self) -> None:
         """Move the instance into ready state.
 
         Pick the back end to use.
@@ -324,17 +335,18 @@ class ArloEvent:
         # Ready to run.
         self._state = _EventState.READY
 
-    def run(self):
+    def run(self) -> None:
         """Call the back end run function.
         """
         if self._state != _EventState.READY:
             self._session.log.warning(f"event is not ready in {self._state}")
             return
 
-        self._state = _EventState.RUNNING
-        self._device.run()
+        if self._device:
+            self._state = _EventState.RUNNING
+            self._device.run()
 
-    def stop(self):
+    def stop(self) -> None:
         """Ask the event stream to stop.
         """
         if self._state != _EventState.RUNNING:
@@ -342,14 +354,16 @@ class ArloEvent:
             return
 
         self._state = _EventState.STARTING
-        self._device.stop()
+        if self._device:
+            self._device.stop()
 
-    async def update(self, **kwargs: Dict[str, Any]):
+    async def update(self, **kwargs: Any) -> None:
         """Update the event stream.
         """
         if self._state != _EventState.RUNNING:
             self._session.log.warning(f"event is not running in {self._state}")
             return
 
-        self._device.update(**kwargs)
+        if self._device:
+            self._device.update(**kwargs)
 

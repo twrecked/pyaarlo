@@ -4,7 +4,7 @@ import os
 import re
 import random
 
-from typing import cast
+from typing import Any, cast, Literal
 from urllib.parse import urlparse, ParseResult
 
 from ..constant import (
@@ -32,7 +32,7 @@ class ArloCfg:
     """
 
 
-    def __init__(self, log: ArloLogger, **kwargs: str | int | bool):
+    def __init__(self, log: ArloLogger, **kwargs: Any):
         """The constructor.
 
         Args:
@@ -40,7 +40,7 @@ class ArloCfg:
         """
         self._log: ArloLogger = log
 
-        self._kw: dict[str, str | int | bool] = kwargs
+        self._kw: dict[str, Any] = kwargs
         self._update_backend: bool = False
         self._storage_dir: str
 
@@ -98,11 +98,11 @@ class ArloCfg:
         return self._add_scheme(cast(str, self._kw.get("host", DEFAULT_HOST)), "https")
 
     @property
-    def auth_host(self):
+    def auth_host(self) -> str:
         return self._add_scheme(cast(str, self._kw.get("auth_host", DEFAULT_AUTH_HOST)), "https")
 
     @property
-    def mqtt_host(self):
+    def mqtt_host(self) -> str:
         return self._remove_scheme(cast(str, self._kw.get("mqtt_host", MQTT_HOST)))
 
     @property
@@ -121,59 +121,59 @@ class ArloCfg:
                 self._kw["mqtt_port"] = cast(int, url.port)
 
     @property
-    def mqtt_hostname_check(self):
-        return self._kw.get("mqtt_hostname_check", True)
+    def mqtt_hostname_check(self) -> bool:
+        return bool(self._kw.get("mqtt_hostname_check", True))
 
     @property
-    def mqtt_transport(self):
-        return self._kw.get("mqtt_transport", "tcp")
+    def mqtt_transport(self) -> Literal["tcp", "websockets"]:
+        return cast(Literal["tcp", "websockets"], self._kw.get("mqtt_transport", "tcp"))
 
     @property
-    def dump(self):
-        return self._kw.get("dump", False)
+    def dump(self) -> bool:
+        return cast(bool, self._kw.get("dump", False))
 
     @property
-    def max_days(self):
-        return self._kw.get("max_days", 365)
+    def max_days(self) -> int:
+        return cast(int, self._kw.get("max_days", 365))
 
     @property
-    def db_motion_time(self):
-        return self._kw.get("db_motion_time", 30)
+    def db_motion_time(self) -> int:
+        return cast(int, self._kw.get("db_motion_time", 30))
 
     @property
-    def db_ding_time(self):
-        return self._kw.get("db_ding_time", 10)
+    def db_ding_time(self) -> int:
+        return cast(int, self._kw.get("db_ding_time", 10))
 
     @property
-    def request_timeout(self):
-        return self._kw.get("request_timeout", 60)
+    def request_timeout(self) -> int:
+        return cast(int, self._kw.get("request_timeout", 60))
 
     @property
     def stream_timeout(self) -> int:
         return cast(int, self._kw.get("stream_timeout", 0))
 
     @property
-    def recent_time(self):
-        return self._kw.get("recent_time", 600)
+    def recent_time(self) -> int:
+        return cast(int, self._kw.get("recent_time", 600))
 
     @property
-    def last_format(self):
-        return self._kw.get("last_format", "%m-%d %H:%M")
+    def last_format(self) -> str:
+        return cast(str, self._kw.get("last_format", "%m-%d %H:%M"))
 
     @property
-    def no_media_upload(self):
-        return self._kw.get("no_media_upload", False)
+    def no_media_upload(self) -> bool:
+        return cast(bool, self._kw.get("no_media_upload", False))
 
     @property
-    def media_retry(self):
-        retries = self._kw.get("media_retry", [])
+    def media_retry(self) -> list[int]:
+        retries = cast(list[int], self._kw.get("media_retry", []))
         if not retries and self.no_media_upload:
             retries = [0, 5, 10]
         return retries
 
     @property
-    def snapshot_checks(self):
-        return self._kw.get("snapshot_checks", [])
+    def snapshot_checks(self) -> list[int]:
+        return cast(list[int], self._kw.get("snapshot_checks", []))
 
     @property
     def user_agent(self) -> str:
@@ -213,55 +213,55 @@ class ArloCfg:
         return cast(str, self._kw.get("mode_api", "auto"))
 
     @property
-    def refresh_devices_every(self):
-        return self._kw.get("refresh_devices_every", 0) * 60 * 60
+    def refresh_devices_every(self) -> int:
+        return cast(int, self._kw.get("refresh_devices_every", 0)) * 60 * 60
 
     @property
-    def refresh_modes_every(self):
-        return self._kw.get("refresh_modes_every", 0) * 60
+    def refresh_modes_every(self) -> int:
+        return cast(int, self._kw.get("refresh_modes_every", 0)) * 60
 
     @property
-    def reconnect_every(self):
-        return self._kw.get("reconnect_every", 0) * 60
+    def reconnect_every(self) -> int:
+        return cast(int, self._kw.get("reconnect_every", 0)) * 60
 
     @property
-    def snapshot_timeout(self):
-        return self._kw.get("snapshot_timeout", 60)
+    def snapshot_timeout(self) -> int:
+        return cast(int, self._kw.get("snapshot_timeout", 60))
 
     @property
-    def verbose(self):
-        return self._kw.get("verbose_debug", False)
+    def verbose(self) -> bool:
+        return cast(bool, self._kw.get("verbose_debug", False))
 
     @property
-    def tfa_source(self):
-        return self._kw.get("tfa_source", TFA_CONSOLE_SOURCE)
+    def tfa_source(self) -> str:
+        return cast(str, self._kw.get("tfa_source", TFA_CONSOLE_SOURCE))
 
     @property
     def tfa_type(self) -> str:
         return cast(str, self._kw.get("tfa_type", TFA_EMAIL_TYPE)).lower()
 
     @property
-    def tfa_delay(self):
-        return self._kw.get("tfa_delay", TFA_DELAY)
+    def tfa_delay(self) -> int:
+        return cast(int, self._kw.get("tfa_delay", TFA_DELAY))
 
     @property
-    def tfa_retries(self):
-        return self._kw.get("tfa_retries", TFA_RETRIES)
+    def tfa_retries(self) -> int:
+        return cast(int, self._kw.get("tfa_retries", TFA_RETRIES))
 
     @property
-    def tfa_timeout(self):
-        return self._kw.get("tfa_timeout", 3)
+    def tfa_timeout(self) -> int:
+        return cast(int, self._kw.get("tfa_timeout", 3))
 
     @property
-    def tfa_total_timeout(self):
-        return self._kw.get("tfa_total_timeout", 60)
+    def tfa_total_timeout(self) -> int:
+        return cast(int, self._kw.get("tfa_total_timeout", 60))
 
     @property
-    def tfa_host(self):
+    def tfa_host(self) -> str:
         host: str = self._remove_scheme(cast(str, self._kw.get("tfa_host", TFA_DEFAULT_HOST)))
         return host.split(":")[0]
 
-    def tfa_host_with_scheme(self, scheme: str = "https"):
+    def tfa_host_with_scheme(self, scheme: str = "https") -> str:
         host: str = self._add_scheme(cast(str, self._kw.get("tfa_host", TFA_DEFAULT_HOST)), scheme)
         return ":".join(host.split(":")[:2])
 
@@ -274,26 +274,26 @@ class ArloCfg:
         return int(bits[1])
 
     @property
-    def tfa_username(self):
+    def tfa_username(self) -> str:
         u = self._kw.get("tfa_username", None)
         if u is None:
             u = self.username
-        return u
+        return cast(str, u)
 
     @property
-    def tfa_password(self):
+    def tfa_password(self) -> str:
         p = self._kw.get("tfa_password", None)
         if p is None:
             p = self.password
-        return p
+        return cast(str, p)
 
     @property
-    def tfa_nickname(self):
-        return self._kw.get("tfa_nickname", self.tfa_username)
+    def tfa_nickname(self) -> str:
+        return cast(str, self._kw.get("tfa_nickname", self.tfa_username))
 
     @property
-    def wait_for_initial_setup(self):
-        return self._kw.get("wait_for_initial_setup", True)
+    def wait_for_initial_setup(self) -> bool:
+        return cast(bool, self._kw.get("wait_for_initial_setup", True))
 
     @property
     def save_state(self) -> bool:
@@ -310,72 +310,71 @@ class ArloCfg:
         return self._user_storage_file('session')
 
     @property
-    def save_session(self):
-        return self._kw.get("save_session", True)
+    def save_session(self) -> bool:
+        return cast(bool, self._kw.get("save_session", True))
 
     @property
     def cookies_file(self) -> str:
         return self._user_storage_file('cookies')
 
     @property
-    def dump_file(self):
+    def dump_file(self) -> str | None:
         if self.dump:
             return self.storage_dir + "/" + "packets.dump"
         return None
 
     @property
-    def library_days(self):
-        return self._kw.get("library_days", PRELOAD_DAYS)
+    def library_days(self) -> int:
+        return cast(int, self._kw.get("library_days", PRELOAD_DAYS))
 
     @property
     def synchronous_mode(self) -> bool:
         return cast(bool, self._kw.get("synchronous_mode", False))
 
     @property
-    def user_stream_delay(self):
-        return self._kw.get("user_stream_delay", 1)
+    def user_stream_delay(self) -> int:
+        return cast(int, self._kw.get("user_stream_delay", 1))
 
     @property
-    def serial_ids(self):
-        return self._kw.get("serial_ids", False)
+    def serial_ids(self) -> bool:
+        return cast(bool, self._kw.get("serial_ids", False))
 
     @property
-    def stream_snapshot(self):
-        return self._kw.get("stream_snapshot", False)
+    def stream_snapshot(self) -> bool:
+        return cast(bool, self._kw.get("stream_snapshot", False))
 
     @property
-    def stream_snapshot_stop(self):
-        return self._kw.get("stream_snapshot_stop", 10)
+    def stream_snapshot_stop(self) -> int:
+        return cast(int, self._kw.get("stream_snapshot_stop", 10))
 
     @property
-    def save_media_to(self):
-        return self._kw.get("save_media_to", "")
+    def save_media_to(self) -> str:
+        return cast(str, self._kw.get("save_media_to", ""))
 
     @property
-    def no_unicode_squash(self):
-        return self._kw.get("no_unicode_squash", True)
+    def no_unicode_squash(self) -> bool:
+        return cast(bool, self._kw.get("no_unicode_squash", True))
 
     @property
     def event_backend(self) -> str:
         return cast(str, self._kw.get("backend", "auto"))
 
     @property
-    def cipher_list(self):
+    def cipher_list(self) -> str:
         if self._kw.get("default_ciphers", False):
             return 'DEFAULT'
-        return self._kw.get("cipher_list", "")
+        return cast(str, self._kw.get("cipher_list", ""))
 
     @property
-    def ecdh_curves(self):
+    def ecdh_curves(self) -> list[str]:
         curve = self._kw.get("ecdh_curve", None)
-        curves = ECDH_CURVES
+        curves = list(ECDH_CURVES)
         if curve in curves:
             # Moves user-selected curve to front of list
-            curves.insert(0, curves.pop(curves.index(curve)))
+            curves.insert(0, curves.pop(curves.index(cast(str, curve))))
         return curves
 
     @property
-    def send_source(self):
-        return self._kw.get("send_source", False)
-
+    def send_source(self) -> bool:
+        return cast(bool, self._kw.get("send_source", False))
 
