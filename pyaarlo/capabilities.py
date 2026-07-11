@@ -42,6 +42,8 @@ from .constant import (
     MODEL_PRO_3_FLOODLIGHT,
     MODEL_PRO_4,
     MODEL_PRO_5,
+    MODEL_PRO_6,
+    MODEL_PRO_6_XL,
     MODEL_ULTRA,
     MODEL_WIRED_VIDEO_DOORBELL,
     MODEL_WIRED_VIDEO_DOORBELL_GEN2_2K,
@@ -117,6 +119,8 @@ class ArloCapabilities:
                     MODEL_PRO_3_FLOODLIGHT,
                     MODEL_PRO_4,
                     MODEL_PRO_5,
+                    MODEL_PRO_6,
+                    MODEL_PRO_6_XL,
                     MODEL_WIRED_VIDEO_DOORBELL_GEN2_2K,
                     MODEL_WIRED_VIDEO_DOORBELL_GEN2_HD,
             )):
@@ -177,6 +181,8 @@ class ArloCapabilities:
                     MODEL_PRO_3_FLOODLIGHT,
                     MODEL_PRO_4,
                     MODEL_PRO_5,
+                    MODEL_PRO_6,
+                    MODEL_PRO_6_XL,
                     MODEL_ULTRA,
                     MODEL_GO,
                     MODEL_BABY,
@@ -199,6 +205,8 @@ class ArloCapabilities:
                     MODEL_PRO_3_FLOODLIGHT,
                     MODEL_PRO_4,
                     MODEL_PRO_5,
+                    MODEL_PRO_6,
+                    MODEL_PRO_6_XL,
                     MODEL_ULTRA,
                     MODEL_WIRED_VIDEO_DOORBELL_GEN2_HD,
                     MODEL_WIRED_VIDEO_DOORBELL_GEN2_2K,
@@ -216,6 +224,8 @@ class ArloCapabilities:
                     MODEL_PRO_3,
                     MODEL_PRO_4,
                     MODEL_PRO_5,
+                    MODEL_PRO_6,
+                    MODEL_PRO_6_XL,
                     MODEL_ULTRA
             )):
                 return True
@@ -235,6 +245,8 @@ class ArloCapabilities:
                     MODEL_PRO_3_FLOODLIGHT,
                     MODEL_PRO_4,
                     MODEL_PRO_5,
+                    MODEL_PRO_6,
+                    MODEL_PRO_6_XL,
                     MODEL_ESSENTIAL_SPOTLIGHT,
                     MODEL_ESSENTIAL_XL_SPOTLIGHT,
                     MODEL_ESSENTIAL_XL_OUTDOOR_GEN2_2K,

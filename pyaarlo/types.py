@@ -9,6 +9,8 @@ from .constant import (
     MODEL_PRO_3_FLOODLIGHT,
     MODEL_PRO_4,
     MODEL_PRO_5,
+    MODEL_PRO_6,
+    MODEL_PRO_6_XL,
     MODEL_WIRED_VIDEO_DOORBELL,
     MODEL_WIRED_VIDEO_DOORBELL_GEN2_HD,
     MODEL_WIRED_VIDEO_DOORBELL_GEN2_2K,
@@ -25,7 +27,7 @@ from .constant import (
 class ArloTypes:
     """Arlo device types.
 
-    These methods are used at start up to determine what objec type to create
+    These methods are used at start up to determine what object type to create
     for devices we read from the Arlo servers.
 
     These were moved here to remove some of code clutter in __init__.py.
@@ -57,6 +59,8 @@ class ArloTypes:
             MODEL_PRO_3_FLOODLIGHT,
             MODEL_PRO_4,
             MODEL_PRO_5,
+            MODEL_PRO_6,
+            MODEL_PRO_6_XL,
             MODEL_ESSENTIAL_SPOTLIGHT,
             MODEL_ESSENTIAL_XL_SPOTLIGHT,
             MODEL_ESSENTIAL_INDOOR,
