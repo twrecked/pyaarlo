@@ -1,3 +1,5 @@
+0.8.0.22
+  Add Arlo Pro6 support [thanks #@dwin-anne]
 0.8.0.21
   Add extra_device_states option [thanks @bk86a]
   Add curl_cffi backend to bypass Cloudflare bot detection on Arlo API [thanks @shouldbecommitted]
