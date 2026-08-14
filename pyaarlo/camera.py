@@ -53,6 +53,7 @@ from .constant import (
     MODEL_PRO_2,
     MODEL_PRO_3,
     MODEL_PRO_3_FLOODLIGHT,
+    MODEL_WIRED_FLOODLIGHT,
     MODEL_PRO_4,
     MODEL_PRO_5,
     MODEL_PRO_6,
@@ -1431,6 +1432,7 @@ class ArloCamera(ArloChildDevice):
                     MODEL_PRO_2,
                     MODEL_PRO_3,
                     MODEL_PRO_3_FLOODLIGHT,
+                    MODEL_WIRED_FLOODLIGHT,
                     MODEL_PRO_4,
                     MODEL_PRO_5,
                     MODEL_PRO_6,
@@ -1455,6 +1457,7 @@ class ArloCamera(ArloChildDevice):
                     MODEL_ESSENTIAL_OUTDOOR_GEN2_HD,
                     MODEL_PRO_3,
                     MODEL_PRO_3_FLOODLIGHT,
+                    MODEL_WIRED_FLOODLIGHT,
                     MODEL_PRO_4,
                     MODEL_PRO_5,
                     MODEL_PRO_6,
@@ -1488,13 +1491,14 @@ class ArloCamera(ArloChildDevice):
             if self.model_id.startswith(MODEL_BABY):
                 return True
         if cap in (FLOODLIGHT_KEY,):
-            if self.model_id.startswith(MODEL_PRO_3_FLOODLIGHT):
+            if self.model_id.startswith((MODEL_PRO_3_FLOODLIGHT, MODEL_WIRED_FLOODLIGHT)):
                 return True
         if cap in (CONNECTION_KEY,):
             # These devices are their own base stations so don't re-add connection key.
             if self.parent_id == self.device_id and self.model_id.startswith((
                     MODEL_BABY,
                     MODEL_PRO_3_FLOODLIGHT,
+                    MODEL_WIRED_FLOODLIGHT,
                     MODEL_PRO_4,
                     MODEL_PRO_5,
                     MODEL_PRO_6,
