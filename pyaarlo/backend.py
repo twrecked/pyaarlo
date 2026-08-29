@@ -304,6 +304,88 @@ class ArloBackEnd(object):
                                          stream=stream, raw=raw, timeout=timeout, host=host, authpost=authpost, cookies=cookies)
         return body
 
+    def get_intelligence_events(self, from_date, limit=100, location_id=None, max_pages=50):
+        """Return flattened Arlo Intelligence events from the feed metadata API.
+
+        ``from_date`` must be a ``YYYYMMDD`` string or a ``datetime.date``. The
+        feed is location-scoped, so all locations are queried by default. Event
+        dictionaries retain the original payload and receive ``eventId``,
+        ``locationId``, and ``deviceId`` fields when those values are available.
+        """
+        if hasattr(from_date, "strftime"):
+            from_date = from_date.strftime("%Y%m%d")
+        from_date = str(from_date)
+        if len(from_date) != 8 or not from_date.isdigit():
+            raise ValueError("from_date must be a YYYYMMDD string or date")
+        try:
+            limit = max(1, min(int(limit), 100))
+            max_pages = max(1, int(max_pages))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("limit and max_pages must be positive integers") from exc
+
+        owner_id = self._web_id or self._user_id
+        if location_id is not None:
+            location_ids = [str(location_id)]
+        else:
+            location_ids = [
+                str(getattr(location, "id", None) or getattr(location, "_id", ""))
+                for location in getattr(self._arlo, "locations", [])
+            ]
+            location_ids = [value for value in location_ids if value]
+        if not owner_id or not location_ids:
+            raise RuntimeError("authenticated owner and location metadata are required")
+
+        base_host = str(self._arlo.cfg.host).rstrip("/")
+        if base_host.endswith("/hmsweb"):
+            host = base_host[:-len("/hmsweb")] + "/hmsfeeds"
+        elif base_host.endswith("/hmsfeeds"):
+            host = base_host
+        else:
+            host = base_host + "/hmsfeeds"
+
+        events = []
+        for current_location_id in location_ids:
+            path = f"/users/{owner_id}/{current_location_id}/metadata"
+            next_page = None
+            for _ in range(max_pages):
+                response = self._request(
+                    path,
+                    method="POST",
+                    params={
+                        "asc": False,
+                        "fromDate": from_date,
+                        "limit": limit,
+                        "groupBy": "events",
+                        "nextPage": next_page,
+                    },
+                    host=host,
+                    raw=True,
+                )
+                data = response.get("data", response) if isinstance(response, dict) else {}
+                grouped = data.get("groupByEvents", {}) if isinstance(data, dict) else {}
+                if isinstance(grouped, dict):
+                    for event_id, event_group in grouped.items():
+                        for device_bucket in event_group if isinstance(event_group, list) else []:
+                            if not isinstance(device_bucket, dict):
+                                continue
+                            for device_id, event_lists in device_bucket.items():
+                                for event_list in event_lists if isinstance(event_lists, list) else []:
+                                    if not isinstance(event_list, list):
+                                        continue
+                                    for event in event_list:
+                                        if not isinstance(event, dict):
+                                            continue
+                                        item = dict(event)
+                                        item.setdefault("eventId", event_id)
+                                        item.setdefault("locationId", current_location_id)
+                                        item.setdefault("deviceId", device_id)
+                                        events.append(item)
+                candidate = data.get("nextPage") if isinstance(data, dict) else None
+                if not candidate or candidate == next_page:
+                    break
+                next_page = candidate
+        return events
+
     def gen_trans_id(self, trans_type=TRANSID_PREFIX):
         return trans_type + "!" + str(uuid.uuid4())
 
@@ -887,7 +969,7 @@ class ArloBackEnd(object):
             else:
                 self._needs_pairing = True
                 factors = self.auth_get(
-                    AUTH_GET_FACTORS + "?data = {}".format(int(time.time())), {}, headers
+                    AUTH_GET_FACTORS + "?data={}".format(int(time.time())), {}, headers
                 )
                 if factors is None:
                     self._arlo.error("login failed: 2fa: no secondary choices available")
@@ -1015,7 +1097,7 @@ class ArloBackEnd(object):
 
         # Validate it!
         validated = self.auth_get(
-            AUTH_VALIDATE_PATH + "?data = {}".format(int(time.time())), {}, headers
+            AUTH_VALIDATE_PATH + "?data={}".format(int(time.time())), {}, headers
         )
         if validated is None:
             self._arlo.error("token validation failed")
