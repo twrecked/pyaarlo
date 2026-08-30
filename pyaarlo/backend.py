@@ -55,7 +55,48 @@ class AuthResult(IntEnum):
     FAILED = 1
 
 
-# include token and session details
+def _flatten_intelligence_events(grouped, location_id):
+    """Flatten list- or dict-shaped groupByEvents responses."""
+    records = []
+    event_keys = {
+        "harlem", "feedId", "feedID", "recordingId", "mediaId", "utcCreatedDate",
+        "eventTime", "timestamp", "createdAt", "description", "aiDescription",
+        "smartDescription", "eventDescription",
+    }
+
+    def walk(value, event_id=None, device_id=None):
+        if isinstance(value, list):
+            for item in value:
+                walk(item, event_id, device_id)
+            return
+        if not isinstance(value, dict):
+            return
+        keys = set(value)
+        if keys & event_keys and ("harlem" in keys or keys & {
+            "feedId", "feedID", "recordingId", "mediaId", "utcCreatedDate",
+            "eventTime", "timestamp", "createdAt",
+        }):
+            item = dict(value)
+            if event_id is not None:
+                item.setdefault("eventId", event_id)
+            item.setdefault("locationId", location_id)
+            if device_id is not None:
+                item.setdefault("deviceId", device_id)
+            records.append(item)
+            return
+        for key, child in value.items():
+            child_event_id = event_id
+            child_device_id = device_id
+            if event_id is None:
+                child_event_id = key
+            elif device_id is None and isinstance(key, str):
+                child_device_id = key
+            walk(child, child_event_id, child_device_id)
+
+    walk(grouped)
+    return records
+
+
 class ArloBackEnd(object):
 
     _session_lock = threading.Lock()
@@ -363,23 +404,7 @@ class ArloBackEnd(object):
                 )
                 data = response.get("data", response) if isinstance(response, dict) else {}
                 grouped = data.get("groupByEvents", {}) if isinstance(data, dict) else {}
-                if isinstance(grouped, dict):
-                    for event_id, event_group in grouped.items():
-                        for device_bucket in event_group if isinstance(event_group, list) else []:
-                            if not isinstance(device_bucket, dict):
-                                continue
-                            for device_id, event_lists in device_bucket.items():
-                                for event_list in event_lists if isinstance(event_lists, list) else []:
-                                    if not isinstance(event_list, list):
-                                        continue
-                                    for event in event_list:
-                                        if not isinstance(event, dict):
-                                            continue
-                                        item = dict(event)
-                                        item.setdefault("eventId", event_id)
-                                        item.setdefault("locationId", current_location_id)
-                                        item.setdefault("deviceId", device_id)
-                                        events.append(item)
+                events.extend(_flatten_intelligence_events(grouped, current_location_id))
                 candidate = data.get("nextPage") if isinstance(data, dict) else None
                 if not candidate or candidate == next_page:
                     break

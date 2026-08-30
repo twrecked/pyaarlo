@@ -1,6 +1,6 @@
 import unittest
 
-from pyaarlo.backend import ArloBackEnd
+from pyaarlo.backend import ArloBackEnd, _flatten_intelligence_events
 
 
 class _Location:
@@ -18,6 +18,21 @@ class _Arlo:
 
 
 class IntelligenceEventsTests(unittest.TestCase):
+    def test_flatten_accepts_dictionary_shaped_group(self):
+        events = _flatten_intelligence_events({
+            "event-1": {
+                "camera-1": {
+                    "feedId": "feed-1",
+                    "utcCreatedDate": 1787162940000,
+                    "harlem": [{"shortCaption": "Person"}],
+                }
+            }
+        }, "location-a")
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["eventId"], "event-1")
+        self.assertEqual(events[0]["locationId"], "location-a")
+        self.assertEqual(events[0]["deviceId"], "camera-1")
+
     def test_get_intelligence_events_flattens_all_locations(self):
         backend = ArloBackEnd.__new__(ArloBackEnd)
         backend._arlo = _Arlo()
