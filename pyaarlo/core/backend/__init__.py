@@ -6,7 +6,7 @@ import uuid
 import cloudscraper
 
 from enum import IntEnum
-from typing import Any
+from typing import Any, Callable, cast
 
 from ...constant import (
     AUTH_FINISH_PATH,
@@ -52,7 +52,7 @@ class _AuthDetails:
     """
     def __init__(self):
         self.state: _AuthState = _AuthState.STARTING
-        self.headers: dict[str, str] | None = None
+        self.headers: dict[str, Any] = {}
         self.browser_code = None
         self.factor_id: str | None = None
         self.needs_pairing: bool = False
@@ -66,7 +66,7 @@ class _EventDetails:
     """
     def __init__(self):
         self.loop_exiting: bool = False
-        self.loop_task: asyncio.Task | None = None
+        self.loop_task: asyncio.Task[Any] | None = None
         self.stream: ArloEvent | None = None
         self.stream_connected: bool = False
 
@@ -94,8 +94,8 @@ class ArloBackEnd:
 
         # Remaining state variables.
         self._dump_file = self._cfg.dump_file
-        self._requests = {}
-        self._callbacks = {}
+        self._requests: dict[str, Any] = {}
+        self._callbacks: dict[str, list[Callable[..., Any]]] = {}
         self._resource_types = DEFAULT_RESOURCES
 
     def _debug(self, msg: str) -> None:
@@ -451,7 +451,7 @@ class ArloBackEnd:
         self._debug("auth: validating")
 
         # Update the token in the header to the new token.
-        self._auth.headers["Authorization"] = self._req.details.token64
+        self._auth.headers["Authorization"] = str(self._req.details.token64 or "")
 
         code, validated = await self._auth_get(
             f"{AUTH_VALIDATE_PATH}?data = {int(time.time())}", {
@@ -662,8 +662,8 @@ class ArloBackEnd:
                         self._debug("auth: using curl_cffi backend")
                         from curl_cffi.requests import Session as cffi_Session
                         from curl_cffi.requests import AsyncSession as cffi_AsyncSession
-                        self._req.details.connection = cffi_Session(impersonate=self._cfg.curl_cffi_impersonate)
-                        self._req.details.async_connection = cffi_AsyncSession(impersonate=self._cfg.curl_cffi_impersonate)
+                        self._req.details.connection = cffi_Session(impersonate=cast(Any, self._cfg.curl_cffi_impersonate))
+                        self._req.details.async_connection = cffi_AsyncSession(impersonate=cast(Any, self._cfg.curl_cffi_impersonate))
                         return True
                     except Exception as e:
                         self._log.warning(f"auth: failed to use curl_cffi backend: {e}")
@@ -713,6 +713,10 @@ class ArloBackEnd:
             return _AuthState.LOGIN
 
         # The current token has expired.
+        if self._req.details.token_expires_in is None:
+            self._debug("auth: no expiry time")
+            return _AuthState.LOGIN
+
         self._debug(f"now={int(time.time())}, expires={int(self._req.details.token_expires_in - 300)}")
         if self._req.details.token_expires_in - 300 < time.time():
             self._debug("auth: login expired")
@@ -774,7 +778,7 @@ class ArloBackEnd:
                 # Update our user info and add the Authorization field to the
                 # auth headers.
                 self._req.update(body)
-                self._auth.headers["Authorization"] = self._req.details.token64
+                self._auth.headers["Authorization"] = str(self._req.details.token64 or "")
 
                 # See what state to move to next.
                 if not body["authCompleted"]:

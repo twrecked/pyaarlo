@@ -1,5 +1,6 @@
 import asyncio
 import os
+from typing import Any, Callable
 from datetime import datetime, timedelta
 from string import Template
 from slugify import slugify
@@ -18,7 +19,7 @@ class ArloMediaDownloader:
     def __init__(self, core: ArloCore, save_format):
         self._core = core
         self._save_format = save_format
-        self._queue = asyncio.Queue()
+        self._queue: asyncio.Queue[Any] = asyncio.Queue()
         self._downloading = False
         self._task = None
 
@@ -150,11 +151,11 @@ class ArloMediaLibrary:
         self._core = core
         self._objs = objs
 
-        self._load_cbs_ = []
+        self._load_cbs_: list[Callable[..., Any]] = []
         self._count = 0
-        self._videos = []
-        self._video_keys = []
-        self._snapshots = {}
+        self._videos: list[Any] = []
+        self._video_keys: list[str] = []
+        self._snapshots: dict[str, Any] = {}
 
         self._downloader = ArloMediaDownloader(core, self._core.cfg.save_media_to)
         self._downloader.start()

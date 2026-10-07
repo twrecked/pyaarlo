@@ -2,13 +2,14 @@ import asyncio
 import base64
 import time
 from datetime import datetime, timezone
+from typing import Any
 
 import requests
 
 try:
     from curl_cffi.requests import AsyncSession as cffi_AsyncSession
 except ImportError:
-    cffi_AsyncSession = None
+    cffi_AsyncSession = None  # type: ignore[assignment, misc]
 
 
 async def http_get_async(url, filename=None):
@@ -16,7 +17,7 @@ async def http_get_async(url, filename=None):
     if url is None:
         return None
 
-    if cffi_AsyncSession:
+    if cffi_AsyncSession is not None:
         async with cffi_AsyncSession() as session:
             response = await session.get(url)
             if response.status_code != 200:
@@ -51,7 +52,7 @@ async def http_get_img_async(url, ignore_date=False):
     if url is None:
         return None, datetime.now().astimezone()
 
-    if cffi_AsyncSession:
+    if cffi_AsyncSession is not None:
         async with cffi_AsyncSession() as session:
             response = await session.get(url)
             if response.status_code != 200:
@@ -194,7 +195,7 @@ async def http_stream(url, chunk=4096):
     :param chunk: chunk bytes to read per time
     :returns async generator object
     """
-    if cffi_AsyncSession:
+    if cffi_AsyncSession is not None:
         async with cffi_AsyncSession() as session:
             response = await session.get(url, stream=True)
             async for data in response.iter_content(chunk):

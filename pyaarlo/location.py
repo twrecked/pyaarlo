@@ -184,9 +184,15 @@ class ArloLocation(ArloObject):
         return self._device_ids
 
     @property
-    def mode(self):
+    def mode(self) -> str:
         """Returns the current mode."""
         return self._load(MODE_KEY, "unknown")
+
+    @mode.setter
+    def mode(self, id_or_name: str) -> None:
+        """Set the location mode (sync wrapper).
+        """
+        self._core.tasks.run_now(self.set_mode, id_or_name=id_or_name)
 
     async def set_mode(self, id_or_name):
         """Set the location mode.
@@ -254,12 +260,6 @@ class ArloLocation(ArloObject):
 
         self._save_and_do_callbacks(MODE_KEY, mode_id)
         self._save(MODE_REVISION_KEY, mode_revision)
-
-    @mode.setter
-    def mode(self, id_or_name):
-        """Set the location mode (sync wrapper).
-        """
-        self._core.tasks.run_now(self.set_mode, id_or_name=id_or_name)
 
     async def update_mode(self):
         """Check and update the base's current mode."""

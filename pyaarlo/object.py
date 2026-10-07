@@ -1,3 +1,4 @@
+from typing import Callable, Any
 from unidecode import unidecode
 
 from .constant import (
@@ -37,7 +38,7 @@ class ArloObject:
         self._type = type
         self._uid = uid
 
-        self._attr_cbs_ = []
+        self._attr_cbs_: list[Callable[..., Any]] = []
 
         # add a listener
         self._core.be.add_listener(self.device_id, self.unique_id, self._event_handler)

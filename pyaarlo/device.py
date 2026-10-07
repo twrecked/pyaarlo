@@ -1,4 +1,6 @@
 
+from typing import Any
+
 from .constant import (
     BATTERY_KEY,
     BATTERY_TECH_KEY,
@@ -38,7 +40,7 @@ class ArloDevice(ArloObject):
 
         # Activities. Used by camera for now but made available to all.
         # XXX maybe not...
-        self._activities = {}
+        self._activities: dict[str, Any] = {}
 
         # Build initial values. These can be at the top level or in the
         # properties dictionary.

@@ -38,8 +38,8 @@ class ArloSessionDetails:
         self.token64: str | None = None
         self.token_expires_in: int | None = None
         self.user_agent: str | None = None
-        self.headers: dict[str, str] = {}
-        self.auth_headers: dict[str, str] = {}
+        self.headers: dict[str, Any] = {}
+        self.auth_headers: dict[str, Any] = {}
 
         # Connection Objects.
         self.connection: Any = None
@@ -149,7 +149,7 @@ class ArloSession:
             pass
         self._debug(f"loading cookies={self.details.cookies}")
 
-    def auth_headers(self) -> dict[str, str]:
+    def auth_headers(self) -> dict[str, Any]:
         """Build headers needed for authentication phase.
 
         This list was determined by packet inspection when logging onto the
@@ -177,10 +177,10 @@ class ArloSession:
             # "Sec-Fetch-Dest": "empty",
             # "Sec-Fetch-Mode": "cors",
             # "Sec-Fetch-Site": "same-site",
-            "User-Agent": self.details.user_agent,
+            "User-Agent": self.details.user_agent or "",
             "X-Service-Version": "v3",
             "X-User-Device-Automation-Name": "QlJPV1NFUg==",
-            "X-User-Device-Id": self.details.device_id,
+            "X-User-Device-Id": self.details.device_id or "",
             "X-User-Device-Type": "BROWSER",
         }
 
@@ -192,7 +192,7 @@ class ArloSession:
 
         return self.details.auth_headers
 
-    def headers(self) -> dict[str, str]:
+    def headers(self) -> dict[str, Any]:
         """Build headers needed for post-authentication phase.
 
         This list was determined by packet inspection when logging onto the
@@ -209,7 +209,7 @@ class ArloSession:
             "Accept-Encoding": "gzip, deflate, br, zstd",
             "Accept-Language": "en-GB,en;q=0.9,en-US;q=0.8",
             "Auth-Version": "2",
-            "Authorization": self.details.token,
+            "Authorization": self.details.token or "",
             "Cache-Control": "no-cache",
             "Content-Type": "application/json; charset=utf-8;",
             # "Dnt": "1",
@@ -224,7 +224,7 @@ class ArloSession:
             # "Sec-Fetch-Dest": "empty",
             # "Sec-Fetch-Mode": "cors",
             # "Sec-Fetch-Site": "same-site",
-            "User-Agent": self.details.user_agent,
+            "User-Agent": self.details.user_agent or "",
         }
         return self.details.headers
 

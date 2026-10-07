@@ -273,7 +273,7 @@ class _SSE:
         # get stream, restart after requested seconds of inactivity or forced close
         try:
             # Fudge timeout for requests library.
-            timeout = self._session.cfg.stream_timeout
+            timeout: int | None = self._session.cfg.stream_timeout
             self._debug(f"starting stream with {timeout} timeout")
             if timeout == 0:
                 timeout = None

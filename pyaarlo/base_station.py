@@ -238,9 +238,15 @@ class ArloBaseStation(ArloDevice):
         return modes
 
     @property
-    def mode(self):
+    def mode(self) -> str:
         """Returns the current mode."""
         return self._load(MODE_KEY, "unknown")
+
+    @mode.setter
+    def mode(self, mode_name: str) -> None:
+        """Set the base station mode (sync wrapper).
+        """
+        self._core.tasks.run_now(self.set_mode, mode_name=mode_name)
 
     async def set_mode(self, mode_name):
         """Set the base station mode.
@@ -386,12 +392,6 @@ class ArloBaseStation(ArloDevice):
             self._core.log.warning(
                 "{0}: mode {1} is unrecognised".format(self.name, mode_name)
             )
-
-    @mode.setter
-    def mode(self, mode_name):
-        """Set the base station mode (sync wrapper).
-        """
-        self._core.tasks.run_now(self.set_mode, mode_name=mode_name)
 
     async def update_mode(self):
         """Check and update the base's current mode."""

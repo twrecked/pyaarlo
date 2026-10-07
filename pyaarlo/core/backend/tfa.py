@@ -21,7 +21,7 @@ from ...constant import (
 try:
     from curl_cffi.requests import AsyncSession as cffi_AsyncSession
 except ImportError:
-    cffi_AsyncSession = None
+    cffi_AsyncSession = None  # type: ignore[assignment, misc]
 
 
 class _TFABase:
@@ -262,7 +262,7 @@ class _TFARestAPI(_TFABase):
             self._debug("invalid config")
             return False
 
-        if cffi_AsyncSession:
+        if cffi_AsyncSession is not None:
             self._session = cffi_AsyncSession()
 
         self._debug("clearing")
@@ -364,7 +364,9 @@ class ArloTFA:
             self._factor_type = ""
     
     async def start(self) -> bool:
-        return await self._handler.start()
+        if self._handler is not None:
+            return await self._handler.start()
+        return False
     
     async def code(self) -> Union[str, None]:
         """Get the "otp" from the tfa source.
@@ -374,7 +376,9 @@ class ArloTFA:
          - None; meaning the tfa failed
          - an empty string which indicates "finishAuth" does the waiting
         """
-        return await self._handler.get()
+        if self._handler is not None:
+            return await self._handler.get()
+        return None
     
     @property
     def type(self) -> Union[str, None]:

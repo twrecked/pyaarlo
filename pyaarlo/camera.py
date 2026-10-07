@@ -73,11 +73,11 @@ class ArloCamera(ArloChildDevice):
         self._snapshot_time = the_epoch()
         self._stream_url = None
         # what user has requested locally
-        self._user_requests = set()
+        self._user_requests: set[str] = set()
         # what is keeping the stream open for us
-        self._local_users = set()
+        self._local_users: set[str] = set()
         # what is triggered from elsewhere
-        self._remote_users = set()
+        self._remote_users: set[str] = set()
 
         # default blank image when waiting for camera image to appear
         self._blank_image = base64.standard_b64decode(BLANK_IMAGE)

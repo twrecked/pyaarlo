@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -26,11 +28,18 @@ class ArloCore:
     conciously-uncoupling from them.
     """
 
-    def __init__(self):
-        self.be: ArloBackEnd | None = None
-        self.tasks: ArloTaskManager | None = None
-        self.cfg: ArloCfg | None = None
-        self.log: ArloLogger | None = None
-        self.st: ArloStorage | None = None
+    def __init__(
+        self,
+        be: ArloBackEnd | None = None,
+        tasks: ArloTaskManager | None = None,
+        cfg: ArloCfg | None = None,
+        log: ArloLogger | None = None,
+        st: ArloStorage | None = None,
+    ):
+        self.be: ArloBackEnd = be  # type: ignore[assignment]
+        self.tasks: ArloTaskManager = tasks  # type: ignore[assignment]
+        self.cfg: ArloCfg = cfg  # type: ignore[assignment]
+        self.log: ArloLogger = log  # type: ignore[assignment]
+        self.st: ArloStorage = st  # type: ignore[assignment]
 
 

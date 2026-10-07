@@ -6,7 +6,7 @@ import datetime
 import pprint
 import threading
 import time
-from typing import Any, List, Union, override
+from typing import Any, List, Union
 
 from .constant import (
     BLANK_IMAGE,
@@ -228,7 +228,6 @@ class PyArlo:
         _ = self._core.tasks.run_every(self._fast_refresh, FAST_REFRESH_INTERVAL)
         _ = self._core.tasks.run_every(self._slow_refresh, SLOW_REFRESH_INTERVAL)
 
-    @override
     def __repr__(self):
         # Representation string of object.
         return "<{0}: {1}>".format(self.__class__.__name__, self._core.cfg.name)
@@ -421,7 +420,8 @@ class PyArlo:
         await self._refresh_modes()
         await self._refresh_ambient_sensors()
         await self._refresh_doorbells()
-        await self._objs.ml.load()
+        if self._objs.ml is not None:
+            await self._objs.ml.load()
         await self._refresh_camera_thumbnails(wait=wait)
         await self._refresh_camera_media(wait=wait)
 
@@ -429,7 +429,8 @@ class PyArlo:
         """Stop connection to Arlo and, optionally, logout."""
         self._core.st.save()
         self._core.tasks.stop()
-        self._objs.ml.stop()
+        if self._objs.ml is not None:
+            self._objs.ml.stop()
         await self._core.be.stop(logout=logout)
 
     @property
@@ -524,13 +525,21 @@ class PyArlo:
         Note:
             This does not include any locations.
         """
-        return self.cameras + self.doorbells + self.lights + self.base_stations + self.sensors
+        devices: list[ArloDevice] = [
+            *self.cameras,
+            *self.doorbells,
+            *self.lights,
+            *self.base_stations,
+            *self.sensors,
+        ]
+        return devices
 
     @property
     def all_objects(self) -> List[ArloObject]:
         """Return all known objects.
         """
-        return self.all_devices + self.locations
+        objects: list[ArloObject] = [*self.all_devices, *self.locations]
+        return objects
 
     @property
     def blank_image(self):
@@ -709,46 +718,34 @@ class PyArlo:
     def lookup_device_by_id(self, device_id) -> Union[ArloDevice, None]:
         """Retrieves a device (base station, camera, doorbell, light or sensor) by its ID.
         """
-        dev = self.lookup_base_station_by_id(device_id)
-        if dev is None:
-            dev = self.lookup_camera_by_id(device_id)
-        if dev is None:
-            dev = self.lookup_doorbell_by_id(device_id)
-        if dev is None:
-            dev = self.lookup_light_by_id(device_id)
-        if dev is None:
-            dev = self.lookup_sensor_by_id(device_id)
-        return dev
+        return (
+            self.lookup_base_station_by_id(device_id)
+            or self.lookup_camera_by_id(device_id)
+            or self.lookup_doorbell_by_id(device_id)
+            or self.lookup_light_by_id(device_id)
+            or self.lookup_sensor_by_id(device_id)
+        )
 
     def lookup_device_by_name(self, name) -> Union[ArloDevice, None]:
         """Retrieves a device (base station, camera, doorbell, light or sensor) by its name.
         """
-        dev = self.lookup_base_station_by_name(name)
-        if dev is None:
-            dev = self.lookup_camera_by_name(name)
-        if dev is None:
-            dev = self.lookup_doorbell_by_name(name)
-        if dev is None:
-            dev = self.lookup_light_by_name(name)
-        if dev is None:
-            dev = self.lookup_sensor_by_name(name)
-        return dev
+        return (
+            self.lookup_base_station_by_name(name)
+            or self.lookup_camera_by_name(name)
+            or self.lookup_doorbell_by_name(name)
+            or self.lookup_light_by_name(name)
+            or self.lookup_sensor_by_name(name)
+        )
 
     def lookup_object_by_id(self, device_id) -> Union[ArloObject, None]:
         """Retrieves a device (base station, camera, doorbell, light, sensor or location) by its ID.
         """
-        obj = self.lookup_device_by_id(device_id)
-        if obj is None:
-            obj = self.lookup_location_by_id(device_id)
-        return obj
+        return self.lookup_device_by_id(device_id) or self.lookup_location_by_id(device_id)
 
     def lookup_object_by_name(self, name) -> Union[ArloObject, None]:
         """Retrieves a device (base station, camera, doorbell, light, sensor or location) by its name.
         """
-        dev = self.lookup_device_by_name(name)
-        if dev is None:
-            dev = self.lookup_location_by_id(name)
-        return dev
+        return self.lookup_device_by_name(name) or self.lookup_location_by_name(name)
 
     def inject_response(self, response):
         """Inject a raw JSON response (simulating a network packet) directly into the event stream.

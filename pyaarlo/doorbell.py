@@ -1,3 +1,5 @@
+from typing import Any
+
 from .constant import (
     BUTTON_PRESSED_KEY,
     CHIMES_KEY,
@@ -20,7 +22,7 @@ class ArloDoorBell(ArloChildDevice):
         self._motion_time_job = None
         self._ding_time_job = None
         self._has_motion_detect = False
-        self._chimes = {}
+        self._chimes: dict[str, Any] = {}
 
     def _motion_stopped(self):
         self._save_and_do_callbacks(MOTION_DETECTED_KEY, False)

@@ -11,7 +11,7 @@ import requests
 try:
     from curl_cffi.requests import AsyncSession as cffi_AsyncSession
 except ImportError:
-    cffi_AsyncSession = None
+    cffi_AsyncSession = None  # type: ignore[assignment, misc]
 
 # Technically, we should support streams that mix line endings.  This regex,
 # however, assumes that a system will provide consistent line endings.

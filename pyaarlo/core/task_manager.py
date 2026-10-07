@@ -1,4 +1,5 @@
 import asyncio
+import concurrent.futures
 import time
 import traceback
 from collections.abc import Callable
@@ -12,7 +13,7 @@ class ArloTaskManager:
 
     def __init__(self, log: ArloLogger) -> None:
         self._log: ArloLogger = log
-        self._tasks: dict[str, asyncio.Task[Any] | asyncio.Future[Any]] = {}
+        self._tasks: dict[str, asyncio.Task[Any] | concurrent.futures.Future[Any]] = {}
         self._counter: int = 0
         self._loop = asyncio.get_running_loop()
         self._log.vdebug("tasks: manager created (asyncio-based)")
@@ -66,7 +67,7 @@ class ArloTaskManager:
             _ = self._tasks.pop(task_id, None)
             self._log.vdebug(f"tasks: periodic-task-completed/cancelled (ID: {task_id})")
 
-    def _submit(self, coro: Any) -> asyncio.Task[Any] | asyncio.Future[Any]:
+    def _submit(self, coro: Any) -> asyncio.Task[Any] | concurrent.futures.Future[Any]:
         """Safely submit a coroutine to the event loop from any thread."""
         try:
             # If we are in the thread running the loop, we can use create_task

@@ -25,12 +25,14 @@ class SecurityUtils:
     def public_key(self) -> str:
         if self.__public_key is None:
             self.__generate_keypair()
+        assert self.__public_key is not None
         return self.__public_key
 
     @property
     def private_key(self) -> str:
         if self.__private_key is None:
             self.__generate_keypair()
+        assert self.__private_key is not None
         return self.__private_key
 
     @property
