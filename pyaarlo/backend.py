@@ -302,7 +302,7 @@ class ArloBackEnd(object):
     ):
         code, body = self._request_tuple(path=path, method=method, params=params, headers=headers,
                                          stream=stream, raw=raw, timeout=timeout, host=host, authpost=authpost, cookies=cookies)
-        return body
+        return body if code == 200 else None
 
     def gen_trans_id(self, trans_type=TRANSID_PREFIX):
         return trans_type + "!" + str(uuid.uuid4())
@@ -748,6 +748,21 @@ class ArloBackEnd(object):
             return tfa_type
 
     def _update_auth_info(self, body):
+        auth_data = body.get("accessToken", body)
+
+        # Trap disabled MFA state and mark auth complete to skip 2FA
+        mfa_state = str(auth_data.get("MFA_State", body.get("MFA_State", ""))).upper()
+        mfa = auth_data.get("mfa", body.get("mfa", None))
+        if mfa_state in ("DISABLED", "NONE") or mfa is False:
+            self.debug(
+                "MFA is disabled (MFA_State={}, mfa={}), skipping 2FA".format(
+                    mfa_state, mfa
+                )
+            )
+            body["authCompleted"] = True
+            if "accessToken" in body:
+                body["accessToken"]["authCompleted"] = True
+
         if "accessToken" in body:
             body = body["accessToken"]
         self._token = body["token"]
@@ -885,11 +900,15 @@ class ArloBackEnd(object):
                 self._needs_pairing = False
                 factor_id = body["factorId"]
             else:
+                if isinstance(body, str) and "disabled" in body.lower():
+                    self.debug("MFA disabled by service, skipping 2FA")
+                    return AuthResult.SUCCESS
+
                 self._needs_pairing = True
                 factors = self.auth_get(
                     AUTH_GET_FACTORS + "?data = {}".format(int(time.time())), {}, headers
                 )
-                if factors is None:
+                if not isinstance(factors, dict) or "items" not in factors:
                     self._arlo.error("login failed: 2fa: no secondary choices available")
                     return AuthResult.FAILED
 
