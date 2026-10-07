@@ -11,7 +11,10 @@ from pyaarlo import (
     ArloLogger,
     ArloObjects,
     ArloStorage,
+    PyArlo,
 )
+from pyaarlo.camera import ArloCamera
+from pyaarlo.types import ArloTypes
 
 @pytest.fixture
 def core_factory():
@@ -130,3 +133,54 @@ async def test_doorbell_02(core_factory, objs):
 
     # Clear out globals.
     objs.base_stations = []
+
+@pytest.mark.asyncio
+async def test_wired_floodlight_flw2001(core_factory, objs):
+    core = core_factory()
+    camera_device = {
+        "deviceId": "FLOODLIGHT-01-ID",
+        "deviceName": "Driveway Floodlight",
+        "deviceType": "camera",
+        "modelId": "FLW2001",
+        "parentId": "FLOODLIGHT-01-ID",
+        "uniqueId": "FLOODLIGHT-01-UID",
+        "state": "provisioned",
+        "properties": {
+            "activityState": "idle",
+            "batteryLevel": 100,
+            "signalStrength": 4,
+        },
+    }
+    cam = ArloCamera("Driveway Floodlight", core, objs, camera_device)
+    assert cam.model_id == "FLW2001"
+    assert ArloTypes.can_be_own_base_station("FLW2001") is True
+    assert cam.has_capability("floodlight") is True
+    assert cam.has_capability("sirenState") is True
+    assert cam.siren_state == "off"
+
+@pytest.mark.asyncio
+async def test_extra_device_states_filtering(core_factory, objs):
+    devices = [
+        {"deviceId": "CAM-01", "deviceName": "Active Cam", "deviceType": "camera", "modelId": "VMC4040", "state": "provisioned"},
+        {"deviceId": "CAM-02", "deviceName": "Deactivated Cam", "deviceType": "camera", "modelId": "VMC4040", "state": "deactivated"},
+    ]
+
+    # 1. Without extra_device_states: CAM-02 is skipped
+    pyarlo_default = PyArlo.__new__(PyArlo)
+    pyarlo_default._core = core_factory()
+    pyarlo_default._devices = devices
+    pyarlo_default._objs = ArloObjects()
+    pyarlo_default.info = lambda *args: None
+    pyarlo_default._build_objects()
+    assert len(pyarlo_default._objs.cameras) == 1
+    assert pyarlo_default._objs.cameras[0].name == "Active Cam"
+
+    # 2. With extra_device_states=["deactivated"]: CAM-02 is accepted
+    pyarlo_extra = PyArlo.__new__(PyArlo)
+    pyarlo_extra._core = core_factory()
+    pyarlo_extra._core.cfg = ArloCfg(pyarlo_extra._core.log, extra_device_states=["deactivated"])
+    pyarlo_extra._devices = devices
+    pyarlo_extra._objs = ArloObjects()
+    pyarlo_extra.info = lambda *args: None
+    pyarlo_extra._build_objects()
+    assert len(pyarlo_extra._objs.cameras) == 2

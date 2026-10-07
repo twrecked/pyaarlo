@@ -7,6 +7,7 @@ from .constant import (
     MODEL_ESSENTIAL_INDOOR_GEN2_2K,
     MODEL_ESSENTIAL_INDOOR_GEN2_HD,
     MODEL_PRO_3_FLOODLIGHT,
+    MODEL_WIRED_FLOODLIGHT,
     MODEL_PRO_4,
     MODEL_PRO_5,
     MODEL_PRO_6,
@@ -57,6 +58,7 @@ class ArloTypes:
         return model_id.startswith((
             MODEL_WIRED_VIDEO_DOORBELL,
             MODEL_PRO_3_FLOODLIGHT,
+            MODEL_WIRED_FLOODLIGHT,
             MODEL_PRO_4,
             MODEL_PRO_5,
             MODEL_PRO_6,
