@@ -241,6 +241,18 @@ class ArloSession:
          - our web id
          - our subscription id
         """
+        auth_data = body.get("accessToken", body)
+
+        # Trap disabled MFA state and mark auth complete to skip 2FA
+        mfa_state = str(auth_data.get("MFA_State", body.get("MFA_State", ""))).upper()
+        mfa = auth_data.get("mfa", body.get("mfa", None))
+        if mfa_state in ("DISABLED", "NONE") or mfa is False:
+            self._debug(
+                f"MFA is disabled (MFA_State={mfa_state}, mfa={mfa}), skipping 2FA"
+            )
+            body["authCompleted"] = True
+            if "accessToken" in body and isinstance(body["accessToken"], dict):
+                body["accessToken"]["authCompleted"] = True
 
         # If we have this we have to drop down a level.
         if "accessToken" in body:
@@ -412,6 +424,6 @@ class ArloSession:
     ):
         code, body = await self.request_tuple(path=path, method=method, params=params, headers=headers,
                                               stream=stream, raw=raw, timeout=timeout, host=host, authpost=authpost, cookies=cookies)
-        return body
+        return body if code == 200 else None
 
 

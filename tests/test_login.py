@@ -174,6 +174,114 @@ async def test_backend_revalidate_token_success(tmp_path):
         for call in rsps.calls:
             assert "/api/auth" not in call.request.url
 
+@pytest.mark.asyncio
+async def test_backend_login_mfa_disabled_by_service(tmp_path):
+    """Test login succeeds when MFA_State is DISABLED and authCompleted is False."""
+    log = ArloLogger(verbose=True)
+    cfg = ArloCfg(
+        log=log,
+        username="test@example.com",
+        password="test-password",
+        http_backend="requests",
+        storage_dir=str(tmp_path)
+    )
+    tasks = ArloTaskManager(log)
+    backend = ArloBackEnd(cfg, log, tasks)
+
+    with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps:
+        rsps.add(responses.OPTIONS, "https://ocapi-app.arlo.com/api/auth", status=200)
+        rsps.add(
+            responses.POST,
+            "https://ocapi-app.arlo.com/api/auth",
+            json={
+                "meta": {"code": 200},
+                "data": {
+                    "token": "token-mfa-disabled",
+                    "userId": "user-mfa-disabled",
+                    "expiresIn": 3600,
+                    "authCompleted": False,
+                    "MFA_State": "DISABLED",
+                    "mfa": False,
+                }
+            },
+            status=200
+        )
+        rsps.add(
+            responses.GET,
+            "https://ocapi-app.arlo.com/api/validateAccessToken",
+            json={"meta": {"code": 200}, "data": {"valid": True}},
+            status=200
+        )
+        rsps.add(
+            responses.GET,
+            "https://myapi.arlo.com/hmsweb/users/session/v3",
+            json={"meta": {"code": 200}, "data": {"userId": "user-mfa-disabled", "authenticated": True}},
+            status=200
+        )
+
+        await backend.connect()
+
+        assert backend.is_connected is True
+        assert backend._req.details.token == "token-mfa-disabled"
+
+@pytest.mark.asyncio
+async def test_backend_login_mfa_disabled_fallback_in_factor(tmp_path):
+    """Test login fallback when MFA disabled error (9306) is returned during factor check."""
+    log = ArloLogger(verbose=True)
+    cfg = ArloCfg(
+        log=log,
+        username="test@example.com",
+        password="test-password",
+        http_backend="requests",
+        storage_dir=str(tmp_path)
+    )
+    tasks = ArloTaskManager(log)
+    backend = ArloBackEnd(cfg, log, tasks)
+
+    with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps:
+        rsps.add(responses.OPTIONS, "https://ocapi-app.arlo.com/api/auth", status=200)
+        rsps.add(
+            responses.POST,
+            "https://ocapi-app.arlo.com/api/auth",
+            json={
+                "meta": {"code": 200},
+                "data": {
+                    "token": "token-factor-fallback",
+                    "userId": "user-factor-fallback",
+                    "expiresIn": 3600,
+                    "authCompleted": False,
+                }
+            },
+            status=200
+        )
+        # Factor check returns error indicating disabled
+        rsps.add(responses.OPTIONS, "https://ocapi-app.arlo.com/api/getFactorId", status=200)
+        rsps.add(
+            responses.POST,
+            "https://ocapi-app.arlo.com/api/getFactorId",
+            json={
+                "meta": {"code": 400, "error": 9306, "message": "Mfa disabled by service"}
+            },
+            status=200
+        )
+        rsps.add(
+            responses.GET,
+            "https://ocapi-app.arlo.com/api/validateAccessToken",
+            json={"meta": {"code": 200}, "data": {"valid": True}},
+            status=200
+        )
+        rsps.add(
+            responses.GET,
+            "https://myapi.arlo.com/hmsweb/users/session/v3",
+            json={"meta": {"code": 200}, "data": {"userId": "user-factor-fallback", "authenticated": True}},
+            status=200
+        )
+
+        await backend.connect()
+
+        assert backend.is_connected is True
+        assert backend._req.details.token == "token-factor-fallback"
+
 
 
 

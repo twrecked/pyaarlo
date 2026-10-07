@@ -384,7 +384,7 @@ class ArloBackEnd:
             },
             self._auth.headers
         )
-        if factors is None:
+        if not isinstance(factors, dict) or "items" not in factors:
             self._log.error("login failed: 2fa: no secondary choices available")
             return None
 
@@ -621,6 +621,13 @@ class ArloBackEnd:
             self._auth.needs_pairing = False
             self._auth.factor_id = body["factorId"]
             return _AuthState.TRUSTED_AUTH
+
+        # Check if MFA is disabled by service
+        if (isinstance(body, str) and "disabled" in body.lower()) or (
+            isinstance(body, dict) and (body.get("error") == 9306 or "disabled" in str(body.get("message", "")).lower())
+        ):
+            self._debug("auth: MFA disabled by service, skipping 2FA")
+            return _AuthState.VALIDATE_TOKEN
 
         # Look for a way to authenticate.
         return _AuthState.NEW_AUTH
