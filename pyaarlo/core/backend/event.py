@@ -18,7 +18,7 @@ from ...constant import (
     MQTT_PATH,
     SUBSCRIBE_PATH,
 )
-from ...utils.sseclient import SSEClient
+from ...utils.sseclient import SSEClient, AsyncSSEClient
 from ..cfg import ArloCfg
 from ..logger import ArloLogger
 from .session import ArloSessionDetails
@@ -55,9 +55,20 @@ class _EventSession:
         except RuntimeError:
             pass
 
+    def _is_running_in_loop(self) -> bool:
+        try:
+            return self.loop is not None and asyncio.get_running_loop() is self.loop
+        except RuntimeError:
+            return False
+
     def dispatch_event(self, response: dict[str, Any]) -> None:
         """Dispatch event back to the async loop."""
-        if self.loop:
+        if self._is_running_in_loop():
+            if asyncio.iscoroutinefunction(self.event_handler):
+                asyncio.create_task(self.event_handler(response))
+            else:
+                self.event_handler(response)
+        elif self.loop:
             _ = asyncio.run_coroutine_threadsafe(self._async_event_handler(response), self.loop)
         else:
             self.event_handler(response)
@@ -70,7 +81,14 @@ class _EventSession:
 
     def dispatch_connect(self) -> dict[str, Any]:
         """Dispatch connect signal and wait for result (needed by MQTT)."""
-        if self.loop:
+        if self._is_running_in_loop():
+            if asyncio.iscoroutinefunction(self.connect_handler):
+                asyncio.create_task(self.connect_handler())
+                return {"devices": []}
+            else:
+                res = self.connect_handler()
+                return res if isinstance(res, dict) else {"devices": []}
+        elif self.loop:
             future = asyncio.run_coroutine_threadsafe(self._async_connect_handler(), self.loop)
             try:
                 return future.result(timeout=30)
@@ -88,7 +106,12 @@ class _EventSession:
 
     def dispatch_reconnect(self) -> None:
         """Dispatch reconnect signal."""
-        if self.loop:
+        if self._is_running_in_loop():
+            if asyncio.iscoroutinefunction(self.reconnect_handler):
+                asyncio.create_task(self.reconnect_handler())
+            else:
+                self.reconnect_handler()
+        elif self.loop:
             _ = asyncio.run_coroutine_threadsafe(self._async_reconnect_handler(), self.loop)
         else:
             self.reconnect_handler()
@@ -106,6 +129,7 @@ class _MQTT:
         self._session: _EventSession = session
         self._client: mqtt.Client | None = None
         self._client_id: str | None = None
+        self._stop_event: asyncio.Event | None = None
 
     def _debug(self, msg: str) -> None:
         self._session.log.debug(f"{msg}")
@@ -163,11 +187,13 @@ class _MQTT:
         except json.decoder.JSONDecodeError as e:
             self._debug("reopening: json error " + str(e))
 
-    def stop(self) -> None:
+    async def stop(self) -> None:
+        if self._stop_event:
+            self._stop_event.set()
         if self._client:
             _ = self._client.disconnect()
 
-    def run(self) -> None:
+    async def run(self) -> None:
 
         try:
             self._debug("(re)starting mqtt event loop")
@@ -202,7 +228,14 @@ class _MQTT:
 
             # Connect.
             _ = self._client.connect(self._session.cfg.mqtt_host, port=self._session.cfg.mqtt_port, keepalive=60)
-            _ = self._client.loop_forever()
+            
+            # Start loop in a background thread as paho-mqtt is sync
+            self._client.loop_start()
+            
+            self._stop_event = asyncio.Event()
+            await self._stop_event.wait()
+            
+            self._client.loop_stop()
 
         except Exception as e:
             # self._log.warning('general exception ' + str(e))
@@ -212,7 +245,7 @@ class _MQTT:
                 )
             )
 
-    def update(self, **_kwargs: Any) -> None:
+    async def update(self, **_kwargs: Any) -> None:
         pass
 
 
@@ -220,17 +253,17 @@ class _SSE:
 
     def __init__(self, session: _EventSession) -> None:
         self._session: _EventSession = session
-        self._stream: SSEClient | None = None
+        self._stream: AsyncSSEClient | None = None
 
     def _debug(self, msg: str) -> None:
         self._session.log.debug(f"sse: {msg}")
 
-    def stop(self) -> None:
+    async def stop(self) -> None:
         self._debug("stopping")
         if self._stream:
-            self._stream.stop()
+            await self._stream.stop()
 
-    def run(self) -> None:
+    async def run(self) -> None:
         """Open and connect an SSE stream.
 
         It will wait for certain signals before moving into a connected
@@ -244,15 +277,16 @@ class _SSE:
             self._debug(f"starting stream with {timeout} timeout")
             if timeout == 0:
                 timeout = None
-            self._stream = SSEClient(
+            self._stream = AsyncSSEClient(
                 self._session.log,
                 self._session.cfg.host + SUBSCRIBE_PATH,
+                session=self._session.details.async_connection or self._session.details.connection,
                 headers=self._session.details.headers,
                 reconnect_cb=self._session.reconnect_handler,
                 timeout=timeout,
             )
 
-            for event in self._stream:
+            async for event in self._stream:
 
                 # stopped?
                 if event is None:
@@ -281,12 +315,6 @@ class _SSE:
                 self._debug("passing on packet")
                 self._session.dispatch_event(response)
 
-        except requests.exceptions.ConnectionError:
-            self._session.log.warning("event loop timeout")
-        except requests.exceptions.HTTPError:
-            self._session.log.warning("event loop closed by server")
-        except AttributeError as e:
-            self._session.log.warning("forced close " + str(e))
         except Exception as e:
             # self._session.log.warning('general exception ' + str(e))
             self._session.log.error(
@@ -335,18 +363,23 @@ class ArloEvent:
         # Ready to run.
         self._state = _EventState.READY
 
-    def run(self) -> None:
+    async def run(self) -> None:
         """Call the back end run function.
         """
-        if self._state != _EventState.READY:
+        if self._state == _EventState.STARTING:
+            self.setup()
+        elif self._state != _EventState.READY:
             self._session.log.warning(f"event is not ready in {self._state}")
             return
 
         if self._device:
             self._state = _EventState.RUNNING
-            self._device.run()
+            try:
+                await self._device.run()
+            finally:
+                self._state = _EventState.STARTING
 
-    def stop(self) -> None:
+    async def stop(self) -> None:
         """Ask the event stream to stop.
         """
         if self._state != _EventState.RUNNING:
@@ -355,7 +388,7 @@ class ArloEvent:
 
         self._state = _EventState.STARTING
         if self._device:
-            self._device.stop()
+            await self._device.stop()
 
     async def update(self, **kwargs: Any) -> None:
         """Update the event stream.

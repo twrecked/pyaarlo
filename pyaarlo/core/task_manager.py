@@ -48,20 +48,23 @@ class ArloTaskManager:
         self, task_id: str, seconds: float, cb: Callable[..., Any], args: dict[str, Any]
     ) -> None:
         """Execute the task periodically."""
-        while True:
-            await asyncio.sleep(seconds)
-            # Periodic tasks shouldn't pop themselves from self._tasks until explicitly cancelled
-            try:
-                if asyncio.iscoroutinefunction(cb):
-                    await cb(**args)
-                else:
-                    await self._loop.run_in_executor(None, lambda: cb(**args))
-            except Exception as e:
-                self._log.error(
-                    f"tasks: periodic-task-error={type(e).__name__}\n{traceback.format_exc()}"
-                )
+        try:
+            while True:
+                await asyncio.sleep(seconds)
+                # Periodic tasks shouldn't pop themselves from self._tasks until explicitly cancelled
+                try:
+                    if asyncio.iscoroutinefunction(cb):
+                        await cb(**args)
+                    else:
+                        await self._loop.run_in_executor(None, lambda: cb(**args))
+                except Exception as e:
+                    self._log.error(
+                        f"tasks: periodic-task-error={type(e).__name__}\n{traceback.format_exc()}"
+                    )
+                self._log.vdebug(f"tasks: periodic-task-iteration (ID: {task_id})")
+        finally:
             _ = self._tasks.pop(task_id, None)
-            self._log.vdebug(f"tasks: periodic-task-completed (ID: {task_id})")
+            self._log.vdebug(f"tasks: periodic-task-completed/cancelled (ID: {task_id})")
 
     def _submit(self, coro: Any) -> asyncio.Task[Any] | asyncio.Future[Any]:
         """Safely submit a coroutine to the event loop from any thread."""

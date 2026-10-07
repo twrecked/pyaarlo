@@ -43,6 +43,7 @@ class ArloSessionDetails:
 
         # Connection Objects.
         self.connection: Any = None
+        self.async_connection: Any = None
         self.cookies: LWPCookieJar | None = None
 
 
@@ -77,7 +78,7 @@ class ArloSession:
         now = time_to_arlotime()
         return f"{url}{sep}eventId={tid}&time={now}"
 
-    def load(self):
+    async def load(self):
 
         # Clear out what we have.
         self.details.device_id = None
@@ -89,20 +90,23 @@ class ArloSession:
         self.details.token64 = None
 
         try:
-            with open(self._save_filename, "rb") as dump:
-                self._save_info = pickle.load(dump)
+            def _do_load():
+                with open(self._save_filename, "rb") as dump:
+                    return pickle.load(dump)
 
-                # Read in values.
-                self.details.device_id = self._save_info["device_id"]
-                self.details.user_id = self._save_info["user_id"]
-                self.details.web_id = self._save_info["web_id"]
-                self.details.sub_id = self._save_info["sub_id"]
-                self.details.token = self._save_info["token"]
-                self.details.token_expires_in = int(self._save_info["expires_in"])
-                # Build remaining.
-                self.details.token64 = to_b64(self.details.token)
-                self._debug(f"load saved={self._save_info}")
-                self._debug(f"load toke64={self.details.token64}")
+            self._save_info = await asyncio.to_thread(_do_load)
+
+            # Read in values.
+            self.details.device_id = self._save_info["device_id"]
+            self.details.user_id = self._save_info["user_id"]
+            self.details.web_id = self._save_info["web_id"]
+            self.details.sub_id = self._save_info["sub_id"]
+            self.details.token = self._save_info["token"]
+            self.details.token_expires_in = int(self._save_info["expires_in"])
+            # Build remaining.
+            self.details.token64 = to_b64(self.details.token)
+            self._debug(f"load saved={self._save_info}")
+            self._debug(f"load toke64={self.details.token64}")
 
         except Exception:
             self._debug("session file not read")
@@ -110,33 +114,37 @@ class ArloSession:
                 "version": "2",
             }
 
-    def save(self):
+    async def save(self):
         try:
-            with open(self._save_filename, "wb") as dump:
-                self._save_info = {
-                    "version": "2",
-                    "device_id": self.details.device_id,
-                    "user_id": self.details.user_id,
-                    "web_id": self.details.web_id,
-                    "sub_id": self.details.sub_id,
-                    "token": self.details.token,
-                    "expires_in": str(self.details.token_expires_in),
-                }
-                # noinspection PyTypeChecker
-                pickle.dump(self._save_info, dump)
-                self._debug(f"save session_info={self._save_info}")
+            def _do_save():
+                with open(self._save_filename, "wb") as dump:
+                    save_info = {
+                        "version": "2",
+                        "device_id": self.details.device_id,
+                        "user_id": self.details.user_id,
+                        "web_id": self.details.web_id,
+                        "sub_id": self.details.sub_id,
+                        "token": self.details.token,
+                        "expires_in": str(self.details.token_expires_in),
+                    }
+                    # noinspection PyTypeChecker
+                    pickle.dump(save_info, dump)
+                    return save_info
+
+            self._save_info = await asyncio.to_thread(_do_save)
+            self._debug(f"save session_info={self._save_info}")
         except Exception as e:
             self._debug(f"session file not written {str(e)}")
 
-    def save_cookies(self):
+    async def save_cookies(self):
         if self.details.cookies is not None:
             self._debug(f"saving-cookies={self.details.cookies}")
-            self.details.cookies.save(ignore_discard=True)
+            await asyncio.to_thread(self.details.cookies.save, ignore_discard=True)
 
-    def load_cookies(self):
+    async def load_cookies(self):
         self.details.cookies = LWPCookieJar(self._cfg.cookies_file)
         try:
-            self.details.cookies.load()
+            await asyncio.to_thread(self.details.cookies.load)
         except Exception as _e:
             pass
         self._debug(f"loading cookies={self.details.cookies}")
@@ -279,36 +287,67 @@ class ArloSession:
             self._vdebug("request-params=\n{}".format(pprint.pformat(params)))
             self._vdebug("request-headers=\n{}".format(pprint.pformat(headers)))
 
-            # Use to_thread to keep cloudscraper (which is blocking) from blocking the event loop
-            def _do_request():
-                if method == "GET":
-                    r = self.details.connection.get(
-                        url,
-                        params=params,
-                        headers=headers,
-                        stream=stream,
-                        timeout=timeout,
-                        cookies=cookies,
-                    )
-                    if stream is True:
-                        return 200, r
-                elif method == "PUT":
-                    r = self.details.connection.put(
-                        url, json=params, headers=headers, timeout=timeout, cookies=cookies,
-                    )
-                elif method == "POST":
-                    r = self.details.connection.post(
-                        url, json=params, headers=headers, timeout=timeout, cookies=cookies,
-                    )
-                elif method == "OPTIONS":
-                    self.details.connection.options(
-                        url, json=params, headers=headers, timeout=timeout
-                    )
-                    return 200, None
-                return r
-
             async with self._lock:
-                r_or_tuple = await asyncio.get_running_loop().run_in_executor(None, _do_request)
+                if self.details.async_connection:
+                    if method == "GET":
+                        r = await self.details.async_connection.get(
+                            url,
+                            params=params,
+                            headers=headers,
+                            stream=stream,
+                            timeout=timeout,
+                            cookies=cookies,
+                        )
+                        if stream is True:
+                            r_or_tuple = 200, r
+                        else:
+                            r_or_tuple = r
+                    elif method == "PUT":
+                        r_or_tuple = await self.details.async_connection.put(
+                            url, json=params, headers=headers, timeout=timeout, cookies=cookies,
+                        )
+                    elif method == "POST":
+                        r_or_tuple = await self.details.async_connection.post(
+                            url, json=params, headers=headers, timeout=timeout, cookies=cookies,
+                        )
+                    elif method == "OPTIONS":
+                        await self.details.async_connection.options(
+                            url, json=params, headers=headers, timeout=timeout
+                        )
+                        r_or_tuple = 200, None
+                    else:
+                        r_or_tuple = 500, None
+                else:
+                    # Use run_in_executor to keep cloudscraper (which is blocking) from blocking the event loop
+                    def _do_request():
+                        if method == "GET":
+                            r = self.details.connection.get(
+                                url,
+                                params=params,
+                                headers=headers,
+                                stream=stream,
+                                timeout=timeout,
+                                cookies=cookies,
+                            )
+                            if stream is True:
+                                return 200, r
+                        elif method == "PUT":
+                            r = self.details.connection.put(
+                                url, json=params, headers=headers, timeout=timeout, cookies=cookies,
+                            )
+                        elif method == "POST":
+                            r = self.details.connection.post(
+                                url, json=params, headers=headers, timeout=timeout, cookies=cookies,
+                            )
+                        elif method == "OPTIONS":
+                            self.details.connection.options(
+                                url, json=params, headers=headers, timeout=timeout
+                            )
+                            return 200, None
+                        return r
+
+                    r_or_tuple = await asyncio.get_running_loop().run_in_executor(None, _do_request)
+
             if isinstance(r_or_tuple, tuple):
                 return r_or_tuple
             r = r_or_tuple

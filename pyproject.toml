@@ -1,0 +1,11 @@
+[tool.basedpyright]
+include = ["pyaarlo", "bin", "tests", "examples"]
+exclude = ["**/__pycache__"]
+typeCheckingMode = "recommended"
+pythonPlatform = "Linux"
+reportOptionalMemberAccess = "none"
+reportOptionalIterable = "none"
+reportDeprecated = "none"
+reportExplicitAny = "none"
+reportAny = "none"
+reportUnannotatedClassAttribute = "none"

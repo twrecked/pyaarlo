@@ -3,20 +3,25 @@ from __future__ import annotations
 import email
 import imaplib
 import re
-import requests
+import asyncio
 import ssl
 import time
+import requests
 
 from typing import Union
 
 from ..cfg import ArloCfg
 from ..logger import ArloLogger
-
 from ...constant import (
     TFA_CONSOLE_SOURCE,
     TFA_IMAP_SOURCE,
     TFA_REST_API_SOURCE,
 )
+
+try:
+    from curl_cffi.requests import AsyncSession as cffi_AsyncSession
+except ImportError:
+    cffi_AsyncSession = None
 
 
 class _TFABase:
@@ -32,13 +37,13 @@ class _TFABase:
     def _debug(self, msg):
         self._log.debug(f"{self._prefix}: {msg}")
 
-    def start(self) -> bool:
+    async def start(self) -> bool:
         return True
 
-    def get(self) -> Union[str, None]:
+    async def get(self) -> Union[str, None]:
         return None
 
-    def stop(self):
+    async def stop(self):
         pass
 
 
@@ -50,15 +55,15 @@ class _TFAConsole(_TFABase):
     def __init__(self, cfg: ArloCfg, log: ArloLogger):
         super().__init__(cfg, log, "2fa-console")
 
-    def start(self):
+    async def start(self):
         self._debug("starting")
         return True
 
-    def get(self):
+    async def get(self):
         self._debug("checking")
-        return input("Enter Code: ")
+        return await asyncio.to_thread(input, "Enter Code: ")
 
-    def stop(self):
+    async def stop(self):
         self._debug("stopping")
 
 
@@ -70,15 +75,15 @@ class _TFAPush(_TFABase):
     def __init__(self, cfg: ArloCfg, log: ArloLogger):
         super().__init__(cfg, log, "2fa-push")
 
-    def start(self):
+    async def start(self):
         self._debug("starting")
         return True
 
-    def get(self):
+    async def get(self):
         self._debug("checking")
         return ""
 
-    def stop(self):
+    async def stop(self):
         self._debug("stopping")
 
 
@@ -96,12 +101,12 @@ class _TFAImap(_TFABase):
         self._old_ids = None
         self._new_ids = None
 
-    def start(self):
+    async def start(self):
         self._debug("starting")
 
         # clean up
         if self._imap is not None:
-            self.stop()
+            await self.stop()
 
         try:
             # allow default ciphers to be specified
@@ -113,24 +118,28 @@ class _TFAImap(_TFABase):
             else:
                 ctx = None
 
-            self._imap = imaplib.IMAP4_SSL(self._cfg.tfa_host, port=self._cfg.tfa_port, ssl_context=ctx)
-            if self._cfg.verbose:
-                self._imap.debug = 4
-            res, status = self._imap.login(
-                self._cfg.tfa_username, self._cfg.tfa_password
-            )
-            if res.lower() != "ok":
-                self._debug("imap login failed")
-                return False
-            res, status = self._imap.select(mailbox='INBOX', readonly=True)
-            if res.lower() != "ok":
-                self._debug("imap select failed")
-                return False
-            res, self._old_ids = self._imap.search(
-                None, "FROM", "do_not_reply@arlo.com"
-            )
-            if res.lower() != "ok":
-                self._debug("imap search failed")
+            def _do_login():
+                imap = imaplib.IMAP4_SSL(self._cfg.tfa_host, port=self._cfg.tfa_port, ssl_context=ctx)
+                if self._cfg.verbose:
+                    imap.debug = 4
+                res, status = imap.login(
+                    self._cfg.tfa_username, self._cfg.tfa_password
+                )
+                if res.lower() != "ok":
+                    return None, "login failed"
+                res, status = imap.select(mailbox='INBOX', readonly=True)
+                if res.lower() != "ok":
+                    return None, "select failed"
+                res, old_ids = imap.search(
+                    None, "FROM", "do_not_reply@arlo.com"
+                )
+                if res.lower() != "ok":
+                    return None, "search failed"
+                return imap, old_ids
+
+            self._imap, self._old_ids = await asyncio.to_thread(_do_login)
+            if self._imap is None:
+                self._debug(f"imap login/setup failed: {self._old_ids}")
                 return False
         except Exception as e:
             self._log.error(f"imap connection failed{str(e)}")
@@ -138,12 +147,9 @@ class _TFAImap(_TFABase):
 
         self._new_ids = self._old_ids
         self._debug("old-ids={}".format(self._old_ids))
-        if res.lower() == "ok":
-            return True
+        return True
 
-        return False
-
-    def get(self):
+    async def get(self):
         self._debug("checking")
 
         # give tfa_total_timeout seconds for email to arrive
@@ -152,16 +158,20 @@ class _TFAImap(_TFABase):
 
             # wait a short while, stop after a total timeout
             # OK to do on first run gives email time to arrive
-            time.sleep(self._cfg.tfa_timeout)
+            await asyncio.sleep(self._cfg.tfa_timeout)
             if time.time() > (start + self._cfg.tfa_total_timeout):
                 return None
 
             try:
                 # grab new email ids
-                self._imap.check()
-                res, self._new_ids = self._imap.search(
-                    None, "FROM", "do_not_reply@arlo.com"
-                )
+                def _do_check():
+                    self._imap.check()
+                    res, new_ids = self._imap.search(
+                        None, "FROM", "do_not_reply@arlo.com"
+                    )
+                    return res, new_ids
+
+                res, self._new_ids = await asyncio.to_thread(_do_check)
                 self._debug("new-ids={}".format(self._new_ids))
                 if self._new_ids == self._old_ids:
                     self._debug("no change in emails")
@@ -180,8 +190,11 @@ class _TFAImap(_TFABase):
                     # New message. Look at all the parts and try to grab the code, if we catch an exception
                     # just move onto the next part.
                     self._debug("new-msg={}".format(msg_id))
-                    res, parts = self._imap.fetch(msg_id, "(BODY.PEEK[])")
-                    # res, parts = self._imap.fetch(msg_id, "(RFC822)")
+                    
+                    def _do_fetch():
+                        return self._imap.fetch(msg_id, "(BODY.PEEK[])")
+                    
+                    res, parts = await asyncio.to_thread(_do_fetch)
 
                     for msg in parts:
                         try:
@@ -196,7 +209,7 @@ class _TFAImap(_TFABase):
                                     try:
                                         body_text = payload.decode(charset, errors="replace")
                                     except Exception as e:
-                                        self.debug(f"decode failed: {e}")
+                                        self._debug(f"decode failed: {e}")
                                         continue
                                     for line in body_text.splitlines():
                                         # match code in email, this might need some work if the email changes
@@ -218,11 +231,17 @@ class _TFAImap(_TFABase):
 
         return None
 
-    def stop(self):
+    async def stop(self):
         self._debug("stopping")
 
-        self._imap.close()
-        self._imap.logout()
+        if self._imap:
+            def _do_logout():
+                try:
+                    self._imap.close()
+                    self._imap.logout()
+                except Exception:
+                    pass
+            await asyncio.to_thread(_do_logout)
         self._imap = None
         self._old_ids = None
         self._new_ids = None
@@ -235,28 +254,37 @@ class _TFARestAPI(_TFABase):
 
     def __init__(self, cfg: ArloCfg, log: ArloLogger):
         super().__init__(cfg, log, "2fa-rest-api")
+        self._session: Union[cffi_AsyncSession, None] = None
 
-    def start(self):
+    async def start(self):
         self._debug("starting")
         if self._cfg.tfa_host is None or self._cfg.tfa_password is None:
             self._debug("invalid config")
             return False
 
+        if cffi_AsyncSession:
+            self._session = cffi_AsyncSession()
+
         self._debug("clearing")
-        response = requests.get(
-            "{}/clear?email={}&token={}".format(
+        url = "{}/clear?email={}&token={}".format(
                 self._cfg.tfa_host_with_scheme("https"),
                 self._cfg.tfa_username,
                 self._cfg.tfa_password,
-            ),
-            timeout=10,
-        )
-        if response.status_code != 200:
+            )
+        
+        if self._session:
+            response = await self._session.get(url, timeout=10)
+            status_code = response.status_code
+        else:
+            response = await asyncio.to_thread(requests.get, url, timeout=10)
+            status_code = response.status_code
+            
+        if status_code != 200:
             self._debug("possible problem clearing")
 
         return True
 
-    def get(self):
+    async def get(self):
         self._debug("checking")
 
         # give tfa_total_timeout seconds for email to arrive
@@ -265,30 +293,40 @@ class _TFARestAPI(_TFABase):
 
             # wait a short while, stop after a total timeout
             # OK to do on first run gives email time to arrive
-            time.sleep(self._cfg.tfa_timeout)
+            await asyncio.sleep(self._cfg.tfa_timeout)
             if time.time() > (start + self._cfg.tfa_total_timeout):
                 return None
 
             # Try for the token.
             self._debug("checking")
-            response = requests.get(
-                "{}/get?email={}&token={}".format(
+            url = "{}/get?email={}&token={}".format(
                     self._cfg.tfa_host_with_scheme("https"),
                     self._cfg.tfa_username,
                     self._cfg.tfa_password,
-                ),
-                timeout=10,
-            )
-            if response.status_code == 200:
-                code = response.json().get("data", {}).get("code", None)
+                )
+            
+            if self._session:
+                response = await self._session.get(url, timeout=10)
+                status_code = response.status_code
+                body = response.json() if status_code == 200 else {}
+            else:
+                response = await asyncio.to_thread(requests.get, url, timeout=10)
+                status_code = response.status_code
+                body = response.json() if status_code == 200 else {}
+                
+            if status_code == 200:
+                code = body.get("data", {}).get("code", None)
                 if code is not None:
                     self._debug("code={}".format(code))
                     return code
 
             self._debug("retrying")
 
-    def stop(self):
+    async def stop(self):
         self._debug("stopping")
+        if self._session:
+            await self._session.close()
+            self._session = None
 
 
 class ArloTFA:
@@ -309,6 +347,8 @@ class ArloTFA:
     def __init__(self, cfg: ArloCfg, log: ArloLogger):
         """Determine which tfa mechanism to use and set up the handlers if needed.
         """
+        self._cfg = cfg
+        self._log = log
         self._type: str = cfg.tfa_source
 
         self._handler: Union[_TFABase, None] = None
@@ -323,9 +363,10 @@ class ArloTFA:
             self._handler = _TFAPush(cfg, log)
             self._factor_type = ""
     
-        self._handler.start()
+    async def start(self) -> bool:
+        return await self._handler.start()
     
-    def code(self) -> Union[str, None]:
+    async def code(self) -> Union[str, None]:
         """Get the "otp" from the tfa source.
     
         This returns one of 3 things:
@@ -333,7 +374,7 @@ class ArloTFA:
          - None; meaning the tfa failed
          - an empty string which indicates "finishAuth" does the waiting
         """
-        return self._handler.get()
+        return await self._handler.get()
     
     @property
     def type(self) -> Union[str, None]:
@@ -343,8 +384,8 @@ class ArloTFA:
     def factor_type(self) -> str:
         return self._factor_type
     
-    def stop(self):
-        self._handler.stop()
+    async def stop(self):
+        await self._handler.stop()
         self._handler = None
         self._type = None
 

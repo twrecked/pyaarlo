@@ -98,12 +98,6 @@ class ArloBackEnd:
         self._callbacks = {}
         self._resource_types = DEFAULT_RESOURCES
 
-        # Restore the persistent session information.
-        self._req.load()
-        if self._req.details.device_id is None:
-            self._debug("created new user ID")
-            self._req.details.device_id = str(uuid.uuid4())
-
     def _debug(self, msg: str) -> None:
         self._log.debug(f"backend: {msg}")
 
@@ -305,7 +299,7 @@ class ArloBackEnd:
         self._debug("event re-connected")
 
     async def _event_reconnect(self):
-        self._event.stream.stop()
+        await self._event.stream.stop()
 
     async def _event_loop_stop(self):
         self._event.loop_exiting = True
@@ -348,7 +342,7 @@ class ArloBackEnd:
                 break
 
             self._debug("starting event device")
-            await asyncio.to_thread(self._event.stream.run)
+            await self._event.stream.run()
             self._debug("exited event device")
 
             # clear down and signal out
@@ -494,6 +488,7 @@ class ArloBackEnd:
         # the authentication proper. For example, capture the current state
         # of an inbox before emails are sent.
         self._auth.tfa_handler = ArloTFA(self._cfg, self._log)
+        await self._auth.tfa_handler.start()
 
         # Start authentication to send out code. Stop if this fails.
         await self._auth_options(AUTH_START_PATH, self._auth.headers)
@@ -506,7 +501,7 @@ class ArloBackEnd:
             self._auth.headers
         )
         if code != 200:
-            self._auth.tfa_handler.stop()
+            await self._auth.tfa_handler.stop()
             self._log.error(f"login failed: new start failed1: {code} - {body}")
             return _AuthState.FAILED
 
@@ -514,8 +509,8 @@ class ArloBackEnd:
         factor_auth_code = body["factorAuthCode"]
 
         # Get otp.
-        otp = await asyncio.get_running_loop().run_in_executor(None, self._auth.tfa_handler.code)
-        self._auth.tfa_handler.stop()
+        otp = await self._auth.tfa_handler.code()
+        await self._auth.tfa_handler.stop()
 
         if otp is None:
             self._log.error(f"login failed: 2fa: code retrieval failed")
@@ -656,13 +651,23 @@ class ArloBackEnd:
                 if self._auth.curves:
                     # Dummy clear of curves to indicate we tried this attempt
                     self._auth.curves = []
-                    
-                    self._debug("auth: using curl_cffi backend")
-                    from curl_cffi import requests as cffi_requests
-                    self._req.details.connection = cffi_requests.Session(impersonate=self._cfg.curl_cffi_impersonate)
-                    return True
+                    try:
+                        self._debug("auth: using curl_cffi backend")
+                        from curl_cffi.requests import Session as cffi_Session
+                        from curl_cffi.requests import AsyncSession as cffi_AsyncSession
+                        self._req.details.connection = cffi_Session(impersonate=self._cfg.curl_cffi_impersonate)
+                        self._req.details.async_connection = cffi_AsyncSession(impersonate=self._cfg.curl_cffi_impersonate)
+                        return True
+                    except Exception as e:
+                        self._log.warning(f"auth: failed to use curl_cffi backend: {e}")
 
-            else:
+            elif self._cfg.http_backend == "requests":
+                if self._auth.curves:
+                    self._auth.curves = []
+                    import requests
+                    self._debug("auth: using requests backend")
+                    self._req.details.connection = requests.Session()
+                    return True
                 # We still have a curve to try? Grab a connection using it.
                 if self._auth.curves:
                     curve = self._auth.curves.pop(0)
@@ -780,18 +785,18 @@ class ArloBackEnd:
         self._log.error(f"login failed: no more curves - possible cloudflare issue")
         return _AuthState.FAILED
 
-    def _auth_starting(self) -> _AuthState:
+    async def _auth_starting(self) -> _AuthState:
         """Clear auth state to a known starting point.
         """
         self._debug("auth: starting")
 
-        self._req.load_cookies()
+        await self._req.load_cookies()
         self._req.details.user_agent = self._cfg.user_agent_string()
         self._req.details.connection = None
         self._auth.factor_id = None
         self._auth.needs_pairing = True
         self._auth.attempt = 1
-        self._auth.curves = []
+        self._auth.curves = self._cfg.ecdh_curves
 
         return _AuthState.REVALIDATE_TOKEN
 
@@ -807,7 +812,7 @@ class ArloBackEnd:
 
         while self._auth.state != _AuthState.SUCCESS and self._auth.state != _AuthState.FAILED:
             if self._auth.state == _AuthState.STARTING:
-                self._auth.state = self._auth_starting()
+                self._auth.state = await self._auth_starting()
             if self._auth.state == _AuthState.REVALIDATE_TOKEN:
                 self._auth.state = await self._auth_revalidate_token()
             if self._auth.state == _AuthState.LOGIN:
@@ -830,8 +835,8 @@ class ArloBackEnd:
         # We are in a successful state so:
         #  - save the session for reloading
         #  - save the cookies for reloading
-        self._req.save()
-        self._req.save_cookies()
+        await self._req.save()
+        await self._req.save_cookies()
         return True
 
     def _session_connection(self) -> bool:
@@ -839,7 +844,10 @@ class ArloBackEnd:
         """
         self._debug("session: fixing connection")
 
-        self._req.details.connection.headers.update(self._req.headers())
+        headers = self._req.headers()
+        self._req.details.connection.headers.update(headers)
+        if self._req.details.async_connection:
+            self._req.details.async_connection.headers.update(headers)
         return True
 
     async def _session_v3_details(self) -> bool:
@@ -925,6 +933,13 @@ class ArloBackEnd:
         return trans_type + "!" + str(uuid.uuid4())
 
     async def connect(self):
+        # Restore the persistent session information.
+        await self._req.load()
+        await self._req.load_cookies()
+        if self._req.details.device_id is None:
+            self._debug("created new user ID")
+            self._req.details.device_id = str(uuid.uuid4())
+
         # Start the login
         self._logged_in = await self._login() and await self._session_finalize()
         if not self._logged_in:
@@ -960,7 +975,7 @@ class ArloBackEnd:
 
         await self._event_loop_stop()
         if self._event.stream is not None:
-            self._event.stream.stop()
+            await self._event.stream.stop()
         if self._event.loop_task:
             await self._event.loop_task
 
@@ -1125,3 +1140,8 @@ class ArloBackEnd:
 
     def ev_inject(self, response):
         self._event_run_callbacks(response)
+
+
+
+
+

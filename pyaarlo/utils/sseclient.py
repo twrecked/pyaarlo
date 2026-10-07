@@ -4,12 +4,172 @@ import re
 import time
 import warnings
 import socket
+import asyncio
 
 import requests
+
+try:
+    from curl_cffi.requests import AsyncSession as cffi_AsyncSession
+except ImportError:
+    cffi_AsyncSession = None
 
 # Technically, we should support streams that mix line endings.  This regex,
 # however, assumes that a system will provide consistent line endings.
 end_of_field = re.compile(r"\r\n\r\n|\r\r|\n\n")
+
+
+class AsyncSSEClient:
+    def __init__(
+        self,
+        log,
+        url,
+        last_id=None,
+        retry=3000,
+        session=None,
+        chunk_size=1024,
+        reconnect_cb=None,
+        **kwargs
+    ):
+        self.log = log
+        self.url = url
+        self.last_id = last_id
+        self.retry = retry
+        self.chunk_size = chunk_size
+        self.running = True
+        self.reconnect_cb = reconnect_cb
+
+        # Optional support for passing in a requests.Session()
+        self.session = session
+
+        # Any extra kwargs will be fed into the requests.get call later.
+        self.requests_kwargs = kwargs
+
+        # The SSE spec requires making requests with Cache-Control: nocache
+        if "headers" not in self.requests_kwargs:
+            self.requests_kwargs["headers"] = {}
+        self.requests_kwargs["headers"]["Cache-Control"] = "no-cache"
+
+        # The 'Accept' header is not required, but explicit > implicit
+        self.requests_kwargs["headers"]["Accept"] = "text/event-stream"
+
+        # Remove these.
+        self.requests_kwargs["headers"]["Content-Type"] = None
+        self.requests_kwargs["headers"]["host"] = None
+
+        # Keep data here as it streams in
+        self.buf = u""
+
+    async def stop(self):
+        self.debug("stop called")
+        self.running = False
+        if hasattr(self, "resp") and self.resp:
+            if getattr(self, "_is_async_session", False) and hasattr(self.resp, "close") and asyncio.iscoroutinefunction(self.resp.close):
+                await self.resp.close()
+            elif hasattr(self.resp, "close"):
+                await asyncio.to_thread(self.resp.close)
+
+    async def disconnect(self):
+        await self.stop()
+
+    async def _connect(self):
+        if self.last_id:
+            self.requests_kwargs["headers"]["Last-Event-ID"] = self.last_id
+
+        # Use session if set. Otherwise fall back to requests module.
+        is_async = (cffi_AsyncSession is not None and isinstance(self.session, cffi_AsyncSession)) or (
+            self.session is not None and asyncio.iscoroutinefunction(getattr(self.session, "get", None))
+        )
+        if is_async:
+            self._is_async_session = True
+            self.resp = await self.session.get(self.url, stream=True, **self.requests_kwargs)
+            self.resp_iterator = self.resp.iter_content(chunk_size=self.chunk_size)
+        else:
+            self._is_async_session = False
+            sess = self.session if self.session is not None else requests
+            def _do_get():
+                return sess.get(self.url, stream=True, **self.requests_kwargs)
+            self.resp = await asyncio.to_thread(_do_get)
+            self._sync_iterator = self.resp.iter_content(chunk_size=self.chunk_size)
+
+        if self.resp.status_code != 200:
+            self.log.error(f"sseclient: connect failed {self.resp.status_code}")
+
+    def _event_complete(self):
+        return re.search(end_of_field, self.buf) is not None
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if not hasattr(self, "resp"):
+            await self._connect()
+
+        encoding = getattr(self.resp, "encoding", None) or "utf-8"
+        decoder = codecs.getincrementaldecoder(encoding)(errors="replace")
+        while not self._event_complete():
+            try:
+                if self._is_async_session:
+                    next_chunk = await self.resp_iterator.__anext__()
+                else:
+                    def _get_next_chunk():
+                        try:
+                            return next(self._sync_iterator)
+                        except StopIteration:
+                            raise EOFError()
+                    next_chunk = await asyncio.to_thread(_get_next_chunk)
+
+                if not next_chunk:
+                    raise EOFError()
+                self.buf += decoder.decode(next_chunk)
+
+            except (
+                StopAsyncIteration,
+                EOFError,
+            ) as e:
+                if not self.running:
+                    self.debug("stopping #1")
+                    raise StopAsyncIteration
+
+                self.debug("error={}".format(type(e).__name__))
+                await asyncio.sleep(self.retry / 1000.0)
+                await self._connect()
+
+                # The SSE spec only supports resuming from a whole message, so
+                # if we have half a message we should throw it out.
+                head, sep, tail = self.buf.rpartition("\n")
+                self.buf = head + sep
+                continue
+            except Exception as e:
+                self.debug("exception={}".format(type(e).__name__))
+                if not self.running:
+                    raise StopAsyncIteration
+                await asyncio.sleep(self.retry / 1000.0)
+                await self._connect()
+                continue
+
+        if not self.running:
+            self.debug("stopping #2")
+            raise StopAsyncIteration
+
+        # Split the complete event (up to the end_of_field) into event_string,
+        # and retain anything after the current complete event in self.buf
+        # for next time.
+        (event_string, self.buf) = re.split(end_of_field, self.buf, maxsplit=1)
+        msg = Event.parse(event_string)
+
+        # If the server requests a specific retry delay, we need to honor it.
+        if msg.retry:
+            self.retry = msg.retry
+
+        # last_id should only be set if included in the message.  It's not
+        # forgotten if a message omits it.
+        if msg.id:
+            self.last_id = msg.id
+
+        return msg
+
+    def debug(self, msg):
+        self.log.debug(f"sseclient: {msg}")
 
 
 class SSEClient:

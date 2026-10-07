@@ -5,15 +5,82 @@ from datetime import datetime, timezone
 
 import requests
 
+try:
+    from curl_cffi.requests import AsyncSession as cffi_AsyncSession
+except ImportError:
+    cffi_AsyncSession = None
+
 
 async def http_get_async(url, filename=None):
     """Download HTTP data (async)."""
-    return await asyncio.get_running_loop().run_in_executor(None, http_get, url, filename)
+    if url is None:
+        return None
+
+    if cffi_AsyncSession:
+        async with cffi_AsyncSession() as session:
+            response = await session.get(url)
+            if response.status_code != 200:
+                return False if filename else None
+            content = response.content
+    else:
+        def _do_get():
+            try:
+                ret = requests.get(url)
+                if ret.status_code == 200:
+                    return ret.content
+            except Exception:
+                pass
+            return None
+        content = await asyncio.get_running_loop().run_in_executor(None, _do_get)
+
+    if content is None:
+        return False if filename else None
+
+    if filename is None:
+        return content
+
+    def _save_file():
+        with open(filename, "wb") as data:
+            data.write(content)
+    await asyncio.get_running_loop().run_in_executor(None, _save_file)
+    return True
 
 
 async def http_get_img_async(url, ignore_date=False):
     """Download HTTP image data (async)."""
-    return await asyncio.get_running_loop().run_in_executor(None, http_get_img, url, ignore_date)
+    if url is None:
+        return None, datetime.now().astimezone()
+
+    if cffi_AsyncSession:
+        async with cffi_AsyncSession() as session:
+            response = await session.get(url)
+            if response.status_code != 200:
+                return None, datetime.now().astimezone()
+            content = response.content
+            headers = response.headers
+    else:
+        def _do_get():
+            try:
+                ret = requests.get(url)
+                if ret.status_code == 200:
+                    return ret.content, ret.headers
+            except Exception:
+                pass
+            return None, {}
+        content, headers = await asyncio.get_running_loop().run_in_executor(None, _do_get)
+
+    if content is None:
+        return None, datetime.now().astimezone()
+
+    date = None
+    if not ignore_date:
+        date = headers.get("Last-Modified", None)
+        if date is not None:
+            date = httptime_to_datetime(date)
+    if date is None:
+        date = datetime.now().astimezone()
+
+    return content, date
 
 
 def utc_to_local(utc_dt):
@@ -120,17 +187,40 @@ def http_get_img(url, ignore_date=False):
     return ret.content, date
 
 
-def http_stream(url, chunk=4096):
+async def http_stream(url, chunk=4096):
     """Generate stream for a given record video.
 
     :param url: url of stream to read
     :param chunk: chunk bytes to read per time
-    :returns generator object
+    :returns async generator object
     """
-    ret = requests.get(url, stream=True)
-    ret.raise_for_status()
-    for data in ret.iter_content(chunk):
-        yield data
+    if cffi_AsyncSession:
+        async with cffi_AsyncSession() as session:
+            response = await session.get(url, stream=True)
+            async for data in response.iter_content(chunk):
+                yield data
+    else:
+        # Fallback to sync requests in thread pool if curl_cffi is not available
+        # This is tricky for a generator, but we can use a queue
+        queue = asyncio.Queue()
+
+        def _do_stream():
+            try:
+                ret = requests.get(url, stream=True)
+                ret.raise_for_status()
+                for data in ret.iter_content(chunk):
+                    asyncio.run_coroutine_threadsafe(queue.put(data), asyncio.get_running_loop())
+            except Exception:
+                pass
+            finally:
+                asyncio.run_coroutine_threadsafe(queue.put(None), asyncio.get_running_loop())
+
+        _ = asyncio.get_running_loop().run_in_executor(None, _do_stream)
+        while True:
+            data = await queue.get()
+            if data is None:
+                break
+            yield data
 
 
 def rgb_to_hex(rgb):

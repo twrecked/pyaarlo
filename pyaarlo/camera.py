@@ -56,7 +56,7 @@ from .constant import (
 from .core import ArloCore
 from .child_device import ArloChildDevice
 from .objects import ArloObjects
-from .utils import http_get, http_get_img, the_epoch, http_get_img_async, http_get_async
+from .utils import the_epoch, http_get_img_async, http_get_async
 from .capabilities import ArloCapabilities
 
 
@@ -1000,14 +1000,14 @@ class ArloCamera(ArloChildDevice):
             await asyncio.sleep(self._core.cfg.user_stream_delay)
         return active
 
-    def get_video(self):
+    async def get_video(self):
         """Download and return the last recorded video.
 
         **Note:** Prefer getting the url and downloading it yourself.
         """
         video = self.last_video
         if video is not None:
-            return http_get(video.video_url)
+            return await http_get_async(video.video_url)
         return None
 
     def stop_activity(self):
