@@ -247,7 +247,8 @@ class PyArlo:
             # Do we need to bother with this device?
             device_name = device.get("deviceName")
             device_state = device.get("state", "unknown").lower()
-            if device_state not in VALID_DEVICE_STATES:
+            valid_device_states = VALID_DEVICE_STATES + self._core.cfg.extra_device_states
+            if device_state not in valid_device_states:
                 self.info(f"skipping {device_name}: state is {device_state}")
                 continue
 

@@ -137,6 +137,17 @@ class ArloCfg:
         return cast(int, self._kw.get("max_days", 365))
 
     @property
+    def extra_device_states(self) -> list[str]:
+        # Additional device `state` values to treat as valid, on top of the
+        # built-in VALID_DEVICE_STATES. Lets users opt in to devices the legacy
+        # API reports with states like "deactivated" (see issue #199). Accepts a
+        # single string or a list; matching is case-insensitive.
+        states = self._kw.get("extra_device_states", [])
+        if isinstance(states, str):
+            states = [states]
+        return [str(s).lower() for s in states]
+
+    @property
     def db_motion_time(self) -> int:
         return cast(int, self._kw.get("db_motion_time", 30))
 

@@ -84,3 +84,13 @@ def test_host_42(log):
     assert cfg.host == "http://test.host.com"
     assert cfg.auth_host == "http://test.host.com"
     assert cfg.mqtt_host == "test.host.com"
+
+def test_extra_device_states(log):
+    cfg1 = ArloCfg(log=log)
+    assert cfg1.extra_device_states == []
+
+    cfg2 = ArloCfg(log=log, extra_device_states="deactivated")
+    assert cfg2.extra_device_states == ["deactivated"]
+
+    cfg3 = ArloCfg(log=log, extra_device_states=["Deactivated", "OFFLINE"])
+    assert cfg3.extra_device_states == ["deactivated", "offline"]
