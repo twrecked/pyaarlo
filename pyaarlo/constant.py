@@ -9,6 +9,7 @@ DEVICES_PATH = "/hmsweb/v2/users/devices"
 DEFINITIONS_PATH = "/hmsweb/users/automation/definitions"
 AUTOMATION_PATH = "/hmsweb/users/devices/automation/active"
 LIBRARY_PATH = "/hmsweb/users/library"
+FEED_METADATA_PATH_FORMAT = "/hmsfeeds/users/{0}/{1}/metadata"  # {0} is owner_id, {1} is location_id
 LOGIN_PATH = "/hmsweb/login/v2"
 SESSION_PATH = "/hmsweb/users/session/v3"
 LOGOUT_PATH = "/hmsweb/logout"
