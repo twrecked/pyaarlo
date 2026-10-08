@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+#
+# Negotiates a SIP/WebRTC call against one camera and prints Arlo's answer
+# SDP. This is a signaling-only example: pyaarlo's SIP client never touches
+# media, so you still need your own WebRTC stack (a browser, aiortc, go2rtc,
+# ...) to build the offer this script sends and to play the answer it gets
+# back. See `pyaarlo/sip.py` for why that split exists.
+#
+# Usage:
+#   ARLO_USERNAME=... ARLO_PASSWORD=... ./sip-stream <camera-name> [offer.sdp]
+#
+# With no offer file, it just prints whether the camera supports SIP
+# streaming and, if so, the ICE servers Arlo published for it - useful on
+# its own to check a given model/firmware before writing any WebRTC code.
+
+import logging
+import os
+import sys
+
+# for examples add pyaarlo install path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+import pyaarlo
+
+USERNAME = os.environ.get('ARLO_USERNAME', 'test.login@gmail.com')
+PASSWORD = os.environ.get('ARLO_PASSWORD', 'test-password')
+
+logging.basicConfig(level=logging.DEBUG,
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+_LOGGER = logging.getLogger('pyaarlo')
+
+if len(sys.argv) < 2:
+    print("usage: {} <camera-name> [offer.sdp]".format(sys.argv[0]))
+    sys.exit(1)
+camera_name = sys.argv[1]
+offer_file = sys.argv[2] if len(sys.argv) > 2 else None
+
+arlo = pyaarlo.PyArlo(username=USERNAME, password=PASSWORD,
+                      tfa_type='EMAIL', tfa_source='console',
+                      save_session=True, save_state=False, storage_dir='aarlo')
+if not arlo.is_connected:
+    print("failed to login({})".format(arlo.last_error))
+    sys.exit(1)
+
+camera = None
+for c in arlo.cameras:
+    if c.name == camera_name:
+        camera = c
+        break
+if camera is None:
+    print("camera not found: {}".format(camera_name))
+    sys.exit(1)
+
+print("model={} interface-version={}".format(camera.model_id, camera.interface_version))
+print("supports-sip-streaming={}".format(camera.supports_sip_streaming))
+if not camera.supports_sip_streaming:
+    print("this camera does not report SIP support - stopping here")
+    sys.exit(0)
+
+info = camera.get_sip_info()
+print("ice-servers={}".format(info["ice_servers"]))
+
+if offer_file is None:
+    print("no offer file given - stopping after signaling handshake check")
+    camera.stop_sip_stream()
+    sys.exit(0)
+
+with open(offer_file, "r") as f:
+    offer_sdp = f.read()
+
+print("negotiating call...")
+answer_sdp = camera.start_sip_stream(offer_sdp)
+print("answer-sdp:")
+print(answer_sdp)
+
+camera.stop_sip_stream()

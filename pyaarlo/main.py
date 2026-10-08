@@ -328,6 +328,19 @@ def list(item):
 
 
 @cli.command()
+def capabilities():
+    ar = login()
+    _print_start()
+    for c in ar.cameras:
+        _print(" {}".format(c.name))
+        _print("  model-id:{}".format(c.model_id))
+        _print("  interface-version:{}".format(c.interface_version))
+        _print("  stream-protocols:{}".format(",".join(sorted(c.stream_protocols))))
+        _print("  sip-push-to-talk:{}".format(c.supports_sip_push_to_talk))
+    _print_end()
+
+
+@cli.command()
 def encrypt():
     in_text = sys.stdin.read()
     enc_text = encrypt_to_string(in_text).rstrip()
@@ -366,8 +379,13 @@ def anonymize():
               help='camera device id')
 @click.option('-f', '--start-ffmpeg/--no-start-ffmpeg', required=False, default=False,
               help='start ffmpeg for stream')
-@click.argument('action', type=click.Choice(['start-stream', 'stop-stream', 'last-thumbnail'], case_sensitive=False))
-def camera(name, device_id, start_ffmpeg, action):
+@click.option('--offer-file', required=False, type=click.Path(exists=True),
+              help='file containing a WebRTC offer SDP, for start-sip-stream')
+@click.option('--answer-file', required=False, type=click.Path(),
+              help='file to write the SIP answer SDP to, for start-sip-stream')
+@click.argument('action', type=click.Choice(
+    ['start-stream', 'stop-stream', 'last-thumbnail', 'sip-info', 'start-sip-stream'], case_sensitive=False))
+def camera(name, device_id, start_ffmpeg, offer_file, answer_file, action):
     camera = None
     ar = login()
     for c in ar.cameras:
@@ -402,6 +420,38 @@ def camera(name, device_id, start_ffmpeg, action):
             print("last-thumbnail={}".format(last_thumbnail))
         else:
             print(' error getting thumbnail')
+
+    elif action == 'sip-info':
+        print('opening SIP signaling (diagnostic only - checks whether this '
+              'camera speaks SIP/WebRTC at all; does not start a call)')
+        info = camera.get_sip_info()
+        print('ice-servers={}'.format(info['ice_servers']))
+        camera.stop_sip_stream()
+
+    elif action == 'start-sip-stream':
+        if offer_file is None:
+            print('--offer-file is required for start-sip-stream '
+                  '(a WebRTC offer SDP from your own peer connection)')
+            return 0
+        with open(offer_file, 'r') as f:
+            offer_sdp = f.read()
+
+        print('opening SIP signaling')
+        camera.get_sip_info()
+        print('negotiating call')
+        answer_sdp = camera.start_sip_stream(offer_sdp)
+
+        if answer_file is not None:
+            with open(answer_file, 'w') as f:
+                f.write(answer_sdp)
+            print('answer-sdp written to {}'.format(answer_file))
+        else:
+            print('answer-sdp:\n{}'.format(answer_sdp))
+
+        # This CLI is a signaling diagnostic, not a player - it has no
+        # media stack to hand the answer to, so there's nothing further to
+        # keep the call open for.
+        camera.stop_sip_stream()
 
 
 def main_func():

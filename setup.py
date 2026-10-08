@@ -24,7 +24,8 @@ setup(
         'curl_cffi',
         'paho-mqtt',
         'cryptography',
-        'python-slugify'
+        'python-slugify',
+        'websocket-client'
     ],
 
     author='Steve Herrell',

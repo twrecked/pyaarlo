@@ -318,6 +318,26 @@ class ArloCfg(object):
         return self._kw.get("stream_snapshot_stop", 10)
 
     @property
+    def sip_timeout(self):
+        """Seconds to wait for a response to a single SIP transaction."""
+        return self._kw.get("sip_timeout", 5)
+
+    @property
+    def sip_keepalive(self):
+        """Seconds between SIP keepAlive MESSAGEs on an established call."""
+        return self._kw.get("sip_keepalive", 30)
+
+    @property
+    def sip_user_agent(self):
+        """The `User-Agent` SIP header sent in SIP messages (not the WebSocket handshake)."""
+        return self._kw.get("sip_user_agent", "SIP.js/0.21.1")
+
+    @property
+    def sip_ws_port(self):
+        """Port used for the `wss://` SIP signaling connection."""
+        return self._kw.get("sip_ws_port", 7443)
+
+    @property
     def save_media_to(self):
         return self._kw.get("save_media_to", "")
 

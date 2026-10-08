@@ -193,6 +193,38 @@ The options are:
 - `linux`; returns a `MPEG-DASH` stream
 
 
+<a name="sip-webrtc"></a>
+## SIP/WebRTC Streaming
+
+Arlo's official apps - including my.arlo.com in a browser - negotiate live
+video over WebRTC, signaled through SIP messages sent over a WebSocket. This
+is a separate engine from the `startStream` relay described above, and the
+two are mutually exclusive on the camera at any given moment (Arlo's own
+error message when this happens is *"SIP Streaming in progress, RTSP
+Streaming is not allowed"*).
+
+Not every camera speaks it - check `camera.supports_sip_streaming` first.
+pyaarlo's SIP client is signaling-only: it takes a WebRTC offer SDP you
+built yourself and returns Arlo's answer SDP, but it never creates a peer
+connection or touches a media packet. You still need your own WebRTC stack
+(a browser, `aiortc`, `go2rtc`, ...) to build the offer and play the answer.
+
+```python
+info = cam.get_sip_info()          # REST only, returns ICE servers
+offer_sdp = my_webrtc_stack.create_offer(info["ice_servers"])
+answer_sdp = cam.start_sip_stream(offer_sdp)
+my_webrtc_stack.set_answer(answer_sdp)
+...
+cam.stop_sip_stream()
+```
+
+See `examples/sip-stream` for a runnable version of the signaling handshake,
+and `pyaarlo camera <name> sip-info` on the CLI for a quick check of whether
+a given camera responds to SIP at all.
+
+Related `kwargs`: `sip_timeout`, `sip_keepalive`, `sip_user_agent`, `sip_ws_port`.
+
+
 <a name="saving-media"></a>
 ## Saving Media
 

@@ -22,6 +22,9 @@ RESTART_PATH = "/hmsweb/users/devices/restart"
 STREAM_SNAPSHOT_PATH = "/hmsweb/users/devices/takeSnapshot"
 STREAM_START_PATH = "/hmsweb/users/devices/startStream"
 IDLE_SNAPSHOT_PATH = "/hmsweb/users/devices/fullFrameSnapshot"
+SIP_INFO_PATH = "/hmsweb/users/devices/sipInfo"
+SIP_INFO_V2_PATH = "/hmsweb/users/devices/sipInfo/v2"
+CAPABILITIES_PATH_FORMAT = "/resources/capabilities/{0}/{0}_{1}.json"  # {0} is lowercased modelId, {1} is interfaceVersion
 CREATE_DEVICE_CERTS_PATH = "/hmsweb/users/devices/v2/security/cert/create"
 RATLS_TOKEN_GENERATE_PATH = "/hmsweb/users/device/ratls/token"
 RATLS_CONNECTIVITY_PATH = '/hmsls/connectivity'
@@ -249,6 +252,8 @@ TOTAL_CAMERAS_KEY = "totalCameras"
 TOTAL_LIGHTS_KEY = "totalLights"
 SILENT_MODE_CALL_KEY = "call"
 SILENT_MODE_ACTIVE_KEY = "active"
+SIP_STREAMING_KEY = "sipStreaming"
+SIP_PUSH_TO_TALK_KEY = "sipPushToTalk"
 
 # Media player
 MEDIA_PLAYER_RESOURCE_ID = "audioPlayback/player"

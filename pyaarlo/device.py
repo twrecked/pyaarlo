@@ -5,6 +5,7 @@ from unidecode import unidecode
 if TYPE_CHECKING:
     from . import PyArlo
 
+from .capabilities import get_capabilities
 from .constant import (
     BATTERY_KEY,
     BATTERY_TECH_KEY,
@@ -94,6 +95,26 @@ class ArloDevice(ArloSuper):
     def hw_version(self):
         """Returns the hardware version."""
         return self._attrs.get("properties", {}).get("hwVersion", None)
+
+    @property
+    def interface_version(self):
+        """Returns the device's Arlo interface version.
+
+        Used, alongside `model_id`, to look up the device's published
+        capability document. See `capabilities`.
+        """
+        return self.attribute("interfaceVersion")
+
+    @property
+    def capabilities(self):
+        """Returns the device's Arlo-published capability document.
+
+        Declares which streaming/talk protocols the device actually
+        supports. Cached; see `pyaarlo.capabilities`. Returns `{}` if the
+        model or interface version is unknown, or the document couldn't be
+        fetched - this never blocks other functionality.
+        """
+        return get_capabilities(self._arlo, self.model_id, self.interface_version)
 
     @property
     def timezone(self):

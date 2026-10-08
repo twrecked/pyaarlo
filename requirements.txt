@@ -7,3 +7,4 @@ curl_cffi
 paho-mqtt
 cryptography
 python-slugify
+websocket-client

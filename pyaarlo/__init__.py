@@ -142,6 +142,12 @@ class PyArlo(object):
     * **ecdh_curve** - Sets initial ecdhCurve for Cloudscraper. Available options are `prime256v1`
       and `secp384r1`. Backend will try all options if login fails.
     * **send_source** - Add a `Source` item to the authentication header, default is False.
+    * **sip_timeout** - Time, in seconds, to wait for a response to a single SIP transaction when using
+      `get_sip_info`/`start_sip_stream`. Default 5 seconds.
+    * **sip_keepalive** - Time, in seconds, between SIP keepAlive messages on an established SIP/WebRTC call.
+      Default 30 seconds.
+    * **sip_user_agent** - The `User-Agent` SIP header sent in SIP messages. Default `SIP.js/0.21.1`.
+    * **sip_ws_port** - Port used for the `wss://` SIP signaling connection. Default 7443.
 
     **Attributes**
 
