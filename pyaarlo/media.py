@@ -156,6 +156,7 @@ class ArloMediaLibrary(object):
         self._arlo = arlo
         self._lock = threading.Lock()
         self._load_cbs_ = []
+        self._update_pending = False
         self._count = 0
         self._videos = []
         self._video_keys = []
@@ -183,9 +184,17 @@ class ArloMediaLibrary(object):
         date_to = datetime.today().strftime("%Y%m%d")
         data = self._fetch_library(date_to, date_to)
 
+        if data is None:
+            # Keep cached media and waiters, but let the next event retry.
+            with self._lock:
+                self._update_pending = False
+            self._arlo.warning("error updating the image library")
+            return
+
         # get current videos
         with self._lock:
-            keys = self._video_keys
+            keys = list(self._video_keys)
+        known_keys = set(keys)
 
         # add in new images
         videos = []
@@ -213,7 +222,7 @@ class ArloMediaLibrary(object):
                 key = "{0}:{1}".format(
                     camera.device_id, arlotime_strftime(video.get("utcCreatedDate"))
                 )
-                if key in keys:
+                if key in known_keys:
                     self.vdebug(f"skipping {key} for {camera.name}")
                     continue
                 self.debug(f"adding {key} for {camera.name}")
@@ -221,6 +230,7 @@ class ArloMediaLibrary(object):
                 videos.append(video)
                 self._downloader.queue_download(video)
                 keys.append(key)
+                known_keys.add(key)
 
         # note changes and run callbacks
         with self._lock:
@@ -231,6 +241,7 @@ class ArloMediaLibrary(object):
             self.debug("update-count=" + str(self._count))
             cbs = self._load_cbs_
             self._load_cbs_ = []
+            self._update_pending = False
 
         # run callbacks with no locks held
         for cb in cbs:
@@ -322,10 +333,13 @@ class ArloMediaLibrary(object):
 
     def queue_update(self, cb):
         with self._lock:
-            if not self._load_cbs_:
+            if not self._update_pending:
                 self.debug("queueing image library update")
                 self._arlo.bg.run_low_in(self.update, 2)
-            self._load_cbs_.append(cb)
+                self._update_pending = True
+            # Camera refreshes read the latest cache, not individual events.
+            if cb not in self._load_cbs_:
+                self._load_cbs_.append(cb)
 
     def stop(self):
         self._downloader.stop()
