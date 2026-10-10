@@ -56,7 +56,7 @@ from .util import time_to_arlotime
 
 _LOGGER = logging.getLogger("pyaarlo")
 
-__version__ = "0.8.0.24"
+__version__ = "0.8.0.25"
 
 
 class FeedMetadataError(Exception):

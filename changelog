@@ -1,3 +1,29 @@
+0.8.0.25
+  Features
+  - Add Arlo Feed Metadata: New feed_metadata() and feed_items() methods have been
+    added to access Arlo's Feed API. This allows for the retrieval of rich
+    metadata, including AI-powered event captions (e.g., "Person detected",
+    "Package detected"). (#205 by @ssheld)
+  - Add Arlo Intelligence Events: A new get_intelligence_events() method has
+    been added to retrieve events from the Arlo Intelligence API. The method
+    handles different data formats returned by the API to provide a consistent
+    output. (#212 by @Jaehdawg)
+
+  Bug Fixes
+  - Media Library Stability: Fixed a critical bug where the media library could
+    stop updating after a temporary API or network error. The library will now
+    recover gracefully without requiring a restart. Also improves performance
+    for users with large libraries. (#214 by @Tosko4)
+  - Streaming Reliability: Improved the reliability of starting video streams by
+    serializing requests. This fixes race conditions and ensures the system
+    cleans up correctly after a failed stream attempt. (#213 by @Tosko4)
+  - Authentication: Corrected URL encoding in certain authentication requests
+    to improve login reliability. (#212 by @Jaehdawg)
+  - HTTP Client Robustness: The internal HTTP client is now more robust and can
+    better handle missing headers or non-JSON error responses from the Arlo API.
+    (#205 by @ssheld)
+
+
 0.8.0.24
   Fix login when MFA is disabled by Arlo service (#1163)
 
