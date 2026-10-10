@@ -100,6 +100,8 @@ class ArloCamera(ArloChildDevice):
         self._event = threading.Event()
         self._snapshot_time = the_epoch()
         self._stream_url = None
+        # Serialize URL requests without blocking activity/event callbacks.
+        self._stream_lock = threading.Lock()
         # what user has requested locally
         self._user_requests = set()
         # what is keeping the stream open for us
@@ -325,6 +327,10 @@ class ArloCamera(ArloChildDevice):
 
     def _get_stream_url(self, starting_for, user_agent=None):
         """Getting the stream URL without starting local streaming."""
+        with self._stream_lock:
+            return self._get_stream_url_locked(starting_for, user_agent)
+
+    def _get_stream_url_locked(self, starting_for, user_agent=None):
         body = {
             "action": "get",
             "from": self.web_id,
@@ -342,20 +348,28 @@ class ArloCamera(ArloChildDevice):
         if user_agent is not None:
             headers["User-Agent"] = self._arlo.be.user_agent(user_agent)
 
-        self._stream_url = self._arlo.be.post(STREAM_START_PATH, body, headers=headers)
-        if self._stream_url is not None:
+        response = self._arlo.be.post(STREAM_START_PATH, body, headers=headers)
+        stream_url = (
+            response["url"].replace("rtsp://", "rtsps://")
+            if response is not None else None
+        )
+        if stream_url is not None:
             if not self.has_any_local_users:
                 with self._lock:
                     self._local_users.add(starting_for)
                     self._dump_activities("_get_stream_url")
 
-            self._stream_url = self._stream_url["url"].replace("rtsp://", "rtsps://")
-            self.debug("url={}".format(self._stream_url))
+            self.debug("url={}".format(stream_url))
         else:
             self.debug(f"No stream url for {self.name}")
-        return self._stream_url
+        self._stream_url = stream_url
+        return stream_url
 
     def _start_stream(self, starting_for, user_agent=None):
+        with self._stream_lock:
+            return self._start_stream_locked(starting_for, user_agent)
+
+    def _start_stream_locked(self, starting_for, user_agent=None):
         with self._lock:
             # Already streaming. Update sub-activity as needed.
             if self.has_any_local_users:
@@ -387,14 +401,17 @@ class ArloCamera(ArloChildDevice):
         if user_agent is not None:
             headers["User-Agent"] = self._arlo.be.user_agent(user_agent)
 
-        self._stream_url = self._arlo.be.post(STREAM_START_PATH, body, headers=headers)
-        if self._stream_url is not None:
-            self._stream_url = self._stream_url["url"].replace("rtsp://", "rtsps://")
-            self.debug("url={}".format(self._stream_url))
-        else:
+        stream_url = None
+        try:
+            response = self._arlo.be.post(STREAM_START_PATH, body, headers=headers)
+            if response is not None:
+                stream_url = response["url"].replace("rtsp://", "rtsps://")
+        finally:
             with self._lock:
-                self._local_users = set()
-        return self._stream_url
+                self._stream_url = stream_url
+                if stream_url is None:
+                    self._local_users.discard(starting_for)
+        return stream_url
 
     def _stop_stream(self, stopping_for="streaming"):
         with self._lock:
