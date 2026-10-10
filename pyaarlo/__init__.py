@@ -191,6 +191,18 @@ class PyArlo(object):
 
     You can use the attribute `*` to register for all events.
 
+    Intelligence metadata can be fetched for a date with ``get_intelligence_events``:
+
+    ```python
+    events = arlo.get_intelligence_events("20260828", limit=100)
+    for event in events:
+        print(event.get("harlem"), event.get("deviceId"), event.get("locationId"))
+    ```
+
+    This returns the feed metadata payloads as dictionaries and does not download
+    media. Callers can supply ``location_id`` to query a single location and
+    ``max_pages`` to bound pagination.
+
     """
 
     def __init__(self, **kwargs):
@@ -642,6 +654,15 @@ class PyArlo(object):
         :rtype: list(ArloLocation)
         """
         return self._locations
+
+    def get_intelligence_events(self, from_date, limit=100, location_id=None, max_pages=50):
+        """Return flattened Arlo Intelligence events for the requested date."""
+        return self._be.get_intelligence_events(
+            from_date=from_date,
+            limit=limit,
+            location_id=location_id,
+            max_pages=max_pages,
+        )
 
     @property
     def all_devices(self):
