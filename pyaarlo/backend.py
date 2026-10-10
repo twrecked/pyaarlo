@@ -248,7 +248,7 @@ class ArloBackEnd(object):
             return 500, None
 
         try:
-            if "application/json" in r.headers["Content-Type"]:
+            if "application/json" in r.headers.get("Content-Type", ""):
                 body = r.json()
             else:
                 body = r.text
@@ -256,7 +256,7 @@ class ArloBackEnd(object):
         except Exception as e:
             self._arlo.warning("body-error={}".format(type(e).__name__))
             self._arlo.debug(f"request-text={r.text}")
-            return 500, None
+            return r.status_code if r.status_code != 200 else 500, None
 
         self.vdebug("request-end={}".format(r.status_code))
         if r.status_code != 200:
@@ -264,6 +264,9 @@ class ArloBackEnd(object):
 
         if raw:
             return 200, body
+
+        if not isinstance(body, dict):
+            return 500, None
 
         # New auth style and TFA helper
         if "meta" in body:
@@ -1339,6 +1342,18 @@ class ArloBackEnd(object):
             self._arlo.bg.run(
                 self._request, path, "POST", params, headers, False, raw, timeout
             )
+
+    def post_with_status(self, path, params=None, headers=None, raw=False, timeout=None):
+        """Post and return ``(http_status, body)`` without event wait handling."""
+        return self._request_tuple(
+            path=path,
+            method="POST",
+            params=params,
+            headers=headers,
+            stream=False,
+            raw=raw,
+            timeout=timeout,
+        )
 
     def auth_post(self, path, params=None, headers=None, raw=False, timeout=None, cookies=None):
         return self._request_tuple(
