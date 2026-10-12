@@ -11,7 +11,7 @@ def readme():
 setup(
 
     name='pyaarlo',
-    version='0.8.0.25',
+    version='0.8.0.26',
     packages=['pyaarlo'],
 
     python_requires='>=3.7',
