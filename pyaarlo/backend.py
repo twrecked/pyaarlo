@@ -631,24 +631,15 @@ class ArloBackEnd(object):
             self._logged_in = False
 
     def _mqtt_topics(self):
-        topics = []
+        topics = set()
         for device in self._arlo.devices:
             for topic in device.get("allowedMqttTopics", []):
-                topics.append((topic, 0))
-        return topics
+                topics.add((topic, 0))
+        return sorted(list(topics))
 
     def _mqtt_subscribe(self):
-        # Make sure we are listening to library events and individual base
-        # station events. This seems sufficient for now.
-        self._event_client.subscribe([
-            (f"u/{self._user_id}/in/userSession/connect", 0),
-            (f"u/{self._user_id}/in/userSession/disconnect", 0),
-            (f"u/{self._user_id}/in/library/add", 0),
-            (f"u/{self._user_id}/in/library/update", 0),
-            (f"u/{self._user_id}/in/library/remove", 0)
-        ])
-
-        topics = self._mqtt_topics()
+        # Make sure we are listening to user events and individual device events.
+        topics = [(f"u/{self._user_id}/in/#", 0)] + self._mqtt_topics()
         self.debug("topics=\n{}".format(pprint.pformat(topics)))
         self._event_client.subscribe(topics)
 
@@ -686,7 +677,6 @@ class ArloBackEnd(object):
         try:
             self.debug("(re)starting mqtt event loop")
             headers = {
-                "Host": MQTT_HOST,
                 "Origin": ORIGIN_HOST,
             }
 
@@ -697,17 +687,30 @@ class ArloBackEnd(object):
             self.debug(f"mqtt: client_id={self._event_client_id}")
 
             # Create and set up the MQTT client.
-            self._event_client = mqtt.Client(
-                client_id=self._event_client_id, transport=self._arlo.cfg.mqtt_transport
-            )
+            if hasattr(mqtt, "CallbackAPIVersion"):
+                self._event_client = mqtt.Client(
+                    mqtt.CallbackAPIVersion.VERSION1,
+                    client_id=self._event_client_id,
+                    transport=self._arlo.cfg.mqtt_transport,
+                )
+            else:
+                self._event_client = mqtt.Client(
+                    client_id=self._event_client_id,
+                    transport=self._arlo.cfg.mqtt_transport,
+                )
             self._event_client.on_log = self._mqtt_on_log
             self._event_client.on_connect = self._mqtt_on_connect
             self._event_client.on_message = self._mqtt_on_message
             ssl_context = ssl.create_default_context()
-            ssl_context.check_hostname = self._arlo.cfg.mqtt_hostname_check
+            if not self._arlo.cfg.mqtt_hostname_check:
+                ssl_context.check_hostname = False
+                ssl_context.verify_mode = ssl.CERT_NONE
+            else:
+                ssl_context.check_hostname = True
             self._event_client.tls_set_context(ssl_context)
             self._event_client.username_pw_set(f"{self._user_id}", self._token)
-            self._event_client.ws_set_options(path=MQTT_PATH, headers=headers)
+            if self._arlo.cfg.mqtt_transport == "websockets":
+                self._event_client.ws_set_options(path=MQTT_PATH, headers=headers)
             self.debug(f"mqtt: host={self._arlo.cfg.mqtt_host}, "
                        f"check={self._arlo.cfg.mqtt_hostname_check}, "
                        f"transport={self._arlo.cfg.mqtt_transport}")

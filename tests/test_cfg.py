@@ -79,3 +79,24 @@ class TestArloCfg(TestCase):
         self.assertEqual(arlo.cfg.host, "http://test.host.com")
         self.assertEqual(arlo.cfg.auth_host, "http://test.host.com")
         self.assertEqual(arlo.cfg.mqtt_host, "test.host.com")
+
+    def test_mqtt_config(self):
+        arlo = tests.arlo.PyArlo(mqtt_host="my-custom-host.com", mqtt_port=8883)
+        self.assertEqual(arlo.cfg.mqtt_host, "my-custom-host.com")
+        self.assertEqual(arlo.cfg.mqtt_port, 8883)
+        self.assertEqual(arlo.cfg.mqtt_transport, "websockets")
+
+    def test_update_mqtt_from_url(self):
+        arlo = tests.arlo.PyArlo()
+        self.assertEqual(arlo.cfg.event_backend, "auto")
+        arlo.cfg.update_mqtt_from_url("wss://mqtt-cluster-v2-z2-1.arloxcld.com:8084")
+        self.assertEqual(arlo.cfg.event_backend, "mqtt")
+        self.assertEqual(arlo.cfg.mqtt_host, "mqtt-cluster-v2-z2-1.arloxcld.com")
+        self.assertEqual(arlo.cfg.mqtt_port, 8084)
+        self.assertEqual(arlo.cfg.mqtt_transport, "websockets")
+
+    def test_update_mqtt_from_url_default_port(self):
+        arlo = tests.arlo.PyArlo()
+        arlo.cfg.update_mqtt_from_url("wss://mqtt-cluster-v2-z2-1.arloxcld.com")
+        self.assertEqual(arlo.cfg.mqtt_port, 443)
+        self.assertEqual(arlo.cfg.mqtt_transport, "websockets")
