@@ -90,15 +90,26 @@ class ArloCfg(object):
         return self._kw.get("mqtt_port", DEFAULT_MQTT_PORT)
 
     def update_mqtt_from_url(self, url):
-        if self._update_backend or self.event_backend == "auto":
-            self._update_backend = True
-            url = urlparse(url)
-            if url.scheme == "wss":
-                self._kw["backend"] = 'sse'
-            else:
-                self._kw["backend"] = 'mqtt'
-                self._kw["mqtt_host"] = url.hostname
-                self._kw["mqtt_port"] = url.port
+        if not url:
+            return
+        parsed = urlparse(url)
+        if "mqtt_host" not in self._kw or self._kw.get("mqtt_host") in (None, "", MQTT_HOST):
+            if parsed.hostname:
+                self._kw["mqtt_host"] = parsed.hostname
+        if "mqtt_port" not in self._kw or self._kw.get("mqtt_port") in (None, "", DEFAULT_MQTT_PORT):
+            if parsed.port:
+                self._kw["mqtt_port"] = parsed.port
+            elif parsed.scheme in ("wss", "https"):
+                self._kw["mqtt_port"] = 443
+            elif parsed.scheme in ("ws", "http"):
+                self._kw["mqtt_port"] = 80
+        if "mqtt_transport" not in self._kw or self._kw.get("mqtt_transport") in (None, "", "tcp"):
+            if parsed.scheme in ("wss", "ws"):
+                self._kw["mqtt_transport"] = "websockets"
+            elif parsed.scheme in ("mqtt", "mqtts", "tcp", "ssl"):
+                self._kw["mqtt_transport"] = "tcp"
+        if self.event_backend == "auto":
+            self._kw["backend"] = "mqtt"
 
     @property
     def mqtt_hostname_check(self):
@@ -106,7 +117,7 @@ class ArloCfg(object):
 
     @property
     def mqtt_transport(self):
-        return self._kw.get("mqtt_transport", "tcp")
+        return self._kw.get("mqtt_transport", "websockets")
 
     @property
     def dump(self):

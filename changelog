@@ -1,3 +1,13 @@
+0.8.0.26
+  Bug Fixes
+  - MQTT Backend Support: Update MQTT event backend to use WebSocket Secure (wss://)
+    transport to match Arlo's event broker.
+  - Dynamic Broker URL Detection: Parse dynamic MQTT broker host, port, and transport
+    from session response and override legacy default settings.
+  - Subscriptions: Deduplicate device topic subscriptions and subscribe to wildcard
+    user notifications (u/{userId}/in/#).
+  - Paho MQTT Compatibility: Add support for paho-mqtt 2.x callback API.
+
 0.8.0.25
   Features
   - Add Arlo Feed Metadata: New feed_metadata() and feed_items() methods have been
