@@ -93,17 +93,17 @@ class ArloCfg(object):
         if not url:
             return
         parsed = urlparse(url)
-        if "mqtt_host" not in self._kw:
+        if "mqtt_host" not in self._kw or self._kw.get("mqtt_host") in (None, "", MQTT_HOST):
             if parsed.hostname:
                 self._kw["mqtt_host"] = parsed.hostname
-        if "mqtt_port" not in self._kw:
+        if "mqtt_port" not in self._kw or self._kw.get("mqtt_port") in (None, "", DEFAULT_MQTT_PORT):
             if parsed.port:
                 self._kw["mqtt_port"] = parsed.port
             elif parsed.scheme in ("wss", "https"):
                 self._kw["mqtt_port"] = 443
             elif parsed.scheme in ("ws", "http"):
                 self._kw["mqtt_port"] = 80
-        if "mqtt_transport" not in self._kw:
+        if "mqtt_transport" not in self._kw or self._kw.get("mqtt_transport") in (None, "", "tcp"):
             if parsed.scheme in ("wss", "ws"):
                 self._kw["mqtt_transport"] = "websockets"
             elif parsed.scheme in ("mqtt", "mqtts", "tcp", "ssl"):

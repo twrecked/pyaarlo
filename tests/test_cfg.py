@@ -100,3 +100,14 @@ class TestArloCfg(TestCase):
         arlo.cfg.update_mqtt_from_url("wss://mqtt-cluster-v2-z2-1.arloxcld.com")
         self.assertEqual(arlo.cfg.mqtt_port, 443)
         self.assertEqual(arlo.cfg.mqtt_transport, "websockets")
+
+    def test_update_mqtt_from_url_overrides_legacy_defaults(self):
+        from pyaarlo.constant import MQTT_HOST
+        # When caller passes legacy defaults, update_mqtt_from_url should still upgrade them
+        arlo = tests.arlo.PyArlo(mqtt_host=MQTT_HOST, mqtt_transport="tcp")
+        self.assertEqual(arlo.cfg.mqtt_host, MQTT_HOST)
+        self.assertEqual(arlo.cfg.mqtt_transport, "tcp")
+        arlo.cfg.update_mqtt_from_url("wss://mqtt-cluster-v2-z2-1.arloxcld.com:8084")
+        self.assertEqual(arlo.cfg.mqtt_host, "mqtt-cluster-v2-z2-1.arloxcld.com")
+        self.assertEqual(arlo.cfg.mqtt_port, 8084)
+        self.assertEqual(arlo.cfg.mqtt_transport, "websockets")
