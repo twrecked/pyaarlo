@@ -472,6 +472,10 @@ class ArloCamera(ArloChildDevice):
 
             return
 
+        if event.get("action") == "wakeup":
+            self.debug(f"{self.name} woke up")
+            self._set_recent(self._arlo.cfg.recent_time)
+
         # Camera Activity State
         activity = event.get("properties", {}).get("activityState", "unknown")
 

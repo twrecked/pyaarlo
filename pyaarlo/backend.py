@@ -480,6 +480,24 @@ class ArloBackEnd(object):
                 props = response['devices'][device_id]
                 responses.append((device_id, resource, props))
 
+        # Base station status / wakeup responses
+        elif resource == "basestation":
+            self.debug("packet: basestation status/wakeup")
+            from_id = response.get("from", None)
+            props = response.get("properties", {})
+            if isinstance(props, dict) and "devices" in props and isinstance(props["devices"], list):
+                for dev_id in props["devices"]:
+                    responses.append((dev_id, resource, response))
+                if from_id and from_id not in props["devices"]:
+                    responses.append((from_id, resource, response))
+            elif isinstance(props, list):
+                for prop in props:
+                    dev_id = prop.get("serialNumber", from_id)
+                    responses.append((dev_id, resource, prop))
+            else:
+                if from_id is not None:
+                    responses.append((from_id, resource, response))
+
         # These are base station responses. Which can be about the base station
         # or devices on it... Check if property is list.
         # XXX these might be deprecated
@@ -513,11 +531,16 @@ class ArloBackEnd(object):
         #  Check for device_id
         #  Check for unique_id
         #  Check for locationId
+        #  Check for from
         # If none of those then is unhandled
         else:
-            device_id = response.get("deviceId",
-                                     response.get("uniqueId",
-                                                  response.get("locationId", None)))
+            device_id = response.get(
+                "deviceId",
+                response.get(
+                    "uniqueId",
+                    response.get("locationId", response.get("from", None))
+                )
+            )
             if device_id is not None:
                 responses.append((device_id, resource, response))
             else:

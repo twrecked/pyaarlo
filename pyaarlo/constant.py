@@ -266,7 +266,7 @@ VIDEO_CONTENT_TYPES = ['2k', '4k', 'hd']
 
 # DEFAULT_MODES = [ { u'id':u'mode0',u'type':u'disarmed' }, { u'id':u'mode1',u'type':u'armed' } ]
 DEFAULT_MODES = {"disarmed": "mode0", "armed": "mode1"}
-DEFAULT_RESOURCES = {"modes", "siren", "doorbells", "lights", "cameras", "devices", "sensors"}
+DEFAULT_RESOURCES = {"modes", "siren", "doorbells", "lights", "cameras", "devices", "sensors", "basestation"}
 
 # MODEL PREFIXES
 MODEL_HUB = "SH1001"
