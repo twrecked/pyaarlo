@@ -115,3 +115,35 @@ def test_failed_start_does_not_erase_a_remote_activity(camera):
     assert not camera.has_local_user("streaming")
     assert camera.has_local_user("remote")
     assert camera.has_remote_user("recording")
+
+
+def test_stop_activity_marks_idle_and_resets_stream_url_even_when_notify_fails(camera):
+    camera._stream_url = "rtsps://example.invalid/active"
+    camera._local_users.add("streaming")
+    camera._remote_users.add("streaming")
+    camera._arlo.be.notify.return_value = None
+
+    assert camera.stop_activity() is True
+    assert camera._stream_url is None
+    assert not camera.has_any_local_users
+    assert not camera.has_any_remote_users
+
+
+def test_subsequent_stream_requests_fresh_url_after_stop_activity(camera):
+    camera._arlo.be.post.side_effect = [
+        {"url": "rtsp://example.invalid/session1"},
+        {"url": "rtsp://example.invalid/session2"},
+    ]
+    camera._arlo.be.notify.return_value = None
+
+    url1 = camera.get_stream()
+    assert url1 == "rtsps://example.invalid/session1"
+    assert camera.has_local_user("streaming")
+
+    camera.stop_activity()
+    assert not camera.has_local_user("streaming")
+
+    url2 = camera.get_stream()
+    assert url2 == "rtsps://example.invalid/session2"
+    assert camera._arlo.be.post.call_count == 2
+

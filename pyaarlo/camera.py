@@ -307,22 +307,24 @@ class ArloCamera(ArloChildDevice):
         with self._lock:
             self._local_users = set()
             self._remote_users = set()
+            self._stream_url = None
             self._dump_activities("_event::idle")
             self._lock.notify_all()
 
     def _stop_activity(self):
         """Request the camera stop whatever it is doing and return to the idle state."""
-        response = self._arlo.be.notify(
-            base=self.base_station,
-            body={
-                "action": "set",
-                "properties": {"activityState": "idle"},
-                "publishResponse": True,
-                "resource": self.resource_id,
-            },
-            wait_for="response",
-        )
-        if response is not None:
+        try:
+            self._arlo.be.notify(
+                base=self.base_station,
+                body={
+                    "action": "set",
+                    "properties": {"activityState": "idle"},
+                    "publishResponse": True,
+                    "resource": self.resource_id,
+                },
+                wait_for="response",
+            )
+        finally:
             self._mark_as_idle()
 
     def _get_stream_url(self, starting_for, user_agent=None):
