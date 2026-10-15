@@ -56,7 +56,7 @@ from .util import time_to_arlotime
 
 _LOGGER = logging.getLogger("pyaarlo")
 
-__version__ = "0.8.0.26"
+__version__ = "0.8.0.27"
 
 
 class FeedMetadataError(Exception):
@@ -411,10 +411,19 @@ class PyArlo(object):
             props = device.get("properties", None)
             self.vdebug(f"device-id={device_id}")
             if device_id is not None and props is not None:
-                device = self.lookup_device_by_id(device_id)
-                if device is not None:
+                # A camera that is its own base station (Pro 4/5/6, Essential, wired
+                # doorbell) is registered twice under one device id, as an ArloBase
+                # and an ArloCamera. Update every object with the id, the same way
+                # the event stream dispatches to every listener.
+                targets = [
+                    d
+                    for d in self.base_stations + self.cameras + self.doorbells + self.lights
+                    if d.device_id == device_id
+                ]
+                if targets:
                     self.vdebug(f"updating {device_id} from device refresh")
-                    device.update_resources(props)
+                    for target in targets:
+                        target.update_resources(props)
                 else:
                     self.vdebug(f"not updating {device_id} from device refresh")
 
