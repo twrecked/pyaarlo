@@ -378,7 +378,7 @@ class ArloSession:
         except Exception as e:
             self._log.warning("body-error={}".format(type(e).__name__))
             self._debug(f"request-text={r.text}")
-            return 500, None
+            return r.status_code if r.status_code != 200 else 500, None
 
         self._vdebug("request-end={}".format(r.status_code))
         if r.status_code != 200:
@@ -386,6 +386,9 @@ class ArloSession:
 
         if raw:
             return 200, body
+
+        if not isinstance(body, dict):
+            return 500, None
 
         # New auth style and TFA helper
         if "meta" in body:

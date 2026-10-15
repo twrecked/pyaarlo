@@ -72,6 +72,49 @@ class _EventDetails:
 
 
 # include token and session details
+
+
+def _flatten_intelligence_events(grouped: Any, location_id: str) -> list[dict[str, Any]]:
+    """Flatten list- or dict-shaped groupByEvents responses."""
+    records: list[dict[str, Any]] = []
+    event_keys = {
+        "harlem", "feedId", "feedID", "recordingId", "mediaId", "utcCreatedDate",
+        "eventTime", "timestamp", "createdAt", "description", "aiDescription",
+        "smartDescription", "eventDescription",
+    }
+
+    def walk(value: Any, event_id: Any = None, device_id: Any = None) -> None:
+        if isinstance(value, list):
+            for item in value:
+                walk(item, event_id, device_id)
+            return
+        if not isinstance(value, dict):
+            return
+        keys = set(value)
+        if keys & event_keys and ("harlem" in keys or keys & {
+            "feedId", "feedID", "recordingId", "mediaId", "utcCreatedDate",
+            "eventTime", "timestamp", "createdAt",
+        }):
+            item = dict(value)
+            if event_id is not None:
+                item.setdefault("eventId", event_id)
+            item.setdefault("locationId", location_id)
+            if device_id is not None:
+                item.setdefault("deviceId", device_id)
+            records.append(item)
+            return
+        for key, child in value.items():
+            child_event_id = event_id
+            child_device_id = device_id
+            if event_id is None:
+                child_event_id = key
+            elif device_id is None and isinstance(key, str):
+                child_device_id = key
+            walk(child, child_event_id, child_device_id)
+
+    walk(grouped)
+    return records
+
 class ArloBackEnd:
 
     def __init__(self, cfg: ArloCfg, log: ArloLogger, tasks: ArloTaskManager):
@@ -380,7 +423,7 @@ class ArloBackEnd:
 
         # Get a list of factors to use.
         code, factors = await self._auth_get(
-            f"{AUTH_GET_FACTORS}?data = {int(time.time())}", {
+            f"{AUTH_GET_FACTORS}?data={int(time.time())}", {
             },
             self._auth.headers
         )
@@ -454,7 +497,7 @@ class ArloBackEnd:
         self._auth.headers["Authorization"] = str(self._req.details.token64 or "")
 
         code, validated = await self._auth_get(
-            f"{AUTH_VALIDATE_PATH}?data = {int(time.time())}", {
+            f"{AUTH_VALIDATE_PATH}?data={int(time.time())}", {
             },
             self._auth.headers
         )
@@ -1145,6 +1188,143 @@ class ArloBackEnd:
 
     def del_listener(self, device, callback):
         pass
+
+    async def post_with_status(
+        self,
+        path: str,
+        params: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+        raw: bool = False,
+        timeout: int | float | None = None,
+        host: str | None = None,
+    ) -> tuple[int, Any]:
+        """Post and return (http_status, body) without event wait handling."""
+        return await self._req.request_tuple(
+            path=path,
+            method="POST",
+            params=params,
+            headers=headers,
+            stream=False,
+            raw=raw,
+            timeout=timeout,
+            host=host,
+        )
+
+    async def _request_tuple(self, *args: Any, **kwargs: Any) -> tuple[int, Any]:
+        return await self._req.request_tuple(*args, **kwargs)
+
+    def get_intelligence_events(
+        self,
+        from_date: Any,
+        limit: int = 100,
+        location_id: str | None = None,
+        max_pages: int = 50,
+    ) -> Any:
+        """Return flattened Arlo Intelligence events from the feed metadata API.
+
+        ``from_date`` must be a ``YYYYMMDD`` string or a ``datetime.date``. The
+        feed is location-scoped, so all locations are queried by default. Event
+        dictionaries retain the original payload and receive ``eventId``,
+        ``locationId``, and ``deviceId`` fields when those values are available.
+        """
+        if hasattr(from_date, "strftime"):
+            from_date = from_date.strftime("%Y%m%d")
+        from_date = str(from_date)
+        if len(from_date) != 8 or not from_date.isdigit():
+            raise ValueError("from_date must be a YYYYMMDD string or date")
+        try:
+            limit = max(1, min(int(limit), 100))
+            max_pages = max(1, int(max_pages))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("limit and max_pages must be positive integers") from exc
+
+        web_id = getattr(self, "_web_id", None) or (
+            self._req.details.web_id if hasattr(self, "_req") and hasattr(self._req, "details") else None
+        )
+        user_id = getattr(self, "_user_id", None) or (
+            self._req.details.user_id if hasattr(self, "_req") and hasattr(self._req, "details") else None
+        )
+        owner_id = web_id or user_id
+        if location_id is not None:
+            location_ids = [str(location_id)]
+        else:
+            arlo_obj = getattr(self, "_arlo", None)
+            locations = getattr(arlo_obj, "locations", []) if arlo_obj else []
+            location_ids = [
+                str(getattr(location, "id", None) or getattr(location, "_id", ""))
+                for location in locations
+            ]
+            location_ids = [value for value in location_ids if value]
+        if not owner_id or not location_ids:
+            raise RuntimeError("authenticated owner and location metadata are required")
+
+        cfg = getattr(self, "_cfg", None) or getattr(getattr(self, "_arlo", None), "cfg", None)
+        base_host = str(getattr(cfg, "host", "")).rstrip("/")
+        if base_host.endswith("/hmsweb"):
+            host = base_host[:-len("/hmsweb")] + "/hmsfeeds"
+        elif base_host.endswith("/hmsfeeds"):
+            host = base_host
+        else:
+            host = base_host + "/hmsfeeds"
+
+        req_fn = getattr(self, "_request", None)
+        if req_fn is not None:
+            events: list[dict[str, Any]] = []
+            for current_location_id in location_ids:
+                path = f"/users/{owner_id}/{current_location_id}/metadata"
+                next_page = None
+                for _ in range(max_pages):
+                    response = req_fn(
+                        path,
+                        method="POST",
+                        params={
+                            "asc": False,
+                            "fromDate": from_date,
+                            "limit": limit,
+                            "groupBy": "events",
+                            "nextPage": next_page,
+                        },
+                        host=host,
+                        raw=True,
+                    )
+                    data = response.get("data", response) if isinstance(response, dict) else {}
+                    grouped = data.get("groupByEvents", {}) if isinstance(data, dict) else {}
+                    events.extend(_flatten_intelligence_events(grouped, current_location_id))
+                    candidate = data.get("nextPage") if isinstance(data, dict) else None
+                    if not candidate or candidate == next_page:
+                        break
+                    next_page = candidate
+            return events
+
+        async def _async_get_events() -> list[dict[str, Any]]:
+            async_events: list[dict[str, Any]] = []
+            for current_location_id in location_ids:
+                path = f"/users/{owner_id}/{current_location_id}/metadata"
+                next_page = None
+                for _ in range(max_pages):
+                    response = await self._req.request(
+                        path,
+                        method="POST",
+                        params={
+                            "asc": False,
+                            "fromDate": from_date,
+                            "limit": limit,
+                            "groupBy": "events",
+                            "nextPage": next_page,
+                        },
+                        host=host,
+                        raw=True,
+                    )
+                    data = response.get("data", response) if isinstance(response, dict) else {}
+                    grouped = data.get("groupByEvents", {}) if isinstance(data, dict) else {}
+                    async_events.extend(_flatten_intelligence_events(grouped, current_location_id))
+                    candidate = data.get("nextPage") if isinstance(data, dict) else None
+                    if not candidate or candidate == next_page:
+                        break
+                    next_page = candidate
+            return async_events
+
+        return _async_get_events()
 
     async def devices(self):
         return await self.get(f"{DEVICES_PATH}?t={time_to_arlotime()}")
