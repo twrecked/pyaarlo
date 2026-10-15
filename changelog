@@ -1,3 +1,15 @@
+0.8.0.27
+  Bug Fixes
+  - MQTT & Auth Token Reconnect: Enable the periodic reconnect daemon for MQTT
+    event streaming and auto-schedule reconnections before the 2-hour Arlo auth
+    token expiration.
+  - Automatic Session Recovery: Automatically catch HTTP 401 Unauthorized and
+    meta 9204 errors across all REST API calls and re-authenticate transparently
+    to keep mode setting, device status, and camera actions functional.
+  - MQTT Lifecycle Robustness: Disconnect cleanly to force a fresh login on auth
+    rejection or repeated connection loss, and refresh device states upon
+    successful reconnection.
+
 0.8.0.26
   Bug Fixes
   - MQTT Backend Support: Update MQTT event backend to use WebSocket Secure (wss://)
