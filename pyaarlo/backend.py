@@ -134,6 +134,11 @@ class ArloBackEnd(object):
         self._event_client = None
         self._event_connected = False
         self._stop_thread = False
+        self._login_lock = threading.RLock()
+        self._last_login_time = 0
+        self._is_logging_in = False
+        self._reconnect_job = None
+        self._mqtt_reconnect_attempts = 0
 
         # login
         self._session = None
@@ -237,7 +242,8 @@ class ArloBackEnd(object):
             timeout=None,
             host=None,
             authpost=False,
-            cookies=None
+            cookies=None,
+            retry_401=True,
     ):
         if params is None:
             params = {}
@@ -297,10 +303,42 @@ class ArloBackEnd(object):
         except Exception as e:
             self._arlo.warning("body-error={}".format(type(e).__name__))
             self._arlo.debug(f"request-text={r.text}")
+            if r.status_code == 401 and not authpost and retry_401 and not getattr(self, "_is_logging_in", False):
+                self._arlo.warning(f"request returned 401 Unauthorized for {path}, attempting re-login and retry")
+                if hasattr(self, "_relogin") and self._relogin():
+                    return self._request_tuple(
+                        path=path,
+                        method=method,
+                        params=params,
+                        headers=headers,
+                        stream=stream,
+                        raw=raw,
+                        timeout=timeout,
+                        host=host,
+                        authpost=authpost,
+                        cookies=cookies,
+                        retry_401=False,
+                    )
             return r.status_code if r.status_code != 200 else 500, None
 
         self.vdebug("request-end={}".format(r.status_code))
         if r.status_code != 200:
+            if r.status_code == 401 and not authpost and retry_401 and not getattr(self, "_is_logging_in", False):
+                self._arlo.warning(f"request returned 401 Unauthorized for {path}, attempting re-login and retry")
+                if hasattr(self, "_relogin") and self._relogin():
+                    return self._request_tuple(
+                        path=path,
+                        method=method,
+                        params=params,
+                        headers=headers,
+                        stream=stream,
+                        raw=raw,
+                        timeout=timeout,
+                        host=host,
+                        authpost=authpost,
+                        cookies=cookies,
+                        retry_401=False,
+                    )
             return r.status_code, None
 
         if raw:
@@ -314,10 +352,27 @@ class ArloBackEnd(object):
             if body["meta"]["code"] == 200:
                 return 200, body["data"]
             else:
+                meta_code = int(body["meta"]["code"])
+                if (meta_code == 401 or body["meta"].get("error") == 9204) and not authpost and retry_401 and not getattr(self, "_is_logging_in", False):
+                    self._arlo.warning(f"response meta error {body['meta'].get('error')} for {path}, attempting re-login and retry")
+                    if hasattr(self, "_relogin") and self._relogin():
+                        return self._request_tuple(
+                            path=path,
+                            method=method,
+                            params=params,
+                            headers=headers,
+                            stream=stream,
+                            raw=raw,
+                            timeout=timeout,
+                            host=host,
+                            authpost=authpost,
+                            cookies=cookies,
+                            retry_401=False,
+                        )
                 # don't warn on untrusted errors, they just mean we need to log in
                 if body["meta"]["error"] != 9204:
                     self._arlo.warning("error in new response=" + str(body))
-                return int(body["meta"]["code"]), body["meta"]["message"]
+                return meta_code, body["meta"]["message"]
 
         # Original response type
         elif "success" in body:
@@ -342,10 +397,11 @@ class ArloBackEnd(object):
             timeout=None,
             host=None,
             authpost=False,
-            cookies=None
+            cookies=None,
+            retry_401=True,
     ):
         code, body = self._request_tuple(path=path, method=method, params=params, headers=headers,
-                                         stream=stream, raw=raw, timeout=timeout, host=host, authpost=authpost, cookies=cookies)
+                                         stream=stream, raw=raw, timeout=timeout, host=host, authpost=authpost, cookies=cookies, retry_401=retry_401)
         return body if code == 200 else None
 
     def get_intelligence_events(self, from_date, limit=100, location_id=None, max_pages=50):
@@ -651,7 +707,13 @@ class ArloBackEnd(object):
 
             # restart login...
             self._event_client = None
-            self._logged_in = False
+            login_lock = getattr(self, "_login_lock", None)
+            if login_lock is not None:
+                with login_lock:
+                    if time.monotonic() - getattr(self, "_last_login_time", 0) >= 10:
+                        self._logged_in = False
+            else:
+                self._logged_in = False
 
     def _mqtt_topics(self):
         topics = set()
@@ -666,14 +728,43 @@ class ArloBackEnd(object):
         self.debug("topics=\n{}".format(pprint.pformat(topics)))
         self._event_client.subscribe(topics)
 
-    def _mqtt_on_connect(self, _client, _userdata, _flags, rc):
+    def _mqtt_on_connect(self, _client, _userdata, _flags, rc, *args):
         # Subscribing in on_connect() means that if we lose the connection and
         # reconnect then subscriptions will be renewed.
         self.debug(f"mqtt: connected={str(rc)}")
-        self._mqtt_subscribe()
+        if rc == 0:
+            self._mqtt_reconnect_attempts = 0
+            self._mqtt_subscribe()
+            with self._lock:
+                self._event_connected = True
+                self._lock.notify_all()
+            self._arlo.bg.run(self.devices)
+        else:
+            self._arlo.warning(f"mqtt: connection rejected with code {rc}")
+            with self._lock:
+                self._event_connected = False
+                self._lock.notify_all()
+            if self._event_client is not None:
+                try:
+                    self._event_client.disconnect()
+                except Exception:
+                    pass
+
+    def _mqtt_on_disconnect(self, _client, _userdata, *args):
+        rc = args[0] if args else 0
+        self.debug(f"mqtt: disconnected rc={str(rc)}")
         with self._lock:
-            self._event_connected = True
+            self._event_connected = False
             self._lock.notify_all()
+        if rc != 0:
+            self._mqtt_reconnect_attempts = getattr(self, "_mqtt_reconnect_attempts", 0) + 1
+            if self._mqtt_reconnect_attempts >= 3:
+                self.debug("multiple unexpected mqtt disconnects, forcing re-login")
+                if self._event_client is not None:
+                    try:
+                        self._event_client.disconnect()
+                    except Exception:
+                        pass
 
     def _mqtt_on_log(self, _client, _userdata, _level, msg):
         self.vdebug(f"mqtt: log={str(msg)}")
@@ -723,6 +814,7 @@ class ArloBackEnd(object):
                 )
             self._event_client.on_log = self._mqtt_on_log
             self._event_client.on_connect = self._mqtt_on_connect
+            self._event_client.on_disconnect = self._mqtt_on_disconnect
             self._event_client.on_message = self._mqtt_on_message
             ssl_context = ssl.create_default_context()
             if not self._arlo.cfg.mqtt_hostname_check:
@@ -754,10 +846,21 @@ class ArloBackEnd(object):
         self.debug("fetching device list after ev-reconnect")
         self.devices()
 
-    def _sse_reconnect(self):
+    def _event_reconnect(self):
         self.debug("trying to reconnect")
         if self._event_client is not None:
-            self._event_client.stop()
+            if self._use_mqtt:
+                try:
+                    self._event_client.disconnect()
+                except Exception as e:
+                    self.debug(f"error disconnecting mqtt client: {e}")
+            else:
+                try:
+                    self._event_client.stop()
+                except Exception as e:
+                    self.debug(f"error stopping sse client: {e}")
+
+    _sse_reconnect = _event_reconnect
 
     def _sse_main(self):
 
@@ -862,11 +965,17 @@ class ArloBackEnd(object):
                 self._lock.wait(1)
                 count += 1
 
-        # start logout daemon for sse clients
-        if not self._use_mqtt:
-            if self._arlo.cfg.reconnect_every != 0:
-                self.debug("automatically reconnecting")
-                self._arlo.bg.run_every(self._sse_reconnect, self._arlo.cfg.reconnect_every)
+        # start reconnect daemon
+        reconnect_interval = self._arlo.cfg.reconnect_every
+        if reconnect_interval == 0:
+            if self._expires_in and self._expires_in > 600:
+                reconnect_interval = self._expires_in - 300
+            else:
+                reconnect_interval = 90 * 60
+
+        if reconnect_interval != 0:
+            self.debug(f"automatically reconnecting every {reconnect_interval}s")
+            self._reconnect_job = self._arlo.bg.run_every(self._event_reconnect, reconnect_interval)
 
         self.debug("stream up")
         return True
@@ -1234,7 +1343,36 @@ class ArloBackEnd(object):
         if self._cookies is not None:
             self._session.cookies = self._cookies
 
+    def _relogin(self):
+        login_lock = getattr(self, "_login_lock", None)
+        if login_lock is None:
+            self._login_lock = threading.RLock()
+            login_lock = self._login_lock
+        with login_lock:
+            if time.monotonic() - getattr(self, "_last_login_time", 0) < 10:
+                return True
+            self.debug("re-logging in after 401 or token expiration")
+            if self._login():
+                self._event_reconnect()
+                return True
+            return False
+
     def _login(self):
+        login_lock = getattr(self, "_login_lock", None)
+        if login_lock is None:
+            self._login_lock = threading.RLock()
+            login_lock = self._login_lock
+        with login_lock:
+            self._is_logging_in = True
+            try:
+                result = self._login_internal()
+                if result:
+                    self._last_login_time = time.monotonic()
+                return result
+            finally:
+                self._is_logging_in = False
+
+    def _login_internal(self):
 
         # pickup user configured user agent
         self._user_agent = self.user_agent(self._arlo.cfg.user_agent)
@@ -1338,6 +1476,9 @@ class ArloBackEnd(object):
         See https://github.com/twrecked/pyaarlo/issues/71
         """
         self.debug("stopping backend")
+        if getattr(self, "_reconnect_job", None) is not None:
+            self._arlo.bg.cancel(self._reconnect_job)
+            self._reconnect_job = None
         self._event_stop_loop()
         if self._event_client is not None:
             try:
