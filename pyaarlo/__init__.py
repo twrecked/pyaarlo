@@ -788,22 +788,22 @@ class PyArlo:
         """
         return self.lookup_device_by_name(name) or self.lookup_location_by_name(name)
 
-    def get_intelligence_events(
+    async def get_intelligence_events(
         self,
         from_date: Any,
         limit: int = 100,
         location_id: str | None = None,
         max_pages: int = 50,
-    ) -> Any:
+    ) -> list[dict[str, Any]]:
         """Return flattened Arlo Intelligence events for the requested date."""
-        return self.be.get_intelligence_events(
+        return await self.be.get_intelligence_events(
             from_date=from_date,
             limit=limit,
             location_id=location_id,
             max_pages=max_pages,
         )
 
-    def feed_metadata(
+    async def feed_metadata(
         self,
         owner_id: str,
         location_id: str,
@@ -812,7 +812,7 @@ class PyArlo:
         group_by: str = "events",
         next_page: str | None = None,
         asc: bool = False,
-    ) -> Any:
+    ) -> dict[str, Any]:
         """Return one Arlo Feed metadata page for a location.
 
         :param owner_id: Owner/user id for the Arlo location.
@@ -846,63 +846,54 @@ class PyArlo:
         if next_page is not None:
             params["nextPage"] = next_page
 
-        result = self.be.post_with_status(
+        res = self.be.post_with_status(
             FEED_METADATA_PATH_FORMAT.format(owner_id, location_id),
             params,
             raw=True,
         )
+        http_status, response = await res if inspect.isawaitable(res) else res
 
-        def _process_response(http_status: int, response: Any) -> dict[str, Any]:
-            if http_status != 200:
-                raise FeedMetadataError(
-                    "Arlo Feed metadata request failed",
-                    http_status=http_status,
-                )
+        if http_status != 200:
+            raise FeedMetadataError(
+                "Arlo Feed metadata request failed",
+                http_status=http_status,
+            )
 
-            if not isinstance(response, dict):
-                raise FeedMetadataError(
-                    "Arlo Feed metadata request returned no usable response",
-                    http_status=http_status,
-                    response_type=type(response).__name__,
-                )
+        if not isinstance(response, dict):
+            raise FeedMetadataError(
+                "Arlo Feed metadata request returned no usable response",
+                http_status=http_status,
+                response_type=type(response).__name__,
+            )
 
-            response_keys = tuple(sorted(str(key) for key in response.keys()))
-            meta = response.get("meta")
-            meta_error = meta.get("error") if isinstance(meta, dict) else None
-            if not isinstance(meta_error, int):
-                meta_error = None
-            if isinstance(meta, dict) and "code" in meta and meta.get("code") != 200:
-                raise FeedMetadataError(
-                    "Arlo Feed metadata request failed",
-                    http_status=http_status,
-                    response_type="dict",
-                    response_keys=response_keys,
-                    meta_code=meta.get("code"),
-                    meta_error=meta_error,
-                )
+        response_keys = tuple(sorted(str(key) for key in response.keys()))
+        meta = response.get("meta")
+        meta_error = meta.get("error") if isinstance(meta, dict) else None
+        if not isinstance(meta_error, int):
+            meta_error = None
+        if isinstance(meta, dict) and "code" in meta and meta.get("code") != 200:
+            raise FeedMetadataError(
+                "Arlo Feed metadata request failed",
+                http_status=http_status,
+                response_type="dict",
+                response_keys=response_keys,
+                meta_code=meta.get("code"),
+                meta_error=meta_error,
+            )
 
-            data = response.get("data")
-            if not isinstance(data, dict):
-                meta_code = meta.get("code") if isinstance(meta, dict) else None
-                raise FeedMetadataError(
-                    "Arlo Feed metadata response missing metadata data",
-                    http_status=http_status,
-                    response_type="dict",
-                    response_keys=response_keys,
-                    meta_code=meta_code,
-                    meta_error=meta_error,
-                )
+        data = response.get("data")
+        if not isinstance(data, dict):
+            meta_code = meta.get("code") if isinstance(meta, dict) else None
+            raise FeedMetadataError(
+                "Arlo Feed metadata response missing metadata data",
+                http_status=http_status,
+                response_type="dict",
+                response_keys=response_keys,
+                meta_code=meta_code,
+                meta_error=meta_error,
+            )
 
-            return data
-
-        if inspect.isawaitable(result):
-            async def _async_call() -> dict[str, Any]:
-                http_status, response = await result
-                return _process_response(http_status, response)
-            return _async_call()
-
-        http_status, response = result
-        return _process_response(http_status, response)
+        return data
 
     def _feed_items_from_metadata(self, metadata: Any) -> list[dict[str, Any]]:
         """Return Feed item dictionaries from a Feed metadata response."""
@@ -929,7 +920,7 @@ class PyArlo:
 
         return items
 
-    def feed_items(
+    async def feed_items(
         self,
         owner_id: str,
         location_id: str,
@@ -937,13 +928,13 @@ class PyArlo:
         limit: int = 200,
         next_page: str | None = None,
         asc: bool = False,
-    ) -> Any:
+    ) -> list[dict[str, Any]]:
         """Return Feed item dictionaries for one Feed metadata page.
 
         This requests Feed metadata grouped by events, then flattens the
         `groupByEvents` response into the raw Feed item dictionaries.
         """
-        res = self.feed_metadata(
+        metadata = await self.feed_metadata(
             owner_id,
             location_id,
             from_date,
@@ -952,13 +943,7 @@ class PyArlo:
             next_page=next_page,
             asc=asc,
         )
-        if inspect.isawaitable(res):
-            async def _async_items() -> list[dict[str, Any]]:
-                metadata = await res
-                return self._feed_items_from_metadata(metadata)
-            return _async_items()
-
-        return self._feed_items_from_metadata(res)
+        return self._feed_items_from_metadata(metadata)
 
     def inject_response(self, response):
         """Inject a raw JSON response (simulating a network packet) directly into the event stream.

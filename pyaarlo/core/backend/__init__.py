@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 import pprint
 import re
 import time
@@ -1213,13 +1214,13 @@ class ArloBackEnd:
     async def _request_tuple(self, *args: Any, **kwargs: Any) -> tuple[int, Any]:
         return await self._req.request_tuple(*args, **kwargs)
 
-    def get_intelligence_events(
+    async def get_intelligence_events(
         self,
         from_date: Any,
         limit: int = 100,
         location_id: str | None = None,
         max_pages: int = 50,
-    ) -> Any:
+    ) -> list[dict[str, Any]]:
         """Return flattened Arlo Intelligence events from the feed metadata API.
 
         ``from_date`` must be a ``YYYYMMDD`` string or a ``datetime.date``. The
@@ -1267,14 +1268,14 @@ class ArloBackEnd:
         else:
             host = base_host + "/hmsfeeds"
 
-        req_fn = getattr(self, "_request", None)
-        if req_fn is not None:
-            events: list[dict[str, Any]] = []
-            for current_location_id in location_ids:
-                path = f"/users/{owner_id}/{current_location_id}/metadata"
-                next_page = None
-                for _ in range(max_pages):
-                    response = req_fn(
+        events: list[dict[str, Any]] = []
+        for current_location_id in location_ids:
+            path = f"/users/{owner_id}/{current_location_id}/metadata"
+            next_page = None
+            for _ in range(max_pages):
+                req_fn = getattr(self, "_request", None)
+                if req_fn is not None:
+                    res = req_fn(
                         path,
                         method="POST",
                         params={
@@ -1287,21 +1288,8 @@ class ArloBackEnd:
                         host=host,
                         raw=True,
                     )
-                    data = response.get("data", response) if isinstance(response, dict) else {}
-                    grouped = data.get("groupByEvents", {}) if isinstance(data, dict) else {}
-                    events.extend(_flatten_intelligence_events(grouped, current_location_id))
-                    candidate = data.get("nextPage") if isinstance(data, dict) else None
-                    if not candidate or candidate == next_page:
-                        break
-                    next_page = candidate
-            return events
-
-        async def _async_get_events() -> list[dict[str, Any]]:
-            async_events: list[dict[str, Any]] = []
-            for current_location_id in location_ids:
-                path = f"/users/{owner_id}/{current_location_id}/metadata"
-                next_page = None
-                for _ in range(max_pages):
+                    response = await res if inspect.isawaitable(res) else res
+                else:
                     response = await self._req.request(
                         path,
                         method="POST",
@@ -1315,16 +1303,15 @@ class ArloBackEnd:
                         host=host,
                         raw=True,
                     )
-                    data = response.get("data", response) if isinstance(response, dict) else {}
-                    grouped = data.get("groupByEvents", {}) if isinstance(data, dict) else {}
-                    async_events.extend(_flatten_intelligence_events(grouped, current_location_id))
-                    candidate = data.get("nextPage") if isinstance(data, dict) else None
-                    if not candidate or candidate == next_page:
-                        break
-                    next_page = candidate
-            return async_events
 
-        return _async_get_events()
+                data = response.get("data", response) if isinstance(response, dict) else {}
+                grouped = data.get("groupByEvents", {}) if isinstance(data, dict) else {}
+                events.extend(_flatten_intelligence_events(grouped, current_location_id))
+                candidate = data.get("nextPage") if isinstance(data, dict) else None
+                if not candidate or candidate == next_page:
+                    break
+                next_page = candidate
+        return events
 
     async def devices(self):
         return await self.get(f"{DEVICES_PATH}?t={time_to_arlotime()}")

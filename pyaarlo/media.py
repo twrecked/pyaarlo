@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 import os
 from typing import Any, Callable
 from datetime import datetime, timedelta
@@ -144,24 +145,28 @@ class ArloMediaDownloader:
 class ArloMediaLibrary:
     """Arlo Library Media module implementation."""
 
-    _code: ArloCore
-    _objs: ArloObjects
+    _core: Any
+    _objs: Any
 
-    def __init__(self, core: ArloCore, objs: ArloObjects):
+    def __init__(self, core: Any, objs: Any = None):
         self._core = core
         self._objs = objs
 
         self._load_cbs_: list[Callable[..., Any]] = []
+        self._update_pending: bool = False
         self._count = 0
         self._videos: list[Any] = []
         self._video_keys: list[str] = []
         self._snapshots: dict[str, Any] = {}
 
-        self._downloader = ArloMediaDownloader(core, self._core.cfg.save_media_to)
+        save_format = getattr(getattr(core, "cfg", None), "save_media_to", "") or ""
+        self._downloader = ArloMediaDownloader(core, save_format)
         self._downloader.start()
 
     def __repr__(self):
-        return "<{0}:{1}>".format(self.__class__.__name__, self._core.cfg.name)
+        cfg = getattr(self._core, "cfg", None)
+        name = getattr(cfg, "name", "media")
+        return "<{0}:{1}>".format(self.__class__.__name__, name)
 
     async def _fetch_library(self, date_from, date_to):
         """Get the library.
@@ -187,9 +192,13 @@ class ArloMediaLibrary:
         return ArloSnapshot(video, camera)
 
     def _lookup_camera_by_id(self, device_id: str):
-        camera = list(filter(lambda cam: cam.device_id == device_id, self._objs.cameras))
-        if camera:
-            return camera[0]
+        if self._objs is not None:
+            camera = list(filter(lambda cam: cam.device_id == device_id, self._objs.cameras))
+            if camera:
+                return camera[0]
+            return None
+        if hasattr(self._core, "lookup_camera_by_id"):
+            return self._core.lookup_camera_by_id(device_id)
         return None
 
     async def _sync_library(self, date_from, date_to, keys):
@@ -198,17 +207,14 @@ class ArloMediaLibrary:
         Passing an empty keys will cause all video information in the given
         date range to be recorded.
         """
-
-        # Fetch video metadata.
         data = await self._fetch_library(date_from, date_to)
         if data is None:
-            self._core.log.warning("error loading the image library")
             return None, None, None
 
+        known_keys = set(keys)
         videos = []
         snapshots = {}
         for video in data:
-
             # Look for camera, skip if not found.
             camera = self._lookup_camera_by_id(video.get("deviceId"))
             if camera is None:
@@ -235,14 +241,15 @@ class ArloMediaLibrary:
                 key = "{0}:{1}".format(
                     camera.device_id, arlotime_strftime(video.get("utcCreatedDate"))
                 )
-                if key in keys:
+                if key in known_keys:
                     self.vdebug(f"skipping {key} for {camera.name}")
                     continue
                 self.vdebug(f"adding {key} for {camera.name}")
-                video = self._create_video(video, camera,)
-                videos.append(video)
-                self._downloader.queue_download(video)
+                video_obj = self._create_video(video, camera)
+                videos.append(video_obj)
+                self._downloader.queue_download(video_obj)
                 keys.append(key)
+                known_keys.add(key)
 
         return videos, snapshots, keys
 
@@ -251,23 +258,25 @@ class ArloMediaLibrary:
         self.debug("updating image library")
 
         # Get known videos.
-        keys = self._video_keys
+        keys = list(self._video_keys)
 
         # Get today's new videos.
         date_to = datetime.today().strftime("%Y%m%d")
-        videos, snapshots, keys = await self._sync_library(date_to, date_to, keys)
+        videos, snapshots, updated_keys = await self._sync_library(date_to, date_to, keys)
         if videos is None:
+            self._update_pending = False
             self._core.log.warning("error updating the image library")
             return
 
         # Append the new videos.
         self._count += 1
         self._videos = videos + self._videos
-        self._video_keys = keys
+        self._video_keys = updated_keys
         self._snapshots = snapshots
         self.debug(f"update-count={self._count}, video-count={len(videos)}, snapshot-count={len(snapshots)}")
         cbs = self._load_cbs_
         self._load_cbs_ = []
+        self._update_pending = False
 
         # run callbacks
         for cb in cbs:
@@ -277,15 +286,14 @@ class ArloMediaLibrary:
                 cb()
 
     async def load(self):
-
         # set beginning and end
-        days = self._core.cfg.library_days
+        cfg = getattr(self._core, "cfg", None)
+        days = getattr(cfg, "library_days", 7)
         now = datetime.today()
         date_from = (now - timedelta(days=days)).strftime("%Y%m%d")
         date_to = now.strftime("%Y%m%d")
         self.debug(f"loading image library ({days} days)")
 
-        # save videos for cameras we know about
         videos, snapshots, keys = await self._sync_library(date_from, date_to, [])
         if videos is None:
             self._core.log.warning("error loading the image library")
@@ -317,19 +325,32 @@ class ArloMediaLibrary:
         return self._count, camera_videos
 
     def queue_update(self, cb):
-        if not self._load_cbs_:
+        tasks = getattr(self._core, "tasks", None)
+        if not self._update_pending:
             self.debug("queueing image library update")
-            self._core.tasks.run_in(self.update, 2)
-        self._load_cbs_.append(cb)
+            if tasks is not None and hasattr(tasks, "run_in"):
+                tasks.run_in(self.update, 2)
+            self._update_pending = True
+        # Camera refreshes read the latest cache, not individual events.
+        if cb not in self._load_cbs_:
+            self._load_cbs_.append(cb)
 
     def stop(self):
         self._downloader.stop()
 
     def debug(self, msg):
-        self._core.log.debug(f"media-library: {msg}")
+        log = getattr(self._core, "log", None)
+        if log is not None and hasattr(log, "debug"):
+            log.debug(f"media-library: {msg}")
+        elif hasattr(self._core, "debug"):
+            self._core.debug(f"media-library: {msg}")
 
     def vdebug(self, msg):
-        self._core.log.vdebug(f"media-library: {msg}")
+        log = getattr(self._core, "log", None)
+        if log is not None and hasattr(log, "vdebug"):
+            log.vdebug(f"media-library: {msg}")
+        elif hasattr(self._core, "vdebug"):
+            self._core.vdebug(f"media-library: {msg}")
 
 
 class ArloMediaObject:

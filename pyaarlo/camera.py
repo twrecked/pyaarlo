@@ -1,7 +1,10 @@
 import asyncio
 import base64
+import inspect
 import pprint
+import threading
 import time
+from typing import Any
 import zlib
 
 from .constant import (
@@ -61,8 +64,12 @@ from .capabilities import ArloCapabilities
 
 
 class ArloCamera(ArloChildDevice):
-    def __init__(self, name: str, core: ArloCore, objs: ArloObjects, attrs):
+    def __init__(self, name: str, core: Any, objs: Any = None, attrs: Any = None):
+        if attrs is None and isinstance(objs, dict):
+            attrs = objs
+            objs = None
         super().__init__(name, core, objs, attrs)
+        self._stream_lock = asyncio.Lock()
         self._recent = False
         self._recent_job = None
         self._cache_count = None
@@ -83,7 +90,8 @@ class ArloCamera(ArloChildDevice):
         self._blank_image = base64.standard_b64decode(BLANK_IMAGE)
 
         # XXX temporary...
-        self.debug(f"camera-count={len(objs.cameras)}")
+        if objs is not None and hasattr(objs, "cameras"):
+            self.debug(f"camera-count={len(objs.cameras)}")
 
     def _parse_statistic(self, data, scale):
         """Parse binary statistics returned from the history API"""
@@ -302,6 +310,10 @@ class ArloCamera(ArloChildDevice):
 
     async def _get_stream_url(self, starting_for, user_agent=None):
         """Getting the stream URL without starting local streaming."""
+        async with self._stream_lock:
+            return await self._get_stream_url_locked(starting_for, user_agent)
+
+    async def _get_stream_url_locked(self, starting_for, user_agent=None):
         body = {
             "action": "get",
             "from": self.web_id,
@@ -319,19 +331,27 @@ class ArloCamera(ArloChildDevice):
         if user_agent is not None:
             headers["User-Agent"] = self._core.cfg.user_agent_string(user_agent)
 
-        self._stream_url = await self._core.be.post(STREAM_START_PATH, body, headers=headers)
-        if self._stream_url is not None:
+        response = await self._core.be.post(STREAM_START_PATH, body, headers=headers)
+        stream_url = (
+            response["url"].replace("rtsp://", "rtsps://")
+            if response is not None else None
+        )
+        if stream_url is not None:
             if not self.has_any_local_users:
                 self._local_users.add(starting_for)
                 self._dump_activities("_get_stream_url")
 
-            self._stream_url = self._stream_url["url"].replace("rtsp://", "rtsps://")
-            self.debug("url={}".format(self._stream_url))
+            self.debug("url={}".format(stream_url))
         else:
             self.debug(f"No stream url for {self.name}")
-        return self._stream_url
+        self._stream_url = stream_url
+        return stream_url
 
     async def _start_stream(self, starting_for, user_agent=None):
+        async with self._stream_lock:
+            return await self._start_stream_locked(starting_for, user_agent)
+
+    async def _start_stream_locked(self, starting_for, user_agent=None):
         # Already streaming. Update sub-activity as needed.
         if self.has_any_local_users:
             self._local_users.add(starting_for)
@@ -362,13 +382,17 @@ class ArloCamera(ArloChildDevice):
         if user_agent is not None:
             headers["User-Agent"] = self._core.cfg.user_agent_string(user_agent)
 
-        self._stream_url = await self._core.be.post(STREAM_START_PATH, body, headers=headers)
-        if self._stream_url is not None:
-            self._stream_url = self._stream_url["url"].replace("rtsp://", "rtsps://")
-            self.debug("url={}".format(self._stream_url))
-        else:
-            self._local_users = set()
-        return self._stream_url
+        stream_url = None
+        try:
+            response = await self._core.be.post(STREAM_START_PATH, body, headers=headers)
+            if response is not None:
+                stream_url = response["url"].replace("rtsp://", "rtsps://")
+                self.debug("url={}".format(stream_url))
+        finally:
+            self._stream_url = stream_url
+            if stream_url is None:
+                self._local_users.discard(starting_for)
+        return stream_url
 
     async def _stop_stream(self, stopping_for="streaming"):
         self._local_users.discard(stopping_for)
@@ -944,43 +968,42 @@ class ArloCamera(ArloChildDevice):
             return "recently active"
         return super().state
     
-    def get_stream_url(self, user_agent=None):
+    async def get_stream_url(self, user_agent=None):
         """Getting the stream URL without starting local streaming."""
-        
-        return self._get_stream_url("remote", user_agent)
+        return await self._get_stream_url("remote", user_agent)
 
-    def get_stream(self, user_agent=None):
+    async def get_stream(self, user_agent=None):
         """Start a stream and return the URL for it.
 
         Code does nothing with the url, it's up to you to pass the url to something.
 
         The stream will stop if nothing connects to it within 30 seconds.
         """
-        return self._start_stream("streaming", user_agent)
+        return await self._start_stream("streaming", user_agent)
 
-    def start_stream(self, user_agent=None):
+    async def start_stream(self, user_agent=None):
         """Start a stream and return the URL for it.
 
         Code does nothing with the url, it's up to you to pass the url to something.
 
         The stream will stop if nothing connects to it within 30 seconds.
         """
-        return self._start_stream("streaming", user_agent)
+        return await self._start_stream("streaming", user_agent)
 
-    def start_snapshot_stream(self, user_agent=None):
-        return self._start_stream("snapshot", user_agent)
+    async def start_snapshot_stream(self, user_agent=None):
+        return await self._start_stream("snapshot", user_agent)
 
-    def start_recording_stream(self, user_agent=None):
-        return self._start_stream("recording", user_agent)
+    async def start_recording_stream(self, user_agent=None):
+        return await self._start_stream("recording", user_agent)
 
-    def stop_stream(self):
-        self._stop_stream("streaming")
+    async def stop_stream(self):
+        await self._stop_stream("streaming")
 
-    def stop_snapshot_stream(self):
-        self._stop_stream("snapshot")
+    async def stop_snapshot_stream(self):
+        await self._stop_stream("snapshot")
 
-    def stop_recording_stream(self):
-        self._stop_stream("recording")
+    async def stop_recording_stream(self):
+        await self._stop_stream("recording")
 
     async def wait_for_user_stream(self, timeout=15):
         self.debug("waiting for stream")
