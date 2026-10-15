@@ -13,7 +13,6 @@ from enum import IntEnum
 from typing import Any, Callable, TypeAlias
 
 from ...constant import (
-    MQTT_HOST,
     ORIGIN_HOST,
     MQTT_PATH,
     SUBSCRIBE_PATH,
@@ -138,28 +137,24 @@ class _MQTT:
         self._session.log.vdebug(f"{msg}")
 
     def _subscribe_devices(self, devices: list[dict[str, Any]]) -> None:
-        topics: list[tuple[str, int]] = []
+        topics: set[tuple[str, int]] = set()
         for device in devices:
             for topic in device.get("allowedMqttTopics", []):
-                topics.append((topic, 0))
+                topics.add((topic, 0))
 
-        self._debug("topics=\n{}".format(pprint.pformat(topics)))
-        if self._client:
-            _ = self._client.subscribe(topics)
+        sorted_topics = sorted(list(topics))
+        self._debug("topics=\n{}".format(pprint.pformat(sorted_topics)))
+        if self._client and sorted_topics:
+            _ = self._client.subscribe(sorted_topics)
 
     def _subscribe_basic(self) -> None:
-        # Make sure we are listening to library events and individual base
-        # station events. This seems sufficient for now.
+        # Make sure we are listening to user events and individual device events.
         if self._client:
             _ = self._client.subscribe([
-                (f"u/{self._session.details.user_id}/in/userSession/connect", 0),
-                (f"u/{self._session.details.user_id}/in/userSession/disconnect", 0),
-                (f"u/{self._session.details.user_id}/in/library/add", 0),
-                (f"u/{self._session.details.user_id}/in/library/update", 0),
-                (f"u/{self._session.details.user_id}/in/library/remove", 0)
+                (f"u/{self._session.details.user_id}/in/#", 0),
             ])
 
-    def _on_connect(self, _client: mqtt.Client, _userdata: Any, _flags: dict[str, Any], rc: int) -> None:
+    def _on_connect(self, _client: mqtt.Client, _userdata: Any, _flags: dict[str, Any], rc: int, *args: Any) -> None:
         # Subscribing in on_connect() means that if we lose the connection and
         # reconnect then subscriptions will be renewed.
         self._debug(f"connected={str(rc)}")
@@ -198,7 +193,6 @@ class _MQTT:
         try:
             self._debug("(re)starting mqtt event loop")
             headers = {
-                "Host": MQTT_HOST,
                 "Origin": ORIGIN_HOST,
             }
 
@@ -209,17 +203,29 @@ class _MQTT:
             self._debug(f"_client_id={self._client_id}")
 
             # Create and set up the MQTT client.
-            self._client = mqtt.Client(
-                client_id=self._client_id, transport=self._session.cfg.mqtt_transport
-            )
+            if hasattr(mqtt, "CallbackAPIVersion"):
+                self._client = mqtt.Client(
+                    mqtt.CallbackAPIVersion.VERSION1,
+                    client_id=self._client_id,
+                    transport=self._session.cfg.mqtt_transport,
+                )
+            else:
+                self._client = mqtt.Client(
+                    client_id=self._client_id, transport=self._session.cfg.mqtt_transport
+                )
             self._client.on_log = self._on_log
             self._client.on_connect = self._on_connect
             self._client.on_message = self._on_message
             ssl_context = ssl.create_default_context()
-            ssl_context.check_hostname = self._session.cfg.mqtt_hostname_check
+            if not self._session.cfg.mqtt_hostname_check:
+                ssl_context.check_hostname = False
+                ssl_context.verify_mode = ssl.CERT_NONE
+            else:
+                ssl_context.check_hostname = True
             self._client.tls_set_context(ssl_context)
             self._client.username_pw_set(f"{self._session.details.user_id}", self._session.details.token)
-            self._client.ws_set_options(path=MQTT_PATH, headers=headers)
+            if self._session.cfg.mqtt_transport == "websockets":
+                self._client.ws_set_options(path=MQTT_PATH, headers=headers)
             self._debug(
                 f"host={self._session.cfg.mqtt_host}, "
                 f"check={self._session.cfg.mqtt_hostname_check}, "

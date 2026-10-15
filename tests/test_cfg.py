@@ -94,3 +94,39 @@ def test_extra_device_states(log):
 
     cfg3 = ArloCfg(log=log, extra_device_states=["Deactivated", "OFFLINE"])
     assert cfg3.extra_device_states == ["deactivated", "offline"]
+
+
+def test_mqtt_config(log):
+    cfg = ArloCfg(log=log, mqtt_host="my-custom-host.com", mqtt_port=8883)
+    assert cfg.mqtt_host == "my-custom-host.com"
+    assert cfg.mqtt_port == 8883
+    assert cfg.mqtt_transport == "websockets"
+
+
+def test_update_mqtt_from_url(log):
+    cfg = ArloCfg(log=log)
+    assert cfg.event_backend == "auto"
+    cfg.update_mqtt_from_url("wss://mqtt-cluster-v2-z2-1.arloxcld.com:8084")
+    assert cfg.event_backend == "mqtt"
+    assert cfg.mqtt_host == "mqtt-cluster-v2-z2-1.arloxcld.com"
+    assert cfg.mqtt_port == 8084
+    assert cfg.mqtt_transport == "websockets"
+
+
+def test_update_mqtt_from_url_default_port(log):
+    cfg = ArloCfg(log=log)
+    cfg.update_mqtt_from_url("wss://mqtt-cluster-v2-z2-1.arloxcld.com")
+    assert cfg.mqtt_port == 443
+    assert cfg.mqtt_transport == "websockets"
+
+
+def test_update_mqtt_from_url_overrides_legacy_defaults(log):
+    from pyaarlo.constant import MQTT_HOST
+    cfg = ArloCfg(log=log, mqtt_host=MQTT_HOST, mqtt_transport="tcp")
+    assert cfg.mqtt_host == MQTT_HOST
+    assert cfg.mqtt_transport == "tcp"
+    cfg.update_mqtt_from_url("wss://mqtt-cluster-v2-z2-1.arloxcld.com:8084")
+    assert cfg.mqtt_host == "mqtt-cluster-v2-z2-1.arloxcld.com"
+    assert cfg.mqtt_port == 8084
+    assert cfg.mqtt_transport == "websockets"
+

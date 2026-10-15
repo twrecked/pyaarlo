@@ -123,7 +123,7 @@ class PyArlo:
     * **snapshot_timeout** - Time, in seconds, to stop the snapshot attempt and return the camera to the idle state.
     * **mqtt_host** - specify the mqtt host to use, default mqtt-cluster.arloxcld.com
     * **mqtt_hostname_check** - disable MQTT host SSL certificate checking, default True
-    * **mqtt_transport** - specify either `websockets` or `tcp`, default `tcp`
+    * **mqtt_transport** - specify either `websockets` or `tcp`, default `websockets`
     * **ecdh_curve** - Sets initial ecdhCurve for Cloudscraper. Available options are `prime256v1`
       and `secp384r1`. Backend will try all options if login fails.
     * **send_source** - Add a `Source` item to the authentication header, default is False.
