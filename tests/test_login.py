@@ -283,6 +283,69 @@ async def test_backend_login_mfa_disabled_fallback_in_factor(tmp_path):
         assert backend._req.details.token == "token-factor-fallback"
 
 
+@pytest.mark.asyncio
+async def test_auth_get_connection_cloudscraper(tmp_path):
+    """Test _auth_get_connection successfully configures cloudscraper backend."""
+    import cloudscraper
+
+    log = ArloLogger()
+    cfg = ArloCfg(log, http_backend="cloudscraper", storage_dir=str(tmp_path))
+    tasks = ArloTaskManager(log)
+    backend = ArloBackEnd(cfg, log, tasks)
+
+    backend._auth.attempt = 1
+    backend._auth.curves = cfg.ecdh_curves.copy()
+
+    success = backend._auth_get_connection()
+
+    assert success is True
+    assert isinstance(backend._req.details.connection, cloudscraper.CloudScraper)
+    assert backend._req.details.async_connection is None
+
+
+@pytest.mark.asyncio
+async def test_auth_get_connection_curl_cffi(tmp_path):
+    """Test _auth_get_connection configures curl_cffi with synced cookie jars."""
+    from curl_cffi.requests import Session as cffi_Session, AsyncSession as cffi_AsyncSession
+
+    log = ArloLogger()
+    cfg = ArloCfg(log, http_backend="curl_cffi", storage_dir=str(tmp_path))
+    tasks = ArloTaskManager(log)
+    backend = ArloBackEnd(cfg, log, tasks)
+
+    await backend._req.load_cookies()
+    backend._auth.attempt = 1
+    backend._auth.curves = cfg.ecdh_curves.copy()
+
+    success = backend._auth_get_connection()
+
+    assert success is True
+    assert isinstance(backend._req.details.connection, cffi_Session)
+    assert isinstance(backend._req.details.async_connection, cffi_AsyncSession)
+    assert backend._req.details.connection.cookies.jar is backend._req.details.cookies
+    assert backend._req.details.async_connection.cookies.jar is backend._req.details.cookies
+
+
+@pytest.mark.asyncio
+async def test_auth_get_connection_requests(tmp_path):
+    """Test _auth_get_connection configures plain requests backend."""
+    import requests
+
+    log = ArloLogger()
+    cfg = ArloCfg(log, http_backend="requests", storage_dir=str(tmp_path))
+    tasks = ArloTaskManager(log)
+    backend = ArloBackEnd(cfg, log, tasks)
+
+    backend._auth.attempt = 1
+    backend._auth.curves = cfg.ecdh_curves.copy()
+
+    success = backend._auth_get_connection()
+
+    assert success is True
+    assert isinstance(backend._req.details.connection, requests.Session)
+    assert backend._req.details.async_connection is None
+
+
 
 
 

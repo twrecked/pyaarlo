@@ -58,7 +58,7 @@ class _AuthDetails:
         self.factor_id: str | None = None
         self.needs_pairing: bool = False
         self.tfa_handler: ArloTFA | None = None
-        self.attempt: int = 4
+        self.attempt: int = 1
         self.curves: list[str] = []
 
 
@@ -504,7 +504,8 @@ class ArloBackEnd:
                 "factorData": "",
                 "factorType": "BROWSER"
             },
-            self._auth.headers
+            self._auth.headers,
+            cookies=self._req.details.cookies
         )
         if code != 200:
             self._log.error(f"login: auth pairing failed: {code} - {body}")
@@ -706,72 +707,74 @@ class ArloBackEnd:
     def _auth_get_connection(self) -> bool:
         """Keep track of connection attempts and curve tries.
 
-        We make 3 attempts to log in. Each attempt will try a different
-        CloudFlare curve. Once we log in we use the working connection
-        for the next stage of the login.
-
-        Note, these loops can be flipped if needed
-
-        Before its first use:
-         - set _auth.attempt to 1
-         - set _auth.curves to []
+        We make 3 attempts to log in.
+        - For curl_cffi: 3 attempts with modern browser TLS fingerprint.
+        - For requests: 3 attempts with plain requests.Session (for testing).
+        - For cloudscraper: cycles through CloudFlare ECDH curves per attempt.
         """
-
-        while True:
-            # Check for curl_cffi override first
-            if self._cfg.http_backend == "curl_cffi":
-                # We only need to try curl_cffi once per attempt loop.
-                # If we're at attempt > 1 but we haven't exhausted curves, we skip this branch
-                # so we can manage the attempt counter correctly, or we can just try it 3 times.
-                
-                # To align with how cloudscraper tries N curves per attempt,
-                # we'll just try curl_cffi once per attempt.
-                if self._auth.curves:
-                    # Dummy clear of curves to indicate we tried this attempt
-                    self._auth.curves = []
-                    try:
-                        self._debug("auth: using curl_cffi backend")
-                        from curl_cffi.requests import Session as cffi_Session
-                        from curl_cffi.requests import AsyncSession as cffi_AsyncSession
-                        self._req.details.connection = cffi_Session(impersonate=cast(Any, self._cfg.curl_cffi_impersonate))
-                        self._req.details.async_connection = cffi_AsyncSession(impersonate=cast(Any, self._cfg.curl_cffi_impersonate))
-                        return True
-                    except Exception as e:
-                        self._log.warning(f"auth: failed to use curl_cffi backend: {e}")
-
-            elif self._cfg.http_backend == "requests":
-                if self._auth.curves:
-                    self._auth.curves = []
-                    import requests
-                    self._debug("auth: using requests backend")
-                    self._req.details.connection = requests.Session()
-                    return True
-                # We still have a curve to try? Grab a connection using it.
-                if self._auth.curves:
-                    curve = self._auth.curves.pop(0)
-                    self._debug(f"auth: CloudFlare curve set to: {curve}")
-                    import cloudscraper
-                    self._req.details.connection = cloudscraper.create_scraper(
-                        disableCloudflareV1=True,
-                        ecdhCurve=curve,
-                        debug=False,
-                    )
-                    return True
-
-            # Do we still have attempts left? Refill the curves and try the
-            # next one.
-            if self._auth.attempt < 4:
+        # 1. curl_cffi backend (default)
+        if self._cfg.http_backend == "curl_cffi":
+            if self._auth.attempt <= 3:
+                self._debug(f"auth: login attempt #{self._auth.attempt} (curl_cffi)")
                 self._auth.attempt += 1
-                self._auth.curves = self._cfg.ecdh_curves
-                self._debug(f"auth: login attempt #{self._auth.attempt - 1}, curves={self._auth.curves}")
+                try:
+                    from curl_cffi.requests import Session as cffi_Session
+                    from curl_cffi.requests import AsyncSession as cffi_AsyncSession
+                    self._req.details.connection = cffi_Session(impersonate=cast(Any, self._cfg.curl_cffi_impersonate))
+                    self._req.details.async_connection = cffi_AsyncSession(impersonate=cast(Any, self._cfg.curl_cffi_impersonate))
+                    if self._req.details.cookies is not None:
+                        self._req.details.connection.cookies.jar = self._req.details.cookies
+                        self._req.details.async_connection.cookies.jar = self._req.details.cookies
+                    return True
+                except Exception as e:
+                    self._log.warning(f"auth: failed to use curl_cffi: {e}")
+            self._req.details.connection = None
+            self._req.details.async_connection = None
+            return False
+
+        # 2. requests backend (for mocks/testing)
+        if self._cfg.http_backend == "requests":
+            if self._auth.attempt <= 3:
+                self._debug(f"auth: login attempt #{self._auth.attempt} (requests)")
+                self._auth.attempt += 1
+                import requests
+                self._req.details.connection = requests.Session()
+                self._req.details.async_connection = None
+                if self._req.details.cookies is not None:
+                    self._req.details.connection.cookies = self._req.details.cookies
+                return True
+            self._req.details.connection = None
+            self._req.details.async_connection = None
+            return False
+
+        # 3. cloudscraper backend (cycles curves across attempts)
+        while True:
+            if self._auth.curves:
+                curve = self._auth.curves.pop(0)
+                self._debug(f"auth: attempt #{self._auth.attempt}, CloudFlare curve set to: {curve}")
+                import cloudscraper
+                self._req.details.connection = cloudscraper.create_scraper(
+                    disableCloudflareV1=True,
+                    ecdhCurve=curve,
+                    debug=False,
+                )
+                self._req.details.async_connection = None
+                if self._req.details.cookies is not None:
+                    self._req.details.connection.cookies = self._req.details.cookies
+                return True
+
+            # If all curves in this attempt failed, advance attempt and reload curves
+            if self._auth.attempt < 3:
+                self._auth.attempt += 1
+                self._auth.curves = self._cfg.ecdh_curves.copy()
+                self._debug(f"auth: starting attempt #{self._auth.attempt} with curves={self._auth.curves}")
                 continue
 
-            # We've failed...
-            self._debug("auth: failed")
+            # All attempts and curves exhausted
+            self._debug("auth: all connection attempts failed")
             self._req.details.connection = None
-            break
-
-        return False
+            self._req.details.async_connection = None
+            return False
 
     async def _auth_revalidate_token(self) -> _AuthState:
         """See if we can skip auth by re-using the old token.
@@ -793,12 +796,13 @@ class ArloBackEnd:
             self._debug("auth: login expired")
             return _AuthState.LOGIN
 
-        while self._auth_get_connection():
+        # Reset attempts and curves for revalidation
+        self._auth.attempt = 1
+        self._auth.curves = self._cfg.ecdh_curves.copy()
 
-            # Fix up the connection with saved state.
-            self._req.details.connection.cookies = self._req.details.cookies
+        while self._auth_get_connection():
             self._auth.headers = self._req.auth_headers()
-            self._auth.headers["Authorization"] = self._req.details.token64
+            self._auth.headers["Authorization"] = str(self._req.details.token64 or "")
 
             # Try the current token.
             state = await self._auth_validate()
@@ -809,8 +813,6 @@ class ArloBackEnd:
             # Don't try too hard.
             await asyncio.sleep(3)
 
-        # Login...
-        # Maybe reset here...
         return _AuthState.LOGIN
 
     async def _auth_login(self) -> _AuthState:
@@ -821,10 +823,11 @@ class ArloBackEnd:
         """
         self._debug("auth: logging in")
 
-        while self._auth_get_connection():
+        # Reset attempts and curves for login
+        self._auth.attempt = 1
+        self._auth.curves = self._cfg.ecdh_curves.copy()
 
-            # Fix up the connection with saved state.
-            self._req.details.connection.cookies = self._req.details.cookies
+        while self._auth_get_connection():
             self._auth.headers = self._req.auth_headers()
 
             # Attempt the auth.
@@ -864,7 +867,7 @@ class ArloBackEnd:
             await asyncio.sleep(3)
 
         # Here means we're out of retries so stop now.
-        self._log.error(f"login failed: no more curves - possible cloudflare issue")
+        self._log.error(f"login failed: all connection attempts failed - possible cloudflare issue")
         return _AuthState.FAILED
 
     async def _auth_starting(self) -> _AuthState:
@@ -877,8 +880,6 @@ class ArloBackEnd:
         self._req.details.connection = None
         self._auth.factor_id = None
         self._auth.needs_pairing = True
-        self._auth.attempt = 1
-        self._auth.curves = self._cfg.ecdh_curves
 
         return _AuthState.REVALIDATE_TOKEN
 

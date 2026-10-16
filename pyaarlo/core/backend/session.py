@@ -144,16 +144,32 @@ class ArloSession:
 
     async def save_cookies(self):
         if self.details.cookies is not None:
+            for conn in (self.details.connection, self.details.async_connection):
+                if conn is not None and hasattr(conn, "cookies"):
+                    jar = getattr(conn.cookies, "jar", conn.cookies)
+                    if jar is not self.details.cookies and hasattr(jar, "__iter__"):
+                        for cookie in jar:
+                            self.details.cookies.set_cookie(cookie)
             self._debug(f"saving-cookies={self.details.cookies}")
             await asyncio.to_thread(self.details.cookies.save, ignore_discard=True)
 
     async def load_cookies(self):
         self.details.cookies = LWPCookieJar(self._cfg.cookies_file)
         try:
-            await asyncio.to_thread(self.details.cookies.load)
+            await asyncio.to_thread(self.details.cookies.load, ignore_discard=True)
         except Exception as _e:
             pass
         self._debug(f"loading cookies={self.details.cookies}")
+        if self.details.connection is not None and hasattr(self.details.connection, "cookies"):
+            if hasattr(self.details.connection.cookies, "jar"):
+                self.details.connection.cookies.jar = self.details.cookies
+            else:
+                self.details.connection.cookies = self.details.cookies
+        if self.details.async_connection is not None and hasattr(self.details.async_connection, "cookies"):
+            if hasattr(self.details.async_connection.cookies, "jar"):
+                self.details.async_connection.cookies.jar = self.details.cookies
+            else:
+                self.details.async_connection.cookies = self.details.cookies
 
     def auth_headers(self) -> dict[str, Any]:
         """Build headers needed for authentication phase.
