@@ -326,13 +326,27 @@ what Arlo devices you have. Please turn on DEBUG level logging, capture the
 output and include as much information as possible about what you were trying to
 do.
 
+### Capturing Browser Traffic (.har)
+
+When troubleshooting issues (such as API changes, stream errors, or unsupported device features), it is very helpful to provide a `.har` (HTTP Archive) file showing what Arlo's official web interface does. Because `my.arlo.com` is working against the same back-end, recording an action on the website captures the exact sequence of requests, endpoints, and responses that Arlo expects.
+
+1. Open your browser and navigate to [my.arlo.com](https://my.arlo.com/#/home).
+2. Open Developer Tools (`F12` or `Ctrl+Shift+I` / `Cmd+Option+I` on macOS) and select the **Network** tab.
+3. Check the **Preserve log** checkbox so page transitions do not clear recorded requests.
+4. Perform the expected action on the website (e.g. view a live stream, stop the stream, change modes, or interact with the device feature).
+5. In the Network tab, click the **Export HAR** icon (downward arrow) or right-click any request in the table and choose **Save all as HAR with content**.
+
+> **Important:** HAR files contain session cookies, tokens, and authorization headers. **Always encrypt** your HAR file using the instructions below before posting it publicly!
+
+### Encrypting Logs and HAR Files
+
 You can use the `pyaarlo` executable to anonymize and encrypt feature on
-arbitrary data like log files or source code. If you are only encrypting you
+arbitrary data like log files, HAR files, or source code. If you are only encrypting you
 don't need your username and password.
 
 ```bash
-# encrypt an existing file
-cat output-file | pyaarlo encrypt
+# encrypt an existing log or HAR file
+cat output-file.har | pyaarlo encrypt > output-file.har.enc
 
 # anonymize and then encrypt a file
 cat output-file | pyaarlo -u 'your-user-name' -p 'your-password' anonymize | pyaarlo encrypt
@@ -343,7 +357,7 @@ logs. No anonymizing is possible this way.
  
 ```bash
 # encrypt an existing file
-cat output-file | ./bin/pyaarlo-encrypt encrypt
+cat output-file.har | ./bin/pyaarlo-encrypt encrypt > output-file.har.enc
 ```
 
 `pyaarlo-encrypt` is a fancy wrapper around:

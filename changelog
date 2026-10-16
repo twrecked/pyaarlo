@@ -1,3 +1,69 @@
+0.8.0.27
+  Bug Fixes
+  - MQTT & Auth Token Reconnect: Enable the periodic reconnect daemon for MQTT
+    event streaming and auto-schedule reconnections before the 2-hour Arlo auth
+    token expiration.
+  - Automatic Session Recovery: Automatically catch HTTP 401 Unauthorized and
+    meta 9204 errors across all REST API calls and re-authenticate transparently
+    to keep mode setting, device status, and camera actions functional.
+  - MQTT Lifecycle Robustness: Disconnect cleanly to force a fresh login on auth
+    rejection or repeated connection loss, and refresh device states upon
+    successful reconnection.
+
+0.8.0.26
+  Bug Fixes
+  - MQTT Backend Support: Update MQTT event backend to use WebSocket Secure (wss://)
+    transport to match Arlo's event broker.
+  - Dynamic Broker URL Detection: Parse dynamic MQTT broker host, port, and transport
+    from session response and override legacy default settings.
+  - Subscriptions: Deduplicate device topic subscriptions and subscribe to wildcard
+    user notifications (u/{userId}/in/#).
+  - Paho MQTT Compatibility: Add support for paho-mqtt 2.x callback API.
+
+0.8.0.25
+  Features
+  - Add Arlo Feed Metadata: New feed_metadata() and feed_items() methods have been
+    added to access Arlo's Feed API. This allows for the retrieval of rich
+    metadata, including AI-powered event captions (e.g., "Person detected",
+    "Package detected"). (#205 by @ssheld)
+  - Add Arlo Intelligence Events: A new get_intelligence_events() method has
+    been added to retrieve events from the Arlo Intelligence API. The method
+    handles different data formats returned by the API to provide a consistent
+    output. (#212 by @Jaehdawg)
+
+  Bug Fixes
+  - Media Library Stability: Fixed a critical bug where the media library could
+    stop updating after a temporary API or network error. The library will now
+    recover gracefully without requiring a restart. Also improves performance
+    for users with large libraries. (#214 by @Tosko4)
+  - Streaming Reliability: Improved the reliability of starting video streams by
+    serializing requests. This fixes race conditions and ensures the system
+    cleans up correctly after a failed stream attempt. (#213 by @Tosko4)
+  - Authentication: Corrected URL encoding in certain authentication requests
+    to improve login reliability. (#212 by @Jaehdawg)
+  - HTTP Client Robustness: The internal HTTP client is now more robust and can
+    better handle missing headers or non-JSON error responses from the Arlo API.
+    (#205 by @ssheld)
+
+
+0.8.0.24
+  Fix login when MFA is disabled by Arlo service (#1163)
+
+0.8.0.23
+  Add Arlo Wired Floodlight Camera 2K (FLW2001) support
+
+0.8.0.22
+  Add Arlo Pro6 support [thanks @edwin-anne]
+0.8.0.21
+  Add extra_device_states option [thanks @bk86a]
+  Add curl_cffi backend to bypass Cloudflare bot detection on Arlo API [thanks @shouldbecommitted]
+0.8.0.20
+  Fix IMAP 2FA OTP extraction on Latin-1 / text-plain mail [thanks @paalkr]
+  Support V3 custom modes and location-based alarm panel [thanks @GuiPoM]
+  Fix stop() leaving ghost threads that block reconnection [thanks @Fernandosnulerin]
+  Fix AttributeError in update_mode when API returns None [thanks @primmer10590]
+0.8.0.19
+  Update media.py to fix date issue.
 0.8.0.18
   Fix a 3.7 run issue.
 0.8.0.17
