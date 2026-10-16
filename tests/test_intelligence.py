@@ -1,6 +1,6 @@
 import pytest
 
-from pyaarlo.backend import ArloBackEnd, _flatten_intelligence_events
+from pyaarlo.core.backend import ArloBackEnd, _flatten_intelligence_events
 
 
 class _Location:

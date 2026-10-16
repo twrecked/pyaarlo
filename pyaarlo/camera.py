@@ -64,10 +64,7 @@ from .capabilities import ArloCapabilities
 
 
 class ArloCamera(ArloChildDevice):
-    def __init__(self, name: str, core: Any, objs: Any = None, attrs: Any = None):
-        if attrs is None and isinstance(objs, dict):
-            attrs = objs
-            objs = None
+    def __init__(self, name: str, core: ArloCore, objs: ArloObjects, attrs):
         super().__init__(name, core, objs, attrs)
         self._stream_lock = asyncio.Lock()
         self._recent = False
@@ -90,8 +87,7 @@ class ArloCamera(ArloChildDevice):
         self._blank_image = base64.standard_b64decode(BLANK_IMAGE)
 
         # XXX temporary...
-        if objs is not None and hasattr(objs, "cameras"):
-            self.debug(f"camera-count={len(objs.cameras)}")
+        self.debug(f"camera-count={len(objs.cameras)}")
 
     def _parse_statistic(self, data, scale):
         """Parse binary statistics returned from the history API"""
@@ -288,24 +284,26 @@ class ArloCamera(ArloChildDevice):
         self.debug("removing streaming activity state")
         self._local_users = set()
         self._remote_users = set()
+        self._stream_url = None
         self._dump_activities("_event::idle")
         self._stream_state_event.set()
         self._stream_state_event.clear()
 
     async def _stop_activity(self):
         """Request the camera stop whatever it is doing and return to the idle state."""
-        response = await self._core.be.notify(
-            device_id=self.base_station.device_id,
-            xcloud_id=self.base_station.xcloud_id,
-            body={
-                "action": "set",
-                "properties": {"activityState": "idle"},
-                "publishResponse": True,
-                "resource": self.resource_id,
-            },
-            wait_for="response",
-        )
-        if response is not None:
+        try:
+            await self._core.be.notify(
+                device_id=self.base_station.device_id,
+                xcloud_id=self.base_station.xcloud_id,
+                body={
+                    "action": "set",
+                    "properties": {"activityState": "idle"},
+                    "publishResponse": True,
+                    "resource": self.resource_id,
+                },
+                wait_for="response",
+            )
+        finally:
             self._mark_as_idle()
 
     async def _get_stream_url(self, starting_for, user_agent=None):
@@ -449,6 +447,10 @@ class ArloCamera(ArloChildDevice):
             self._set_recent(self._core.cfg.recent_time)
 
             return
+
+        if event.get("action") == "wakeup":
+            self.debug(f"{self.name} woke up")
+            self._set_recent(self._core.cfg.recent_time)
 
         # Camera Activity State
         activity = event.get("properties", {}).get("activityState", "unknown")

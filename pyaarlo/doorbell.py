@@ -36,7 +36,7 @@ class ArloDoorBell(ArloChildDevice):
         self.debug(self.name + " DOORBELL got one " + resource)
 
         # create fake motion/button press event...
-        if resource == self.resource_id:
+        if resource == self.resource_id or resource == "basestation":
             props = event.get("properties", {})
 
             # Newer doorbells send a motionDetected True followed by False. If we

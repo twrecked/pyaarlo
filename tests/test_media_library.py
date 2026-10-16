@@ -14,7 +14,9 @@ def library(monkeypatch):
     arlo = MagicMock()
     arlo.cfg.save_media_to = ""
     arlo.be.post = AsyncMock(return_value=[])
-    library = ArloMediaLibrary(arlo)
+    objs = MagicMock()
+    objs.cameras = []
+    library = ArloMediaLibrary(arlo, objs)
     library._videos = [object()]
     library._video_keys = ["existing-video"]
     library._snapshots = {"camera": object()}
@@ -62,7 +64,7 @@ async def test_success_after_failure_notifies_waiters_and_allows_next_refresh(li
     await library.update()
 
     camera = SimpleNamespace(device_id="camera", name="Test", base_station=None)
-    library._core.lookup_camera_by_id.return_value = camera
+    library._objs.cameras = [camera]
     video = {"deviceId": "camera", "contentType": "video/mp4",
              "utcCreatedDate": 1700000000000, "name": "new-video"}
     library._core.be.post.return_value = [video] if has_video else []

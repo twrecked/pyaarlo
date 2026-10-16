@@ -141,6 +141,11 @@ class ArloBackEnd:
         self._requests: dict[str, Any] = {}
         self._callbacks: dict[str, list[Callable[..., Any]]] = {}
         self._resource_types = DEFAULT_RESOURCES
+        self._login_lock: asyncio.Lock = asyncio.Lock()
+        self._last_login_time: float = 0.0
+        self._reconnect_job: str | None = None
+        self._mqtt_reconnect_attempts: int = 0
+        self._req.set_relogin_handler(self._relogin)
 
     def _debug(self, msg: str) -> None:
         self._log.debug(f"backend: {msg}")
@@ -210,6 +215,24 @@ class ArloBackEnd:
                 props = response['devices'][device_id]
                 responses.append((device_id, resource, props))
 
+        # Base station status / wakeup responses
+        elif resource == "basestation":
+            self._debug("packet: basestation status/wakeup")
+            from_id = response.get("from", None)
+            props = response.get("properties", {})
+            if isinstance(props, dict) and "devices" in props and isinstance(props["devices"], list):
+                for dev_id in props["devices"]:
+                    responses.append((dev_id, resource, response))
+                if from_id and from_id not in props["devices"]:
+                    responses.append((from_id, resource, response))
+            elif isinstance(props, list):
+                for prop in props:
+                    dev_id = prop.get("serialNumber", from_id)
+                    responses.append((dev_id, resource, prop))
+            else:
+                if from_id is not None:
+                    responses.append((from_id, resource, response))
+
         # These are base station responses. Which can be about the base station
         # or devices on it... Check if property is list.
         # XXX these might be deprecated
@@ -245,9 +268,13 @@ class ArloBackEnd:
         #  Check for locationId
         # If none of those then is unhandled
         else:
-            device_id = response.get("deviceId",
-                                     response.get("uniqueId",
-                                                  response.get("locationId", None)))
+            device_id = response.get(
+                "deviceId",
+                response.get(
+                    "uniqueId",
+                    response.get("locationId", response.get("from", None))
+                )
+            )
             if device_id is not None:
                 responses.append((device_id, resource, response))
             else:
@@ -894,6 +921,21 @@ class ArloBackEnd:
         await self._req.save_cookies()
         return True
 
+    async def _relogin(self) -> bool:
+        async with self._login_lock:
+            if time.monotonic() - self._last_login_time < 10:
+                return True
+            self._debug("re-logging in after 401 or token expiration")
+            self._req._is_logging_in = True
+            try:
+                if await self._login():
+                    self._last_login_time = time.monotonic()
+                    await self._event_reconnect()
+                    return True
+                return False
+            finally:
+                self._req._is_logging_in = False
+
     def _session_connection(self) -> bool:
         """Make sure the headers are set up for the non-auth phase.
         """
@@ -1018,6 +1060,23 @@ class ArloBackEnd:
             count += 1
         # XXX: check count and fail?
 
+        # start reconnect daemon
+        reconnect_interval = self._cfg.reconnect_every
+        if reconnect_interval == 0:
+            token_expires_in = getattr(self._req.details, "token_expires_in", None)
+            if token_expires_in:
+                delta = int(token_expires_in - time.time())
+                if delta > 600:
+                    reconnect_interval = delta - 300
+                else:
+                    reconnect_interval = 90 * 60
+            else:
+                reconnect_interval = 90 * 60
+
+        if reconnect_interval != 0:
+            self._debug(f"automatically reconnecting every {reconnect_interval}s")
+            self._reconnect_job = self._tasks.run_every(self._event_reconnect, reconnect_interval)
+
         self._debug("stream up")
         return True
 
@@ -1027,6 +1086,10 @@ class ArloBackEnd:
 
     async def stop(self, logout: bool=True):
         self._debug("trying to stop")
+
+        if self._reconnect_job is not None:
+            self._tasks.cancel(self._reconnect_job)
+            self._reconnect_job = None
 
         await self._event_loop_stop()
         if self._event.stream is not None:
@@ -1210,9 +1273,6 @@ class ArloBackEnd:
             timeout=timeout,
             host=host,
         )
-
-    async def _request_tuple(self, *args: Any, **kwargs: Any) -> tuple[int, Any]:
-        return await self._req.request_tuple(*args, **kwargs)
 
     async def get_intelligence_events(
         self,

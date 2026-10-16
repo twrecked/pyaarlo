@@ -15,7 +15,9 @@ def library(monkeypatch):
     arlo.cfg.save_media_to = ""
     arlo.cfg.library_days = 7
     arlo.be.post = AsyncMock(return_value=[])
-    return ArloMediaLibrary(arlo)
+    objs = MagicMock()
+    objs.cameras = []
+    return ArloMediaLibrary(arlo, objs)
 
 
 @pytest.mark.asyncio
@@ -86,9 +88,7 @@ async def test_callback_can_queue_itself_for_the_next_refresh(library):
 @pytest.mark.asyncio
 async def test_recording_order_and_deduplication_survive_load_and_refresh(library):
     camera = SimpleNamespace(device_id="test-camera", name="Test", base_station=None)
-    library._core.lookup_camera_by_id.side_effect = (
-        lambda device_id: camera if device_id == camera.device_id else None
-    )
+    library._objs.cameras = [camera]
 
     def record(name, timestamp, device_id=camera.device_id):
         return {"deviceId": device_id, "contentType": "video/mp4",

@@ -10,34 +10,26 @@ from .logger import ArloLogger
 
 class ArloStorage:
 
-    def __init__(self, cfg: Any, log: Any = None):
-        if log is None:
-            arlo = cfg
-            self._cfg = getattr(arlo, "cfg", arlo)
-            self._log = getattr(arlo, "log", getattr(arlo, "_log", arlo))
-        else:
-            self._cfg = cfg
-            self._log = log
+    def __init__(self, cfg: ArloCfg, log: ArloLogger):
+        self._cfg: ArloCfg = cfg
+        self._log: ArloLogger = log
 
-        self._state_file: str | None = getattr(self._cfg, "state_file", None)
+        self._state_file: str | None = self._cfg.state_file
         self._db: dict[str, Any] = {}
 
         self._create_storage_directory()
         self.load()
 
-        if hasattr(self._log, "debug"):
-            self._log.debug("storage: created")
+        self._log.debug("storage: created")
 
     def _create_storage_directory(self):
         """Create storage area.
         """
         try:
-            storage_dir = getattr(self._cfg, "storage_dir", None)
-            if storage_dir and isinstance(storage_dir, str) and not os.path.exists(storage_dir):
-                os.mkdir(storage_dir)
+            if not os.path.exists(self._cfg.storage_dir):
+                os.mkdir(self._cfg.storage_dir)
         except Exception as _e:
-            if hasattr(self._log, "warning"):
-                self._log.warning(f"Problem creating {getattr(self._cfg, 'storage_dir', '')}")
+            self._log.warning(f"Problem creating {self._cfg.storage_dir}")
 
     def _ekey(self, key: str | list[str]) -> str:
         return key if not isinstance(key, list) else "/".join(key)

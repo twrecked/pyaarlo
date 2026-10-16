@@ -1,11 +1,12 @@
 import asyncio
+import inspect
 import pickle
 import pprint
 import uuid
 import traceback
 
 from http.cookiejar import LWPCookieJar
-from typing import Any
+from typing import Any, Callable
 
 from ...constant import (
     ORIGIN_HOST,
@@ -62,6 +63,11 @@ class ArloSession:
         self._save_filename = cfg.session_file
         self._save_username = cfg.username
         self._save_info: dict[str, dict[str, str]] | None = None
+        self._relogin_handler: Callable[..., Any] | None = None
+        self._is_logging_in: bool = False
+
+    def set_relogin_handler(self, handler: Callable[..., Any] | None) -> None:
+        self._relogin_handler = handler
 
 
     def _debug(self, msg: str):
@@ -277,7 +283,8 @@ class ArloSession:
             timeout=None,
             host=None,
             authpost=False,
-            cookies=None
+            cookies=None,
+            retry_401=True,
     ):
         if params is None:
             params = {}
@@ -378,10 +385,46 @@ class ArloSession:
         except Exception as e:
             self._log.warning("body-error={}".format(type(e).__name__))
             self._debug(f"request-text={r.text}")
+            if r.status_code == 401 and not authpost and retry_401 and not self._is_logging_in:
+                self._log.warning(f"request returned 401 Unauthorized for {path}, attempting re-login and retry")
+                if self._relogin_handler is not None:
+                    res = self._relogin_handler()
+                    if await res if inspect.isawaitable(res) else res:
+                        return await self.request_tuple(
+                            path=path,
+                            method=method,
+                            params=params,
+                            headers=headers,
+                            stream=stream,
+                            raw=raw,
+                            timeout=timeout,
+                            host=host,
+                            authpost=authpost,
+                            cookies=cookies,
+                            retry_401=False,
+                        )
             return r.status_code if r.status_code != 200 else 500, None
 
         self._vdebug("request-end={}".format(r.status_code))
         if r.status_code != 200:
+            if r.status_code == 401 and not authpost and retry_401 and not self._is_logging_in:
+                self._log.warning(f"request returned 401 Unauthorized for {path}, attempting re-login and retry")
+                if self._relogin_handler is not None:
+                    res = self._relogin_handler()
+                    if await res if inspect.isawaitable(res) else res:
+                        return await self.request_tuple(
+                            path=path,
+                            method=method,
+                            params=params,
+                            headers=headers,
+                            stream=stream,
+                            raw=raw,
+                            timeout=timeout,
+                            host=host,
+                            authpost=authpost,
+                            cookies=cookies,
+                            retry_401=False,
+                        )
             return r.status_code, None
 
         if raw:
@@ -395,10 +438,29 @@ class ArloSession:
             if body["meta"]["code"] == 200:
                 return 200, body["data"]
             else:
+                meta_code = int(body["meta"]["code"])
+                if (meta_code == 401 or body["meta"].get("error") == 9204) and not authpost and retry_401 and not self._is_logging_in:
+                    self._log.warning(f"response meta error {body['meta'].get('error')} for {path}, attempting re-login and retry")
+                    if self._relogin_handler is not None:
+                        res = self._relogin_handler()
+                        if await res if inspect.isawaitable(res) else res:
+                            return await self.request_tuple(
+                                path=path,
+                                method=method,
+                                params=params,
+                                headers=headers,
+                                stream=stream,
+                                raw=raw,
+                                timeout=timeout,
+                                host=host,
+                                authpost=authpost,
+                                cookies=cookies,
+                                retry_401=False,
+                            )
                 # don't warn on untrusted errors, they just mean we need to log in
                 if body["meta"]["error"] != 9204:
                     self._log.warning("error in new response=" + str(body))
-                return int(body["meta"]["code"]), body["meta"]["message"]
+                return meta_code, body["meta"]["message"]
 
         # Original response type
         elif "success" in body:
@@ -423,10 +485,11 @@ class ArloSession:
             timeout=None,
             host=None,
             authpost=False,
-            cookies=None
+            cookies=None,
+            retry_401=True,
     ):
         code, body = await self.request_tuple(path=path, method=method, params=params, headers=headers,
-                                              stream=stream, raw=raw, timeout=timeout, host=host, authpost=authpost, cookies=cookies)
+                                              stream=stream, raw=raw, timeout=timeout, host=host, authpost=authpost, cookies=cookies, retry_401=retry_401)
         return body if code == 200 else None
 
 

@@ -129,6 +129,7 @@ class _MQTT:
         self._client: mqtt.Client | None = None
         self._client_id: str | None = None
         self._stop_event: asyncio.Event | None = None
+        self._reconnect_attempts: int = 0
 
     def _debug(self, msg: str) -> None:
         self._session.log.debug(f"{msg}")
@@ -158,10 +159,32 @@ class _MQTT:
         # Subscribing in on_connect() means that if we lose the connection and
         # reconnect then subscriptions will be renewed.
         self._debug(f"connected={str(rc)}")
-        connect_result = self._session.dispatch_connect()
-        self._subscribe_basic()
-        if "devices" in connect_result:
-            self._subscribe_devices(connect_result["devices"])
+        if rc == 0:
+            self._reconnect_attempts = 0
+            connect_result = self._session.dispatch_connect()
+            self._subscribe_basic()
+            if "devices" in connect_result:
+                self._subscribe_devices(connect_result["devices"])
+        else:
+            self._session.log.warning(f"mqtt: connection rejected with code {rc}")
+            if self._client:
+                try:
+                    _ = self._client.disconnect()
+                except Exception:
+                    pass
+
+    def _on_disconnect(self, _client: mqtt.Client, _userdata: Any, *args: Any) -> None:
+        rc = args[0] if args else 0
+        self._debug(f"mqtt: disconnected rc={str(rc)}")
+        if rc != 0:
+            self._reconnect_attempts += 1
+            if self._reconnect_attempts >= 3:
+                self._debug("multiple unexpected mqtt disconnects, forcing re-login")
+                if self._client:
+                    try:
+                        _ = self._client.disconnect()
+                    except Exception:
+                        pass
 
     def _on_log(self, _client: mqtt.Client, _userdata: Any, _level: int, msg: str) -> None:
         self._vdebug(f"log={str(msg)}")
@@ -215,6 +238,7 @@ class _MQTT:
                 )
             self._client.on_log = self._on_log
             self._client.on_connect = self._on_connect
+            self._client.on_disconnect = self._on_disconnect
             self._client.on_message = self._on_message
             ssl_context = ssl.create_default_context()
             if not self._session.cfg.mqtt_hostname_check:

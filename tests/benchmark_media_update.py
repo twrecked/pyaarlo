@@ -38,12 +38,12 @@ for size in (100, 1000, 10000):
         current = records[:size]
         camera = SimpleNamespace(device_id="test-camera", name="Synthetic", base_station=None)
         arlo = SimpleNamespace(
-            cfg=SimpleNamespace(save_media_to="", library_days=7),
+            cfg=SimpleNamespace(save_media_to="", library_days=7, name="test"),
             be=SimpleNamespace(post=AsyncMock(return_value=current)),
-            lookup_camera_by_id=lambda _: camera,
             log=SimpleNamespace(debug=lambda _: None, vdebug=lambda _: None, warning=lambda _: None, error=lambda _: None),
         )
-        library = media.ArloMediaLibrary(arlo)
+        objs = SimpleNamespace(cameras=[camera])
+        library = media.ArloMediaLibrary(arlo, objs)
         asyncio.run(library.load())
         current = records + records[size:]
         arlo.be.post.return_value = current

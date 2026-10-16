@@ -328,10 +328,19 @@ class PyArlo:
             props = device.get("properties", None)
             self.vdebug(f"device-id={device_id}")
             if device_id is not None and props is not None:
-                device_obj = self.lookup_device_by_id(device_id)
-                if device_obj is not None:
+                # A camera that is its own base station (Pro 4/5/6, Essential, wired
+                # doorbell) is registered twice under one device id, as an ArloBase
+                # and an ArloCamera. Update every object with the id, the same way
+                # the event stream dispatches to every listener.
+                targets = [
+                    d
+                    for d in self.base_stations + self.cameras + self.doorbells + self.lights
+                    if d.device_id == device_id
+                ]
+                if targets:
                     self.vdebug(f"updating {device_id} from device refresh")
-                    device_obj.update_resources(props)
+                    for target in targets:
+                        target.update_resources(props)
                 else:
                     self.vdebug(f"not updating {device_id} from device refresh")
 
@@ -507,8 +516,6 @@ class PyArlo:
 
     @property
     def be(self):
-        if hasattr(self, "_be"):
-            return self._be
         return self._core.be
 
     @property
@@ -549,8 +556,6 @@ class PyArlo:
     def locations(self) -> List[ArloLocation]:
         """Returns the list of locations known to Arlo.
         """
-        if hasattr(self, "_locations"):
-            return self._locations
         return self._objs.locations
 
     @property

@@ -145,10 +145,10 @@ class ArloMediaDownloader:
 class ArloMediaLibrary:
     """Arlo Library Media module implementation."""
 
-    _core: Any
-    _objs: Any
+    _core: ArloCore
+    _objs: ArloObjects
 
-    def __init__(self, core: Any, objs: Any = None):
+    def __init__(self, core: ArloCore, objs: ArloObjects):
         self._core = core
         self._objs = objs
 
@@ -159,14 +159,11 @@ class ArloMediaLibrary:
         self._video_keys: list[str] = []
         self._snapshots: dict[str, Any] = {}
 
-        save_format = getattr(getattr(core, "cfg", None), "save_media_to", "") or ""
-        self._downloader = ArloMediaDownloader(core, save_format)
+        self._downloader = ArloMediaDownloader(core, self._core.cfg.save_media_to)
         self._downloader.start()
 
     def __repr__(self):
-        cfg = getattr(self._core, "cfg", None)
-        name = getattr(cfg, "name", "media")
-        return "<{0}:{1}>".format(self.__class__.__name__, name)
+        return "<{0}:{1}>".format(self.__class__.__name__, self._core.cfg.name)
 
     async def _fetch_library(self, date_from, date_to):
         """Get the library.
@@ -192,13 +189,9 @@ class ArloMediaLibrary:
         return ArloSnapshot(video, camera)
 
     def _lookup_camera_by_id(self, device_id: str):
-        if self._objs is not None:
-            camera = list(filter(lambda cam: cam.device_id == device_id, self._objs.cameras))
-            if camera:
-                return camera[0]
-            return None
-        if hasattr(self._core, "lookup_camera_by_id"):
-            return self._core.lookup_camera_by_id(device_id)
+        camera = list(filter(lambda cam: cam.device_id == device_id, self._objs.cameras))
+        if camera:
+            return camera[0]
         return None
 
     async def _sync_library(self, date_from, date_to, keys):

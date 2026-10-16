@@ -1,4 +1,5 @@
 from inspect import signature
+from unittest.mock import MagicMock
 import pytest
 
 from pyaarlo import FeedMetadataError, PyArlo
@@ -13,6 +14,14 @@ class FakeBackend(object):
     async def post_with_status(self, path, params, raw=False):
         self.posts.append((path, params, raw))
         return self.http_status, self.response
+
+
+def _create_pyarlo(backend):
+    arlo = PyArlo.__new__(PyArlo)
+    core = MagicMock()
+    core.be = backend
+    arlo._core = core
+    return arlo
 
 
 @pytest.mark.asyncio
@@ -47,8 +56,7 @@ async def test_feed_metadata_posts_request_and_returns_data():
         "nextPage": "next-page",
     }
     backend = FakeBackend({"meta": {"code": 200}, "data": data})
-    arlo = PyArlo.__new__(PyArlo)
-    arlo._be = backend
+    arlo = _create_pyarlo(backend)
 
     metadata = await arlo.feed_metadata(
         "owner-id",
@@ -79,8 +87,7 @@ async def test_feed_metadata_posts_request_and_returns_data():
 @pytest.mark.asyncio
 async def test_feed_metadata_uses_feed_defaults():
     backend = FakeBackend({"meta": {"code": 200}, "data": {}})
-    arlo = PyArlo.__new__(PyArlo)
-    arlo._be = backend
+    arlo = _create_pyarlo(backend)
 
     metadata = await arlo.feed_metadata("owner-id", "location-id", "20260524")
 
@@ -101,8 +108,7 @@ async def test_feed_metadata_uses_feed_defaults():
 async def test_feed_metadata_returns_data_when_meta_has_no_code():
     data = {"groupByEvents": {}}
     backend = FakeBackend({"meta": {}, "data": data})
-    arlo = PyArlo.__new__(PyArlo)
-    arlo._be = backend
+    arlo = _create_pyarlo(backend)
 
     metadata = await arlo.feed_metadata("owner-id", "location-id", "20260524")
 
@@ -112,8 +118,7 @@ async def test_feed_metadata_returns_data_when_meta_has_no_code():
 @pytest.mark.asyncio
 async def test_feed_metadata_raises_for_http_failure():
     backend = FakeBackend(None, http_status=429)
-    arlo = PyArlo.__new__(PyArlo)
-    arlo._be = backend
+    arlo = _create_pyarlo(backend)
 
     with pytest.raises(FeedMetadataError) as ctx:
         await arlo.feed_metadata("owner-id", "location-id", "20260524")
@@ -135,8 +140,7 @@ async def test_feed_metadata_raises_for_meta_error():
             }
         }
     )
-    arlo = PyArlo.__new__(PyArlo)
-    arlo._be = backend
+    arlo = _create_pyarlo(backend)
 
     with pytest.raises(FeedMetadataError) as ctx:
         await arlo.feed_metadata("owner-id", "location-id", "20260524")
@@ -152,8 +156,7 @@ async def test_feed_metadata_raises_for_meta_error():
 @pytest.mark.asyncio
 async def test_feed_metadata_raises_for_no_usable_response():
     backend = FakeBackend("not-json")
-    arlo = PyArlo.__new__(PyArlo)
-    arlo._be = backend
+    arlo = _create_pyarlo(backend)
 
     with pytest.raises(FeedMetadataError) as ctx:
         await arlo.feed_metadata("owner-id", "location-id", "20260524")
@@ -166,8 +169,7 @@ async def test_feed_metadata_raises_for_no_usable_response():
 @pytest.mark.asyncio
 async def test_feed_metadata_raises_for_missing_data():
     backend = FakeBackend({"meta": {"code": 200}})
-    arlo = PyArlo.__new__(PyArlo)
-    arlo._be = backend
+    arlo = _create_pyarlo(backend)
 
     with pytest.raises(FeedMetadataError) as ctx:
         await arlo.feed_metadata("owner-id", "location-id", "20260524")
@@ -181,8 +183,7 @@ async def test_feed_metadata_raises_for_missing_data():
 @pytest.mark.asyncio
 async def test_feed_metadata_raises_for_non_dict_data():
     backend = FakeBackend({"meta": {"code": 200}, "data": []})
-    arlo = PyArlo.__new__(PyArlo)
-    arlo._be = backend
+    arlo = _create_pyarlo(backend)
 
     with pytest.raises(FeedMetadataError) as ctx:
         await arlo.feed_metadata("owner-id", "location-id", "20260524")
@@ -234,8 +235,7 @@ async def test_feed_items_flattens_group_by_events():
         "nextPage": "next-page",
     }
     backend = FakeBackend({"meta": {"code": 200}, "data": data})
-    arlo = PyArlo.__new__(PyArlo)
-    arlo._be = backend
+    arlo = _create_pyarlo(backend)
 
     items = await arlo.feed_items(
         "owner-id",
@@ -270,8 +270,7 @@ async def test_feed_items_always_requests_event_grouping():
     assert "group_by" not in signature(PyArlo.feed_items).parameters
 
     backend = FakeBackend({"meta": {"code": 200}, "data": {}})
-    arlo = PyArlo.__new__(PyArlo)
-    arlo._be = backend
+    arlo = _create_pyarlo(backend)
 
     await arlo.feed_items("owner-id", "location-id", "20260524")
 
@@ -281,8 +280,7 @@ async def test_feed_items_always_requests_event_grouping():
 @pytest.mark.asyncio
 async def test_feed_items_propagates_metadata_errors():
     backend = FakeBackend(None, http_status=500)
-    arlo = PyArlo.__new__(PyArlo)
-    arlo._be = backend
+    arlo = _create_pyarlo(backend)
 
     with pytest.raises(FeedMetadataError) as ctx:
         await arlo.feed_items("owner-id", "location-id", "20260524")

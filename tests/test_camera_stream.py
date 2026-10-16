@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from pyaarlo.camera import ArloCamera
-from pyaarlo.storage import ArloStorage
+from pyaarlo.core.storage import ArloStorage
 
 
 @pytest.fixture
@@ -15,8 +15,11 @@ def camera():
     arlo.cfg.state_file = None
     arlo.cfg.library_days = 7
     arlo.be.post = AsyncMock()
-    arlo.st = ArloStorage(arlo)
-    return ArloCamera("Synthetic camera", arlo, {
+    arlo.st = ArloStorage(arlo.cfg, arlo.log)
+    objs = MagicMock()
+    objs.cameras = []
+    objs.base_stations = []
+    return ArloCamera("Synthetic camera", arlo, objs, {
         "deviceId": "test-device", "deviceType": "camera",
         "parentId": "test-base", "userId": "test-user", "modelId": "TEST",
     })
