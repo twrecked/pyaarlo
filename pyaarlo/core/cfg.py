@@ -235,6 +235,10 @@ class ArloCfg:
         return cast(str, self._kw.get("mode_api", "auto"))
 
     @property
+    def refresh_devices(self) -> bool:
+        return cast(bool, self._kw.get("refresh_devices", True))
+
+    @property
     def refresh_devices_every(self) -> int:
         return cast(int, self._kw.get("refresh_devices_every", 0)) * 60 * 60
 

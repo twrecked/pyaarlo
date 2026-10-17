@@ -220,15 +220,19 @@ def light_turn_on(cli_ctx: CLIContext, targets: tuple[str, ...], brightness: int
         sys.exit(1)
 
     async def _turn_on() -> int:
-        # Check cache if not ignoring cache
-        if not cli_ctx.ignore_cache:
-            cached = load_cache()
-            if is_cache_stale(cached):
-                fill_cache(await create_pyarlo(cli_ctx.config, wait_for_setup=True))
-
-        arlo = await create_pyarlo(cli_ctx.config, wait_for_setup=True)
+        use_cache = not cli_ctx.ignore_cache
+        arlo = await create_pyarlo(
+            cli_ctx.config,
+            wait_for_setup=False,
+            start_background=False,
+            refresh_devices=not use_cache,
+        )
         try:
             matched, missing = resolve_devices(arlo.lights, target_names)
+            if missing and use_cache:
+                await arlo._refresh_devices(force=True)
+                arlo._build_objects()
+                matched, missing = resolve_devices(arlo.lights, target_names)
 
             exit_code = 0
             for name in missing:
@@ -240,8 +244,6 @@ def light_turn_on(cli_ctx: CLIContext, targets: tuple[str, ...], brightness: int
                 bright_str = f" (brightness: {brightness})" if brightness is not None else ""
                 click.echo(f"[{lt.name}] Turned ON{bright_str}")
 
-            # Also update cache with new state
-            fill_cache(arlo)
             return exit_code
         finally:
             await arlo.stop(logout=False)
@@ -261,14 +263,19 @@ def light_turn_off(cli_ctx: CLIContext, targets: tuple[str, ...]) -> None:
         sys.exit(1)
 
     async def _turn_off() -> int:
-        if not cli_ctx.ignore_cache:
-            cached = load_cache()
-            if is_cache_stale(cached):
-                fill_cache(await create_pyarlo(cli_ctx.config, wait_for_setup=True))
-
-        arlo = await create_pyarlo(cli_ctx.config, wait_for_setup=True)
+        use_cache = not cli_ctx.ignore_cache
+        arlo = await create_pyarlo(
+            cli_ctx.config,
+            wait_for_setup=False,
+            start_background=False,
+            refresh_devices=not use_cache,
+        )
         try:
             matched, missing = resolve_devices(arlo.lights, target_names)
+            if missing and use_cache:
+                await arlo._refresh_devices(force=True)
+                arlo._build_objects()
+                matched, missing = resolve_devices(arlo.lights, target_names)
 
             exit_code = 0
             for name in missing:
@@ -279,7 +286,6 @@ def light_turn_off(cli_ctx: CLIContext, targets: tuple[str, ...]) -> None:
                 await lt.turn_off()
                 click.echo(f"[{lt.name}] Turned OFF")
 
-            fill_cache(arlo)
             return exit_code
         finally:
             await arlo.stop(logout=False)
@@ -300,9 +306,19 @@ def light_brightness(cli_ctx: CLIContext, level: int, targets: tuple[str, ...]) 
         sys.exit(1)
 
     async def _set_brightness() -> int:
-        arlo = await create_pyarlo(cli_ctx.config, wait_for_setup=True)
+        use_cache = not cli_ctx.ignore_cache
+        arlo = await create_pyarlo(
+            cli_ctx.config,
+            wait_for_setup=False,
+            start_background=False,
+            refresh_devices=not use_cache,
+        )
         try:
             matched, missing = resolve_devices(arlo.lights, target_names)
+            if missing and use_cache:
+                await arlo._refresh_devices(force=True)
+                arlo._build_objects()
+                matched, missing = resolve_devices(arlo.lights, target_names)
 
             exit_code = 0
             for name in missing:
@@ -313,7 +329,6 @@ def light_brightness(cli_ctx: CLIContext, level: int, targets: tuple[str, ...]) 
                 await lt.set_brightness(level)
                 click.echo(f"[{lt.name}] Brightness set to {level}")
 
-            fill_cache(arlo)
             return exit_code
         finally:
             await arlo.stop(logout=False)
@@ -370,9 +385,19 @@ def location_list(cli_ctx: CLIContext) -> None:
 def location_set_mode(cli_ctx: CLIContext, mode: str, loc_target: str | None) -> None:
     """Set the armed/disarmed mode for a location."""
     async def _set_mode() -> int:
-        arlo = await create_pyarlo(cli_ctx.config, wait_for_setup=True)
+        use_cache = not cli_ctx.ignore_cache
+        arlo = await create_pyarlo(
+            cli_ctx.config,
+            wait_for_setup=False,
+            start_background=False,
+            refresh_devices=not use_cache,
+        )
         try:
             target_loc = resolve_location(arlo.locations, loc_target)
+            if target_loc is None and use_cache:
+                await arlo._refresh_locations(force=True)
+                target_loc = resolve_location(arlo.locations, loc_target)
+
             if target_loc is None:
                 if not arlo.locations:
                     click.echo("Error: No locations found on this Arlo account.", err=True)
@@ -382,11 +407,9 @@ def location_set_mode(cli_ctx: CLIContext, mode: str, loc_target: str | None) ->
                     click.echo(f"Error: Location '{loc_target}' not found.", err=True)
                 return 1
 
-            avail = target_loc.available_modes
             click.echo(f"Setting mode '{mode}' on location '{target_loc.name}'...")
             await target_loc.set_mode(mode)
             click.echo(f"[{target_loc.name}] Mode changed to '{mode}' (Current: {target_loc.mode})")
-            fill_cache(arlo)
             return 0
         finally:
             await arlo.stop(logout=False)

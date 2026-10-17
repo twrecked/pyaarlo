@@ -310,17 +310,26 @@ class PyArlo:
             if device_type == "sensors":
                 self._objs.sensors.append(ArloSensor(device_name, self._core, self._objs, device))
 
-    async def _refresh_devices(self):
+    async def _refresh_devices(self, force: bool = False):
         """Read in the devices list.
 
         This returns all devices known to the Arlo system. The newer devices
         include state information - battery levels etc - while the old devices
         don't. We update what we can.
         """
+        if not force and not self._core.cfg.refresh_devices and self._core.cfg.save_state:
+            cached = self._core.st.get(["ARLO", "DEVICES"])
+            if cached and isinstance(cached, list):
+                self.debug(f"using {len(cached)} saved devices from storage")
+                self._devices = cached
+                return
+
         self._devices = await self._core.be.devices()
         if not self._devices:
             self.warning("No devices returned")
             self._devices = []
+        elif self._core.cfg.save_state:
+            self._core.st.set(["ARLO", "DEVICES"], self._devices, prefix="aarlo")
         self.vdebug(f"devices={pprint.pformat(self._devices)}")
         
         # Newer devices include information in this response. Be sure to update it.
@@ -345,11 +354,21 @@ class PyArlo:
                 else:
                     self.vdebug(f"not updating {device_id} from device refresh")
 
-    async def _refresh_locations(self):
+    async def _refresh_locations(self, force: bool = False):
         """Retrieve location list from the backend
         """
         self.debug("_refresh_locations")
         self._objs.locations = []
+
+        if not force and not self._core.cfg.refresh_devices and self._core.cfg.save_state:
+            cached_loc = self._core.st.get(["ARLO", "LOCATION_DATA"])
+            if cached_loc and isinstance(cached_loc, dict):
+                self.debug("using saved location data from storage")
+                for user_location in cached_loc.get("userLocations", []):
+                    self._objs.locations.append(ArloLocation(self._core, self._objs, user_location, True))
+                for shared_location in cached_loc.get("sharedLocations", []):
+                    self._objs.locations.append(ArloLocation(self._core, self._objs, shared_location, False))
+                return
 
         elocation_data = await self._core.be.get(LOCATIONS_EMERGENCY_PATH)
         if elocation_data:
@@ -362,6 +381,8 @@ class PyArlo:
         if not location_data:
             self.warning("No locations returned from " + url)
         else:
+            if self._core.cfg.save_state:
+                self._core.st.set(["ARLO", "LOCATION_DATA"], location_data, prefix="aarlo")
             for user_location in location_data.get("userLocations", []):
                 self._objs.locations.append(ArloLocation(self._core, self._objs, user_location, True))
             for shared_location in location_data.get("sharedLocations", []):
