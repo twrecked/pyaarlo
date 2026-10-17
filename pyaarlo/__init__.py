@@ -251,7 +251,7 @@ class PyArlo:
         await self._core.be.start()
 
         # Now ping the bases.
-        self._ping_bases()
+        await self._ping_bases()
 
         # Start initial refresh and, if needed, wait for it to finish.
         if self._core.cfg.synchronous_mode or self._core.cfg.wait_for_initial_setup:
@@ -386,10 +386,10 @@ class PyArlo:
         for doorbell in self._objs.doorbells:
             await doorbell.update_silent_mode()
 
-    def _ping_bases(self):
+    async def _ping_bases(self):
         for base in self._objs.base_stations:
             if base.has_capability(PING_CAPABILITY):
-                base.ping()
+                await base.ping()
             else:
                 self.vdebug(f"NO ping to {base.device_id}")
 
@@ -413,7 +413,7 @@ class PyArlo:
     async def _fast_refresh(self):
         self.vdebug("fast refresh")
         self._core.tasks.run_now(self._core.st.save)
-        self._ping_bases()
+        await self._ping_bases()
 
         # See if the backend need to reconnect.
         await self._core.be.check_token()
@@ -986,8 +986,8 @@ class PyArlo:
         pass
 
     # TODO needs thinking about... track new cameras for example.
-    def update(self, update_cameras=False, update_base_station=False):
-        pass
+    async def update(self, update_cameras=False, update_base_station=False):
+        await self._fast_refresh()
 
     def error(self, msg):
         self._core.log.error(msg)

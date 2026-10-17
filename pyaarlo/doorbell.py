@@ -145,17 +145,17 @@ class ArloDoorBell(ArloChildDevice):
         if response is not None:
             self._save_and_do_callbacks(SILENT_MODE_KEY, silence_settings)
 
-    def silence_off(self):
-        self._core.tasks.run_now(self._silence, active=False, calls=False, chimes={})
+    async def silence_off(self):
+        await self._silence(active=False, calls=False, chimes={})
 
-    def silence_on(self):
-        self._core.tasks.run_now(self._silence, active=True, calls=True, chimes=self._build_chimes(True))
+    async def silence_on(self):
+        await self._silence(active=True, calls=True, chimes=self._build_chimes(True))
 
-    def silence_chimes(self):
-        self._core.tasks.run_now(self._silence, active=True, calls=False, chimes=self._build_chimes(True))
+    async def silence_chimes(self):
+        await self._silence(active=True, calls=False, chimes=self._build_chimes(True))
 
-    def silence_calls(self):
-        self._core.tasks.run_now(self._silence, active=True, calls=True, chimes=self._build_chimes(False))
+    async def silence_calls(self):
+        await self._silence(active=True, calls=True, chimes=self._build_chimes(False))
 
     @property
     def is_silenced(self):

@@ -561,8 +561,8 @@ class ArloBaseStation(ArloDevice):
         else:
             self._save_and_do_callbacks(CONNECTION_KEY, "available")
 
-    def ping(self):
-        self._core.tasks.run_now(self._ping_and_check_reply)
+    async def ping(self):
+        await self._ping_and_check_reply()
 
     @property
     def state(self):

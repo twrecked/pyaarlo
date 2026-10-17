@@ -291,22 +291,22 @@ class ArloLocation(ArloObject):
         if custom_modes:
             self._parse_custom_modes(custom_modes)
 
-    def stand_by(self):
-        self.mode = "standby"
+    async def stand_by(self):
+        await self.set_mode("standby")
 
     @property
     def is_stand_by(self):
         return self.mode == "standby"
 
-    def arm_home(self):
-        self.mode = "armHome"
+    async def arm_home(self):
+        await self.set_mode("armHome")
 
     @property
     def is_armed_home(self):
         return self.mode == "armHome"
 
-    def arm_away(self):
-        self.mode = "armAway"
+    async def arm_away(self):
+        await self.set_mode("armAway")
 
     @property
     def is_armed_away(self):

@@ -855,14 +855,14 @@ class ArloCamera(ArloChildDevice):
                 self._objs.ml.queue_update, check, cb=self._update_from_media_library
             )
 
-    def request_snapshot(self):
+    async def request_snapshot(self):
         """Requests a snapshot from the camera without blocking.
 
         The snapshot can be handled with callbacks registered to
         LAST_IMAGE_SRC_KEY - lastImageSource starting with snapshot/, or capture/
         LAST_IMAGE_DATA_KEY - presignedLastImageData containing the image data.
         """
-        self._core.tasks.run_now(self._request_snapshot)
+        await self._request_snapshot()
 
         self.vdebug("handle dodgy cameras")
         self._core.tasks.run_in(self._stop_snapshot, self._core.cfg.snapshot_timeout)
@@ -1035,13 +1035,13 @@ class ArloCamera(ArloChildDevice):
             return await http_get_async(video.video_url)
         return None
 
-    def stop_activity(self):
+    async def stop_activity(self):
         """Request the camera stop whatever it is doing and return to the idle state."""
         # has_any_activity
-        self._stop_activity()
+        await self._stop_activity()
         return True
 
-    def start_recording(self, duration=None):
+    async def start_recording(self, duration=None):
         """Request the camera start recording.
 
         :param duration: seconds for recording to run, `None` means no stopping.
@@ -1064,8 +1064,7 @@ class ArloCamera(ArloChildDevice):
         }
         self.debug("starting recording")
         self._save_and_do_callbacks(ACTIVITY_STATE_KEY, "alertStreamActive")
-        self._core.tasks.run_now(
-            self._core.be.post,
+        await self._core.be.post(
             path=RECORD_START_PATH,
             params=body,
             headers={"xcloudId": self.xcloud_id},
@@ -1078,7 +1077,7 @@ class ArloCamera(ArloChildDevice):
 
         return self._stream_url
 
-    def stop_recording(self):
+    async def stop_recording(self):
         """Request the camera stop recording."""
         if not self.has_user_request("recording") and not self.has_remote_user(
             "recording"
@@ -1092,8 +1091,7 @@ class ArloCamera(ArloChildDevice):
             "deviceId": self.device_id,
         }
         self.debug("stopping recording")
-        self._core.tasks.run_now(
-            self._core.be.post,
+        await self._core.be.post(
             path=RECORD_STOP_PATH,
             params=body,
             headers={"xcloudId": self.xcloud_id},
@@ -1312,7 +1310,7 @@ class ArloCamera(ArloChildDevice):
             body=body
         )
 
-    def set_volume(self, mute=False, volume=50):
+    async def set_volume(self, mute=False, volume=50):
         """Sets the music volume.
 
         :param mute: `True` to mute the volume.
@@ -1324,7 +1322,7 @@ class ArloCamera(ArloChildDevice):
             "resource": self.resource_id,
             "properties": {"speaker": {"mute": mute, "volume": volume}},
         }
-        self._core.be.notify(
+        await self._core.be.notify(
             device_id=self.device_id,
             xcloud_id=self.xcloud_id,
             body=body
@@ -1346,48 +1344,48 @@ class ArloCamera(ArloChildDevice):
         )
         return True
 
-    def nightlight_on(self):
+    async def nightlight_on(self):
         """Turns the nightlight on."""
-        self._core.tasks.run_now(self._set_nightlight_properties, properties={"enabled": True})
+        return await self._set_nightlight_properties({"enabled": True})
 
-    def nightlight_off(self):
+    async def nightlight_off(self):
         """Turns the nightlight off."""
-        self._core.tasks.run_now(self._set_nightlight_properties, properties={"enabled": False})
+        return await self._set_nightlight_properties({"enabled": False})
 
-    def set_nightlight_brightness(self, brightness):
+    async def set_nightlight_brightness(self, brightness):
         """Sets the nightlight brightness.
 
         :param brightness: brightness (0-255)
         """
-        self._core.tasks.run_now(self._set_nightlight_properties, properties={"brightness": brightness})
+        return await self._set_nightlight_properties({"brightness": brightness})
 
-    def set_nightlight_rgb(self, red=255, green=255, blue=255):
+    async def set_nightlight_rgb(self, red=255, green=255, blue=255):
         """Turns the nightlight color to the specified RGB value.
 
         :param red: red value
         :param green: green value
         :param blue: blue value
         """
-        self._core.tasks.run_now(self._set_nightlight_properties, properties={
+        return await self._set_nightlight_properties({
             "mode": "rgb", "rgb": {"red": red, "green": green, "blue": blue}
         })
 
-    def set_nightlight_color_temperature(self, temperature):
+    async def set_nightlight_color_temperature(self, temperature):
         """Turns the nightlight to the specified Kelvin color temperature.
 
         :param temperature: temperature, in Kelvin
         """
-        self._core.tasks.run_now(self._set_nightlight_properties, properties={
+        return await self._set_nightlight_properties({
             "mode": "temperature", "temperature": str(temperature)
         })
 
-    def set_nightlight_mode(self, mode):
+    async def set_nightlight_mode(self, mode):
         """Turns the nightlight to a particular mode.
 
         :param mode: either `rgb`, `temperature` or `rainbow`
         :return:
         """
-        self._core.tasks.run_now(self._set_nightlight_properties, properties={"mode": mode})
+        return await self._set_nightlight_properties({"mode": mode})
 
     async def _set_spotlight_properties(self, properties):
         self.debug(
@@ -1405,22 +1403,22 @@ class ArloCamera(ArloChildDevice):
         )
         return True
 
-    def set_spotlight_on(self):
+    async def set_spotlight_on(self):
         """Turns the spotlight on"""
-        self._core.tasks.run_now(self._set_spotlight_properties, properties={"enabled": True})
+        return await self._set_spotlight_properties({"enabled": True})
 
-    def set_spotlight_off(self):
+    async def set_spotlight_off(self):
         """Turns the spotlight off"""
-        self._core.tasks.run_now(self._set_spotlight_properties, properties={"enabled": False})
+        return await self._set_spotlight_properties({"enabled": False})
 
-    def set_spotlight_brightness(self, brightness):
+    async def set_spotlight_brightness(self, brightness):
         """Sets the nightlight brightness.
 
         :param brightness: brightness (0-255)
         """
         # Note: Intensity is 0-100 scale, which we map from 0-255 to
         #       provide an API consistent with nightlight brightness
-        self._core.tasks.run_now(self._set_spotlight_properties, properties={"intensity": (brightness / 255 * 100)})
+        return await self._set_spotlight_properties({"intensity": (brightness / 255 * 100)})
 
     async def _set_floodlight_properties(self, properties):
         self.debug(
@@ -1438,18 +1436,18 @@ class ArloCamera(ArloChildDevice):
         )
         return True
 
-    def floodlight_on(self):
+    async def floodlight_on(self):
         """Turns the floodlight on."""
-        self._core.tasks.run_now(self._set_floodlight_properties, properties={"on": True})
+        return await self._set_floodlight_properties({"on": True})
 
-    def floodlight_off(self):
+    async def floodlight_off(self):
         """Turns the floodlight off."""
-        self._core.tasks.run_now(self._set_floodlight_properties, properties={"on": False})
+        return await self._set_floodlight_properties({"on": False})
 
-    def set_floodlight_brightness(self, brightness):
+    async def set_floodlight_brightness(self, brightness):
         """Turns the floodlight brightness value (0-255)."""
         percentage = int(brightness / 255 * 100)
-        self._core.tasks.run_now(self._set_floodlight_properties, properties={
+        return await self._set_floodlight_properties({
             FLOODLIGHT_BRIGHTNESS1_KEY: percentage,
             FLOODLIGHT_BRIGHTNESS2_KEY: percentage,
         })
