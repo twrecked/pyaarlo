@@ -170,9 +170,10 @@ async def test_backend_revalidate_token_success(tmp_path):
         assert backend.is_connected is True
         assert backend._req.details.token == "saved-token-123"
         
-        # Verify that we NEVER called the login POST
+        # Verify that we NEVER called the login POST or the redundant validateAccessToken GET
         for call in rsps.calls:
             assert "/api/auth" not in call.request.url
+            assert "/api/validateAccessToken" not in call.request.url
 
 @pytest.mark.asyncio
 async def test_backend_login_mfa_disabled_by_service(tmp_path):

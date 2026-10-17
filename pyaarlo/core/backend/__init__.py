@@ -60,6 +60,7 @@ class _AuthDetails:
         self.tfa_handler: ArloTFA | None = None
         self.attempt: int = 1
         self.curves: list[str] = []
+        self.force_reauth: bool = False
 
 
 class _EventDetails:
@@ -779,7 +780,12 @@ class ArloBackEnd:
     async def _auth_revalidate_token(self) -> _AuthState:
         """See if we can skip auth by re-using the old token.
         """
-        self._debug("auth: revalidating token")
+        self._debug("auth: checking saved token")
+
+        # If a re-login was explicitly triggered after 401, the old token is invalid.
+        if self._auth.force_reauth:
+            self._debug("auth: force_reauth is set, token previously failed with 401")
+            return _AuthState.LOGIN
 
         # We haven't logged in at all yet.
         if self._req.details.token64 is None:
@@ -796,22 +802,14 @@ class ArloBackEnd:
             self._debug("auth: login expired")
             return _AuthState.LOGIN
 
-        # Reset attempts and curves for revalidation
+        # Token is unexpired. Optimistically reuse without validateAccessToken network round-trip.
+        self._debug("auth: token is unexpired, reusing without pre-validation")
         self._auth.attempt = 1
         self._auth.curves = self._cfg.ecdh_curves.copy()
-
-        while self._auth_get_connection():
+        if self._auth_get_connection():
             self._auth.headers = self._req.auth_headers()
             self._auth.headers["Authorization"] = str(self._req.details.token64 or "")
-
-            # Try the current token.
-            state = await self._auth_validate()
-            if state != _AuthState.FAILED:
-                self._debug("auth: testing ok")
-                return _AuthState.SUCCESS
-
-            # Don't try too hard.
-            await asyncio.sleep(3)
+            return _AuthState.SUCCESS
 
         return _AuthState.LOGIN
 
@@ -928,6 +926,7 @@ class ArloBackEnd:
                 return True
             self._debug("re-logging in after 401 or token expiration")
             self._req._is_logging_in = True
+            self._auth.force_reauth = True
             try:
                 if await self._login():
                     self._last_login_time = time.monotonic()
@@ -935,6 +934,7 @@ class ArloBackEnd:
                     return True
                 return False
             finally:
+                self._auth.force_reauth = False
                 self._req._is_logging_in = False
 
     def _session_connection(self) -> bool:
