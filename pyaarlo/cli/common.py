@@ -21,6 +21,7 @@ class CLIContext:
         verbose: int = 0,
         username: str | None = None,
         password: str | None = None,
+        backend: str | None = None,
     ) -> None:
         self.config_path = config_path
         self.ignore_cache = ignore_cache
@@ -30,6 +31,8 @@ class CLIContext:
             self.cli_overrides["username"] = username
         if password is not None:
             self.cli_overrides["password"] = password
+        if backend is not None:
+            self.cli_overrides["backend"] = backend.lower()
 
         self._config: dict[str, Any] | None = None
 
@@ -62,6 +65,7 @@ def common_options(f: Callable[..., Any]) -> Callable[..., Any]:
         click.option("-v", "--verbose", count=True, help="Increase verbosity (-v for INFO, -vv for DEBUG)"),
         click.option("-u", "--username", default=None, help="Arlo username (overrides config/env)"),
         click.option("-p", "--password", default=None, help="Arlo password (overrides config/env)"),
+        click.option("--backend", type=click.Choice(["auto", "sse", "mqtt"], case_sensitive=False), default=None, help="Event stream backend (auto, sse, mqtt)"),
         click.option("--ignore-cache", is_flag=True, default=False, help="Bypass cache and query Arlo live"),
     ]
     for option in reversed(options):

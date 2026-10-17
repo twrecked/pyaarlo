@@ -24,6 +24,7 @@ from .targets import parse_targets, match_device
 @click.option("--exclude-event", default=None, help="Comma-separated event/attribute names to ignore")
 @click.option("--compact", is_flag=True, default=False, help="Print events in single-line compact format")
 @click.option("-l", "--length", "--max-length", "max_length", type=int, default=None, help="Maximum value length (defaults to 80 in --compact mode, 0 for unlimited)")
+@click.option("--sse", is_flag=True, default=False, help="Shortcut for --backend sse")
 @click.option("--json", "json_output", is_flag=True, default=False, help="Print events as JSON lines")
 @click.option("--raw", is_flag=True, default=False, help="Print raw backend event stream packets")
 @common_options
@@ -33,22 +34,27 @@ def cli(
     exclude_event: str | None,
     compact: bool,
     max_length: int | None,
+    sse: bool,
     json_output: bool,
     raw: bool,
     config_path: str | None,
     verbose: int,
     username: str | None,
     password: str | None,
+    backend: str | None,
     ignore_cache: bool,
 ) -> None:
     """Connect to Arlo and stream live device events."""
     setup_logging(verbose)
+    if sse:
+        backend = "sse"
     cli_ctx = CLIContext(
         config_path=config_path,
         ignore_cache=ignore_cache,
         verbose=verbose,
         username=username,
         password=password,
+        backend=backend,
     )
 
     device_filters = parse_targets([filter_device]) if filter_device else []

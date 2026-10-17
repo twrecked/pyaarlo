@@ -31,6 +31,7 @@ def cli(
     verbose: int,
     username: str | None,
     password: str | None,
+    backend: str | None,
     ignore_cache: bool,
 ) -> None:
     """PyArlo command-line interface for device actions and automation."""
@@ -41,6 +42,7 @@ def cli(
         verbose=verbose,
         username=username,
         password=password,
+        backend=backend,
     )
 
 

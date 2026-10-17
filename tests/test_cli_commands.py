@@ -17,6 +17,7 @@ def test_pyaarlo_help():
     runner = CliRunner()
     result = runner.invoke(pyaarlo_cli, ["--help"])
     assert result.exit_code == 0
+    assert "--backend" in result.output
     assert "login" in result.output
     assert "cache" in result.output
     assert "light" in result.output
@@ -79,6 +80,8 @@ def test_pyaarlo_monitor_help():
     assert "--filter-event" in result.output
     assert "--compact" in result.output
     assert "--length" in result.output
+    assert "--sse" in result.output
+    assert "--backend" in result.output
     assert "--json" in result.output
 
 
