@@ -1,0 +1,553 @@
+from __future__ import annotations
+
+import asyncio
+import os
+import sys
+import time
+from typing import Any
+
+import click
+
+from .cache import clear_cache, fill_cache, load_cache, is_cache_stale
+from .common import (
+    CLIContext,
+    clear_user_session,
+    common_options,
+    create_pyarlo,
+    get_auth_status,
+    print_auth_status,
+    setup_logging,
+)
+from .config import get_default_cache_path, parse_tfa_spec
+from .targets import parse_targets, resolve_devices, resolve_location
+
+
+@click.group()
+@common_options
+@click.pass_context
+def cli(
+    ctx: click.Context,
+    config_path: str | None,
+    verbose: int,
+    username: str | None,
+    password: str | None,
+    ignore_cache: bool,
+) -> None:
+    """PyArlo command-line interface for device actions and automation."""
+    setup_logging(verbose)
+    ctx.obj = CLIContext(
+        config_path=config_path,
+        ignore_cache=ignore_cache,
+        verbose=verbose,
+        username=username,
+        password=password,
+    )
+
+
+# -------------------------------------------------------------------------
+# Login
+# -------------------------------------------------------------------------
+@cli.command()
+@click.option("--status", is_flag=True, default=False, help="Display token timeouts and authentication status")
+@click.option("--tfa", default=None, help="2FA delivery and entry spec (e.g. email:imap, email:console, push, sms)")
+@click.option("--tfa-type", default=None, help="2FA delivery mechanism (email, sms, push)")
+@click.option("--tfa-source", default=None, help="2FA entry mechanism (console, imap, push, rest-api)")
+@click.option("--push", is_flag=True, default=False, help="Shortcut for --tfa push")
+@click.option("--force", is_flag=True, default=False, help="Force full re-authentication even if session token is still valid")
+@click.option("--tfa-host", default=None, help="IMAP server host for 2FA")
+@click.option("--tfa-user", default=None, help="IMAP username for 2FA")
+@click.option("--tfa-pass", default=None, help="IMAP password for 2FA")
+@click.pass_obj
+def login(
+    cli_ctx: CLIContext,
+    status: bool,
+    tfa: str | None,
+    tfa_type: str | None,
+    tfa_source: str | None,
+    push: bool,
+    force: bool,
+    tfa_host: str | None,
+    tfa_user: str | None,
+    tfa_pass: str | None,
+) -> None:
+    """Log in to Arlo, verify credentials, refresh cache, or check token status."""
+    if status:
+        auth_status = get_auth_status(cli_ctx.config)
+        code = print_auth_status(auth_status)
+        sys.exit(code)
+
+    if push:
+        cli_ctx.cli_overrides["tfa_type"] = "push"
+        cli_ctx.cli_overrides["tfa_source"] = "push"
+    elif tfa:
+        t_type, t_source = parse_tfa_spec(tfa)
+        cli_ctx.cli_overrides["tfa_type"] = t_type
+        cli_ctx.cli_overrides["tfa_source"] = t_source
+
+    if tfa_type is not None:
+        cli_ctx.cli_overrides["tfa_type"] = tfa_type
+    if tfa_source is not None:
+        cli_ctx.cli_overrides["tfa_source"] = tfa_source
+    if tfa_host is not None:
+        cli_ctx.cli_overrides["tfa_host"] = tfa_host
+    if tfa_user is not None:
+        cli_ctx.cli_overrides["tfa_username"] = tfa_user
+    if tfa_pass is not None:
+        cli_ctx.cli_overrides["tfa_password"] = tfa_pass
+
+    if force:
+        clear_user_session(cli_ctx.config)
+        click.echo("Force flag set: previous session tokens cleared.")
+
+    async def _login() -> int:
+        click.echo(
+            f"Authenticating with Arlo (2FA: {cli_ctx.config.get('tfa_type')}:{cli_ctx.config.get('tfa_source')})..."
+        )
+        arlo = await create_pyarlo(cli_ctx.config, wait_for_setup=True)
+        try:
+            cache_data = fill_cache(arlo)
+            dev_count = len(cache_data.get("devices", []))
+            loc_count = len(cache_data.get("locations", []))
+            click.echo(f"Successfully authenticated as {cli_ctx.config.get('username')}.")
+            click.echo(f"Discovered {dev_count} devices across {loc_count} locations.\n")
+
+            auth_status = get_auth_status(cli_ctx.config)
+            print_auth_status(auth_status)
+            return 0
+        finally:
+            await arlo.stop(logout=False)
+
+    exit_code = asyncio.run(_login())
+    sys.exit(exit_code)
+
+
+# -------------------------------------------------------------------------
+# Cache
+# -------------------------------------------------------------------------
+@cli.group()
+def cache() -> None:
+    """Manage local device and location cache."""
+    pass
+
+
+@cache.command("fill")
+@click.pass_obj
+def cache_fill(cli_ctx: CLIContext) -> None:
+    """Populate or update local cache from Arlo."""
+    async def _fill() -> int:
+        click.echo("Querying Arlo for fresh device and location catalog...")
+        arlo = await create_pyarlo(cli_ctx.config, wait_for_setup=True)
+        try:
+            cache_data = fill_cache(arlo)
+            dev_count = len(cache_data.get("devices", []))
+            loc_count = len(cache_data.get("locations", []))
+            cache_path = get_default_cache_path()
+            click.echo(f"Cache updated: {dev_count} devices, {loc_count} locations saved to {cache_path}")
+            return 0
+        finally:
+            await arlo.stop(logout=False)
+
+    exit_code = asyncio.run(_fill())
+    sys.exit(exit_code)
+
+
+@cache.command("clear")
+def cache_clear() -> None:
+    """Remove local cache file."""
+    path = get_default_cache_path()
+    if clear_cache(path):
+        click.echo(f"Cache cleared: {path}")
+    else:
+        click.echo(f"No cache file existed at {path}")
+    sys.exit(0)
+
+
+@cache.command("show")
+def cache_show() -> None:
+    """Display information about current cache."""
+    cache_path = get_default_cache_path()
+    cached = load_cache(cache_path)
+    if not cached:
+        click.echo(f"No cache found at {cache_path}")
+        sys.exit(0)
+
+    ts = cached.get("timestamp", 0)
+    age_seconds = int(time.time() - ts) if ts else 0
+    age_str = f"{age_seconds} seconds ago" if age_seconds < 120 else f"{age_seconds // 60} minutes ago"
+    is_stale = is_cache_stale(cached)
+
+    devices = cached.get("devices", [])
+    locations = cached.get("locations", [])
+
+    counts: dict[str, int] = {}
+    for d in devices:
+        t = d.get("type", "unknown")
+        counts[t] = counts.get(t, 0) + 1
+
+    click.echo(f"Cache Location: {cache_path}")
+    click.echo(f"Last Updated:   {time.ctime(ts)} ({age_str}) {'[STALE]' if is_stale else '[VALID]'}")
+    click.echo(f"Total Devices:  {len(devices)}")
+    for t, cnt in sorted(counts.items()):
+        click.echo(f"  - {t}: {cnt}")
+    click.echo(f"Locations:      {len(locations)}")
+    for loc in locations:
+        click.echo(f"  - {loc.get('name')} (ID: {loc.get('id')}, Mode: {loc.get('mode')})")
+    sys.exit(0)
+
+
+# -------------------------------------------------------------------------
+# Light
+# -------------------------------------------------------------------------
+@cli.group()
+def light() -> None:
+    """Control Arlo lights (turn on, turn off, set brightness)."""
+    pass
+
+
+@light.command("turn-on")
+@click.argument("targets", nargs=-1, required=True)
+@click.option("-b", "--brightness", type=int, default=None, help="Brightness level (0-255)")
+@click.pass_obj
+def light_turn_on(cli_ctx: CLIContext, targets: tuple[str, ...], brightness: int | None) -> None:
+    """Turn on one or more lights by name or ID."""
+    target_names = parse_targets(targets)
+    if not target_names:
+        click.echo("Error: Please specify at least one light name or ID.", err=True)
+        sys.exit(1)
+
+    async def _turn_on() -> int:
+        # Check cache if not ignoring cache
+        if not cli_ctx.ignore_cache:
+            cached = load_cache()
+            if is_cache_stale(cached):
+                fill_cache(await create_pyarlo(cli_ctx.config, wait_for_setup=True))
+
+        arlo = await create_pyarlo(cli_ctx.config, wait_for_setup=True)
+        try:
+            matched, missing = resolve_devices(arlo.lights, target_names)
+
+            exit_code = 0
+            for name in missing:
+                click.echo(f"Error: Light '{name}' not found.", err=True)
+                exit_code = 1
+
+            for lt in matched:
+                await lt.turn_on(brightness=brightness)
+                bright_str = f" (brightness: {brightness})" if brightness is not None else ""
+                click.echo(f"[{lt.name}] Turned ON{bright_str}")
+
+            # Also update cache with new state
+            fill_cache(arlo)
+            return exit_code
+        finally:
+            await arlo.stop(logout=False)
+
+    exit_code = asyncio.run(_turn_on())
+    sys.exit(exit_code)
+
+
+@light.command("turn-off")
+@click.argument("targets", nargs=-1, required=True)
+@click.pass_obj
+def light_turn_off(cli_ctx: CLIContext, targets: tuple[str, ...]) -> None:
+    """Turn off one or more lights by name or ID."""
+    target_names = parse_targets(targets)
+    if not target_names:
+        click.echo("Error: Please specify at least one light name or ID.", err=True)
+        sys.exit(1)
+
+    async def _turn_off() -> int:
+        if not cli_ctx.ignore_cache:
+            cached = load_cache()
+            if is_cache_stale(cached):
+                fill_cache(await create_pyarlo(cli_ctx.config, wait_for_setup=True))
+
+        arlo = await create_pyarlo(cli_ctx.config, wait_for_setup=True)
+        try:
+            matched, missing = resolve_devices(arlo.lights, target_names)
+
+            exit_code = 0
+            for name in missing:
+                click.echo(f"Error: Light '{name}' not found.", err=True)
+                exit_code = 1
+
+            for lt in matched:
+                await lt.turn_off()
+                click.echo(f"[{lt.name}] Turned OFF")
+
+            fill_cache(arlo)
+            return exit_code
+        finally:
+            await arlo.stop(logout=False)
+
+    exit_code = asyncio.run(_turn_off())
+    sys.exit(exit_code)
+
+
+@light.command("brightness")
+@click.argument("level", type=int)
+@click.argument("targets", nargs=-1, required=True)
+@click.pass_obj
+def light_brightness(cli_ctx: CLIContext, level: int, targets: tuple[str, ...]) -> None:
+    """Set brightness level (0-255) for one or more lights."""
+    target_names = parse_targets(targets)
+    if not target_names:
+        click.echo("Error: Please specify at least one light name or ID.", err=True)
+        sys.exit(1)
+
+    async def _set_brightness() -> int:
+        arlo = await create_pyarlo(cli_ctx.config, wait_for_setup=True)
+        try:
+            matched, missing = resolve_devices(arlo.lights, target_names)
+
+            exit_code = 0
+            for name in missing:
+                click.echo(f"Error: Light '{name}' not found.", err=True)
+                exit_code = 1
+
+            for lt in matched:
+                await lt.set_brightness(level)
+                click.echo(f"[{lt.name}] Brightness set to {level}")
+
+            fill_cache(arlo)
+            return exit_code
+        finally:
+            await arlo.stop(logout=False)
+
+    exit_code = asyncio.run(_set_brightness())
+    sys.exit(exit_code)
+
+
+# -------------------------------------------------------------------------
+# Location
+# -------------------------------------------------------------------------
+@cli.group()
+def location() -> None:
+    """View and change location modes."""
+    pass
+
+
+@location.command("list")
+@click.pass_obj
+def location_list(cli_ctx: CLIContext) -> None:
+    """List locations and their current/available modes."""
+    async def _list() -> int:
+        # Check cache if valid
+        if not cli_ctx.ignore_cache:
+            cached = load_cache()
+            if cached and not is_cache_stale(cached) and cached.get("locations"):
+                for loc in cached["locations"]:
+                    modes = list(loc.get("available_modes", {}).keys())
+                    click.echo(f"Location: {loc.get('name')} (ID: {loc.get('id')})")
+                    click.echo(f"  Active Mode:     {loc.get('mode')}")
+                    click.echo(f"  Available Modes: {', '.join(modes)}")
+                return 0
+
+        arlo = await create_pyarlo(cli_ctx.config, wait_for_setup=True)
+        try:
+            for loc in arlo.locations:
+                modes = list(loc.available_modes_with_ids.keys())
+                click.echo(f"Location: {loc.name} (ID: {loc.device_id})")
+                click.echo(f"  Active Mode:     {loc.mode}")
+                click.echo(f"  Available Modes: {', '.join(modes)}")
+            fill_cache(arlo)
+            return 0
+        finally:
+            await arlo.stop(logout=False)
+
+    exit_code = asyncio.run(_list())
+    sys.exit(exit_code)
+
+
+@location.command("set-mode")
+@click.argument("mode")
+@click.option("-l", "--location", "loc_target", default=None, help="Location name or ID (optional if only 1 location)")
+@click.pass_obj
+def location_set_mode(cli_ctx: CLIContext, mode: str, loc_target: str | None) -> None:
+    """Set the armed/disarmed mode for a location."""
+    async def _set_mode() -> int:
+        arlo = await create_pyarlo(cli_ctx.config, wait_for_setup=True)
+        try:
+            target_loc = resolve_location(arlo.locations, loc_target)
+            if target_loc is None:
+                if not arlo.locations:
+                    click.echo("Error: No locations found on this Arlo account.", err=True)
+                elif loc_target is None:
+                    click.echo("Error: Multiple locations found. Please specify --location <name-or-id>.", err=True)
+                else:
+                    click.echo(f"Error: Location '{loc_target}' not found.", err=True)
+                return 1
+
+            avail = target_loc.available_modes
+            click.echo(f"Setting mode '{mode}' on location '{target_loc.name}'...")
+            await target_loc.set_mode(mode)
+            click.echo(f"[{target_loc.name}] Mode changed to '{mode}' (Current: {target_loc.mode})")
+            fill_cache(arlo)
+            return 0
+        finally:
+            await arlo.stop(logout=False)
+
+    exit_code = asyncio.run(_set_mode())
+    sys.exit(exit_code)
+
+
+# -------------------------------------------------------------------------
+# Camera
+# -------------------------------------------------------------------------
+@cli.group()
+def camera() -> None:
+    """Manage Arlo cameras (snapshot, stream)."""
+    pass
+
+
+@camera.command("snapshot")
+@click.argument("targets", nargs=-1, required=True)
+@click.pass_obj
+def camera_snapshot(cli_ctx: CLIContext, targets: tuple[str, ...]) -> None:
+    """Request a fresh snapshot from one or more cameras."""
+    target_names = parse_targets(targets)
+    if not target_names:
+        click.echo("Error: Please specify at least one camera name or ID.", err=True)
+        sys.exit(1)
+
+    async def _snapshot() -> int:
+        arlo = await create_pyarlo(cli_ctx.config, wait_for_setup=True)
+        try:
+            matched, missing = resolve_devices(arlo.cameras, target_names)
+
+            exit_code = 0
+            for name in missing:
+                click.echo(f"Error: Camera '{name}' not found.", err=True)
+                exit_code = 1
+
+            for cam in matched:
+                click.echo(f"[{cam.name}] Requesting snapshot...")
+                success = await cam.request_snapshot()
+                if success:
+                    click.echo(f"[{cam.name}] Snapshot requested successfully.")
+                else:
+                    click.echo(f"[{cam.name}] Snapshot request returned false.")
+                    exit_code = 1
+            return exit_code
+        finally:
+            await arlo.stop(logout=False)
+
+    exit_code = asyncio.run(_snapshot())
+    sys.exit(exit_code)
+
+
+@camera.command("stream")
+@click.argument("target")
+@click.option("-f", "--start-ffmpeg", is_flag=True, default=False, help="Launch ffmpeg to capture stream to video_dir")
+@click.pass_obj
+def camera_stream(cli_ctx: CLIContext, target: str, start_ffmpeg: bool) -> None:
+    """Get live stream URL for a camera."""
+    async def _stream() -> int:
+        arlo = await create_pyarlo(cli_ctx.config, wait_for_setup=True)
+        try:
+            matched, missing = resolve_devices(arlo.cameras, [target])
+            if not matched:
+                click.echo(f"Error: Camera '{target}' not found.", err=True)
+                return 1
+
+            cam = matched[0]
+            click.echo(f"[{cam.name}] Requesting stream URL...")
+            stream_url = await cam.get_stream()
+            if not stream_url:
+                click.echo(f"[{cam.name}] Failed to obtain stream URL.", err=True)
+                return 1
+
+            click.echo(f"Stream URL: {stream_url}")
+
+            if start_ffmpeg:
+                click.echo("Starting ffmpeg HLS capture in ./video_dir...")
+                os.makedirs("video_dir", exist_ok=True)
+                os.system(
+                    f"ffmpeg -i '{stream_url}' -fflags flush_packets -max_delay 2 "
+                    f"-flags -global_header -hls_time 2 -hls_list_size 3 -vcodec copy -y video_dir/video.m3u8"
+                )
+
+            return 0
+        finally:
+            await arlo.stop(logout=False)
+
+    exit_code = asyncio.run(_stream())
+    sys.exit(exit_code)
+
+
+# -------------------------------------------------------------------------
+# List
+# -------------------------------------------------------------------------
+@cli.command("list")
+@click.argument("item", default="all", type=click.Choice(
+    ["all", "devices", "cameras", "lights", "doorbells", "bases", "locations", "sensors"],
+    case_sensitive=False,
+))
+@click.option("-c", "--compact", is_flag=True, default=False, help="Display items in compact format")
+@click.pass_obj
+def list_cmd(cli_ctx: CLIContext, item: str, compact: bool) -> None:
+    """List Arlo devices, locations, or subsystems."""
+    async def _list() -> int:
+        # Check cache if not ignoring cache
+        if not cli_ctx.ignore_cache:
+            cached = load_cache()
+            if cached and not is_cache_stale(cached):
+                _print_cached_list(cached, item, compact)
+                return 0
+
+        # Live query
+        arlo = await create_pyarlo(cli_ctx.config, wait_for_setup=True)
+        try:
+            cache_data = fill_cache(arlo)
+            _print_cached_list(cache_data, item, compact)
+            return 0
+        finally:
+            await arlo.stop(logout=False)
+
+    def _print_cached_list(data: dict[str, Any], item_type: str, is_compact: bool) -> None:
+        devices = data.get("devices", [])
+        locations = data.get("locations", [])
+
+        type_map = {
+            "bases": ["base_station"],
+            "cameras": ["camera"],
+            "lights": ["light"],
+            "doorbells": ["doorbell"],
+            "sensors": ["sensor"],
+            "devices": ["camera", "light", "doorbell", "sensor", "base_station"],
+            "all": ["camera", "light", "doorbell", "sensor", "base_station"],
+        }
+
+        if item_type in type_map:
+            filtered = [d for d in devices if d.get("type") in type_map[item_type]]
+            for d in filtered:
+                if is_compact:
+                    click.echo(f"[{d.get('type')}] {d.get('name')} (ID: {d.get('id')}, SN: {d.get('serial_number')})")
+                else:
+                    click.echo(f"{d.get('name')}:")
+                    click.echo(f"  Type:          {d.get('type')}")
+                    click.echo(f"  Device ID:     {d.get('id')}")
+                    click.echo(f"  Model:         {d.get('model_id')}")
+                    click.echo(f"  Serial Number: {d.get('serial_number')}")
+
+        if item_type in ("all", "locations"):
+            for loc in locations:
+                if is_compact:
+                    click.echo(f"[location] {loc.get('name')} (ID: {loc.get('id')}, Mode: {loc.get('mode')})")
+                else:
+                    click.echo(f"Location {loc.get('name')}:")
+                    click.echo(f"  ID:              {loc.get('id')}")
+                    click.echo(f"  Mode:            {loc.get('mode')}")
+                    modes = list(loc.get("available_modes", {}).keys())
+                    click.echo(f"  Available Modes: {', '.join(modes)}")
+
+    exit_code = asyncio.run(_list())
+    sys.exit(exit_code)
+
+
+def main() -> None:
+    cli()
+
+
+if __name__ == "__main__":
+    main()

@@ -24,7 +24,8 @@ setup(
         'curl_cffi>=0.5.10',
         'paho-mqtt',
         'cryptography',
-        'python-slugify'
+        'python-slugify',
+        'platformdirs>=3.0',
     ],
 
     author='Steve Herrell',
@@ -62,7 +63,9 @@ setup(
 
     entry_points={
         'console_scripts': [
-            'pyaarlo = pyaarlo.main:main_func',
+            'pyaarlo = pyaarlo.cli.main_cmd:cli',
+            'pyaarlo-monitor = pyaarlo.cli.monitor_cmd:cli',
+            'pyaarlo-utils = pyaarlo.cli.utils_cmd:cli',
         ],
     },
 

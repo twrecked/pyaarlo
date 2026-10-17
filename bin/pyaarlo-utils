@@ -1,0 +1,11 @@
+#!/usr/bin/env python3
+
+import os
+import sys
+
+# for examples add pyaarlo install path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+from pyaarlo.cli.utils_cmd import cli
+
+if __name__ == "__main__":
+    cli()
