@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import datetime
 import os
 import sys
 import time
+from pathlib import Path
 from typing import Any
 
 import click
@@ -499,6 +501,236 @@ def camera_stream(cli_ctx: CLIContext, target: str, start_ffmpeg: bool) -> None:
             await arlo.stop(logout=False)
 
     exit_code = asyncio.run(_stream())
+    sys.exit(exit_code)
+
+
+# -------------------------------------------------------------------------
+# Media
+# -------------------------------------------------------------------------
+@cli.group()
+def media() -> None:
+    """List and download recorded media."""
+    pass
+
+
+def _resolve_date_range(
+    days: int | None,
+    single_date: str | None,
+    date_from: str | None,
+    date_to: str | None,
+) -> tuple[str, str]:
+    now = datetime.datetime.now()
+    if single_date:
+        d = single_date.replace("-", "").strip()
+        return d, d
+    if date_from or date_to:
+        d_from = date_from.replace("-", "").strip() if date_from else (now - datetime.timedelta(days=7)).strftime("%Y%m%d")
+        d_to = date_to.replace("-", "").strip() if date_to else now.strftime("%Y%m%d")
+        return d_from, d_to
+    n_days = days if days is not None and days > 0 else 1
+    d_from = (now - datetime.timedelta(days=n_days - 1)).strftime("%Y%m%d")
+    d_to = now.strftime("%Y%m%d")
+    return d_from, d_to
+
+
+def _filter_videos(
+    videos: list[Any],
+    camera_filters: list[str],
+    object_filter: str | None,
+) -> list[Any]:
+    results = []
+    for vid in videos:
+        # Camera filter
+        if camera_filters:
+            cam = getattr(vid, "camera", None)
+            cam_name = getattr(cam, "name", "").lower()
+            cam_id = getattr(cam, "device_id", "").lower()
+            if not any(cf.lower() in (cam_name, cam_id) for cf in camera_filters):
+                continue
+
+        # Object filter
+        if object_filter and object_filter.lower() != "all":
+            obj_type = str(getattr(vid, "object_type", "") or "").lower()
+            trigger = str(getattr(vid, "triggered_by", "") or "").lower()
+            target_obj = object_filter.lower()
+            if target_obj == "motion":
+                if trigger != "motion" and not obj_type:
+                    continue
+            else:
+                if target_obj not in (obj_type, trigger):
+                    continue
+
+        results.append(vid)
+
+    # Sort newest first
+    results.sort(key=lambda v: getattr(v, "created_at", 0), reverse=True)
+    return results
+
+
+@media.command("list")
+@click.option("-c", "--camera", "cameras", default=None, help="Filter by camera name or device ID (comma-separated)")
+@click.option("--days", type=int, default=1, help="Number of days back to search (default: 1)")
+@click.option("--date", "single_date", default=None, help="Specific date to search (YYYY-MM-DD)")
+@click.option("--from", "date_from", default=None, help="Start date (YYYY-MM-DD)")
+@click.option("--to", "date_to", default=None, help="End date (YYYY-MM-DD)")
+@click.option("--object", "object_type", default=None, help="Filter by detected object (person, vehicle, animal, package, motion)")
+@click.option("--compact", is_flag=True, default=False, help="Display one line per recording")
+@click.option("--json", "json_output", is_flag=True, default=False, help="Display as JSON lines")
+@click.pass_obj
+def media_list(
+    cli_ctx: CLIContext,
+    cameras: str | None,
+    days: int,
+    single_date: str | None,
+    date_from: str | None,
+    date_to: str | None,
+    object_type: str | None,
+    compact: bool,
+    json_output: bool,
+) -> None:
+    """List camera recordings with date and object filtering."""
+    import json
+
+    d_from, d_to = _resolve_date_range(days, single_date, date_from, date_to)
+    cam_targets = parse_targets([cameras]) if cameras else []
+
+    async def _run() -> int:
+        use_cache = not cli_ctx.ignore_cache
+        arlo = await create_pyarlo(
+            cli_ctx.config,
+            wait_for_setup=False,
+            start_background=False,
+            refresh_devices=not use_cache,
+        )
+        try:
+            videos, _, _ = await arlo.ml._sync_library(d_from, d_to, [])
+            if not videos:
+                click.echo(f"No recordings found between {d_from} and {d_to}.")
+                return 0
+
+            filtered = _filter_videos(videos, cam_targets, object_type)
+            if not filtered:
+                click.echo(f"No recordings matching filters found between {d_from} and {d_to}.")
+                return 0
+
+            for vid in filtered:
+                cam = getattr(vid, "camera", None)
+                cam_name = getattr(cam, "name", "unknown")
+                cam_id = getattr(cam, "device_id", "unknown")
+                obj_label = getattr(vid, "object_type", None) or getattr(vid, "triggered_by", None) or "recording"
+                duration = getattr(vid, "media_duration_seconds", 0)
+                dt = getattr(vid, "datetime", None)
+                dt_str = dt.strftime("%Y-%m-%d %H:%M:%S") if dt else "unknown"
+                vid_id = getattr(vid, "id", "")
+                url = getattr(vid, "video_url", "")
+
+                if json_output:
+                    payload = {
+                        "id": vid_id,
+                        "timestamp": dt_str,
+                        "camera": cam_name,
+                        "camera_id": cam_id,
+                        "object": obj_label,
+                        "duration": duration,
+                        "url": url,
+                    }
+                    click.echo(json.dumps(payload))
+                elif compact:
+                    click.echo(f"{dt_str} [{cam_name}] {obj_label} ({duration}s) - id={vid_id}")
+                else:
+                    click.echo(f"[{dt_str}] {cam_name}: {obj_label} ({duration}s)")
+                    click.echo(f"  ID:  {vid_id}")
+                    click.echo(f"  URL: {url}")
+            return 0
+        finally:
+            await arlo.stop(logout=False)
+
+    exit_code = asyncio.run(_run())
+    sys.exit(exit_code)
+
+
+@media.command("download")
+@click.option("-c", "--camera", "cameras", default=None, help="Filter by camera name or device ID (comma-separated)")
+@click.option("--days", type=int, default=1, help="Number of days back to search (default: 1)")
+@click.option("--date", "single_date", default=None, help="Specific date to search (YYYY-MM-DD)")
+@click.option("--from", "date_from", default=None, help="Start date (YYYY-MM-DD)")
+@click.option("--to", "date_to", default=None, help="End date (YYYY-MM-DD)")
+@click.option("--object", "object_type", default=None, help="Filter by detected object (person, vehicle, animal, package, motion)")
+@click.option("-o", "--output-dir", default="./media", help="Destination folder for downloaded files (default: ./media)")
+@click.option("--limit", type=int, default=None, help="Maximum number of files to download")
+@click.option("--thumbnails", is_flag=True, default=False, help="Download thumbnail images instead of full videos")
+@click.pass_obj
+def media_download(
+    cli_ctx: CLIContext,
+    cameras: str | None,
+    days: int,
+    single_date: str | None,
+    date_from: str | None,
+    date_to: str | None,
+    object_type: str | None,
+    output_dir: str,
+    limit: int | None,
+    thumbnails: bool,
+) -> None:
+    """Download recordings or thumbnails to local disk."""
+    d_from, d_to = _resolve_date_range(days, single_date, date_from, date_to)
+    cam_targets = parse_targets([cameras]) if cameras else []
+
+    async def _run() -> int:
+        use_cache = not cli_ctx.ignore_cache
+        arlo = await create_pyarlo(
+            cli_ctx.config,
+            wait_for_setup=False,
+            start_background=False,
+            refresh_devices=not use_cache,
+        )
+        try:
+            videos, _, _ = await arlo.ml._sync_library(d_from, d_to, [])
+            if not videos:
+                click.echo(f"No recordings found between {d_from} and {d_to}.")
+                return 0
+
+            filtered = _filter_videos(videos, cam_targets, object_type)
+            if not filtered:
+                click.echo(f"No recordings matching filters found between {d_from} and {d_to}.")
+                return 0
+
+            if limit is not None and limit > 0:
+                filtered = filtered[:limit]
+
+            dest_dir = Path(output_dir)
+            dest_dir.mkdir(parents=True, exist_ok=True)
+
+            file_type = "thumbnail" if thumbnails else "video"
+            click.echo(f"Downloading {len(filtered)} {file_type}(s) to {dest_dir}...")
+            count = 0
+            for vid in filtered:
+                cam = getattr(vid, "camera", None)
+                cam_name = getattr(cam, "name", "cam").replace(" ", "_").lower()
+                dt = getattr(vid, "datetime", None)
+                dt_str = dt.strftime("%Y%m%d_%H%M%S") if dt else f"id_{getattr(vid, 'id', '0')}"
+                obj_label = getattr(vid, "object_type", None) or getattr(vid, "triggered_by", None) or "recording"
+                ext = "jpg" if thumbnails else getattr(vid, "extension", "mp4")
+
+                filename = str(dest_dir / f"{dt_str}_{cam_name}_{obj_label}.{ext}")
+
+                if thumbnails:
+                    ok = await vid.download_thumbnail(filename)
+                else:
+                    ok = await vid.download_video(filename)
+
+                if ok:
+                    click.echo(f"  [OK] {filename}")
+                    count += 1
+                else:
+                    click.echo(f"  [FAILED] {filename}", err=True)
+
+            click.echo(f"Successfully downloaded {count}/{len(filtered)} file(s).")
+            return 0 if count == len(filtered) else 1
+        finally:
+            await arlo.stop(logout=False)
+
+    exit_code = asyncio.run(_run())
     sys.exit(exit_code)
 
 

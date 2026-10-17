@@ -24,7 +24,69 @@ def test_pyaarlo_help():
     assert "light" in result.output
     assert "location" in result.output
     assert "camera" in result.output
+    assert "media" in result.output
     assert "list" in result.output
+
+
+def test_pyaarlo_media_help():
+    runner = CliRunner()
+    result = runner.invoke(pyaarlo_cli, ["media", "--help"])
+    assert result.exit_code == 0
+    assert "list" in result.output
+    assert "download" in result.output
+
+    res_list = runner.invoke(pyaarlo_cli, ["media", "list", "--help"])
+    assert res_list.exit_code == 0
+    assert "--camera" in res_list.output
+    assert "--days" in res_list.output
+    assert "--object" in res_list.output
+
+    res_down = runner.invoke(pyaarlo_cli, ["media", "download", "--help"])
+    assert res_down.exit_code == 0
+    assert "--output-dir" in res_down.output
+    assert "--thumbnails" in res_down.output
+
+
+def test_media_date_and_filter_helpers():
+    from types import SimpleNamespace
+    from pyaarlo.cli.main_cmd import _resolve_date_range, _filter_videos
+
+    # Single date
+    d_from, d_to = _resolve_date_range(None, "2026-10-15", None, None)
+    assert d_from == "20261015"
+    assert d_to == "20261015"
+
+    # From-To
+    d_from, d_to = _resolve_date_range(None, None, "2026-10-01", "2026-10-05")
+    assert d_from == "20261001"
+    assert d_to == "20261005"
+
+    # Days
+    d_from, d_to = _resolve_date_range(1, None, None, None)
+    assert len(d_from) == 8
+    assert len(d_to) == 8
+
+    # Filter videos
+    cam1 = SimpleNamespace(name="Front Door", device_id="CAM1")
+    cam2 = SimpleNamespace(name="Driveway", device_id="CAM2")
+
+    v1 = SimpleNamespace(camera=cam1, object_type="person", triggered_by="motion", created_at=100)
+    v2 = SimpleNamespace(camera=cam2, object_type="vehicle", triggered_by="motion", created_at=200)
+    v3 = SimpleNamespace(camera=cam1, object_type="animal", triggered_by="motion", created_at=300)
+
+    videos = [v1, v2, v3]
+
+    # Camera filter
+    res = _filter_videos(videos, ["CAM1"], None)
+    assert res == [v3, v1]  # Sorted newest first (300, 100)
+
+    # Object filter
+    res = _filter_videos(videos, [], "vehicle")
+    assert res == [v2]
+
+    # Combined
+    res = _filter_videos(videos, ["Front Door"], "animal")
+    assert res == [v3]
 
 
 def test_pyaarlo_login_help():
