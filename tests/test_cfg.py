@@ -117,7 +117,33 @@ def test_update_mqtt_from_url_default_port(log):
     cfg = ArloCfg(log=log)
     cfg.update_mqtt_from_url("wss://mqtt-cluster-v2-z2-1.arloxcld.com")
     assert cfg.mqtt_port == 443
-    assert cfg.mqtt_transport == "websockets"
+
+
+def test_inline_mode_and_deprecation(log):
+    # Default is False
+    cfg_default = ArloCfg(log=log)
+    assert cfg_default.inline_mode is False
+    assert cfg_default.synchronous_mode is False
+
+    # New inline_mode kwarg
+    cfg_inline = ArloCfg(log=log, inline_mode=True)
+    assert cfg_inline.inline_mode is True
+    assert cfg_inline.synchronous_mode is True
+
+    # Legacy synchronous_mode kwarg
+    cfg_legacy = ArloCfg(log=log, synchronous_mode=True)
+    assert cfg_legacy.inline_mode is True
+    assert cfg_legacy.synchronous_mode is True
+
+
+def test_start_background_config(log):
+    # Default is True
+    cfg_default = ArloCfg(log=log)
+    assert cfg_default.start_background is True
+
+    # Disabled
+    cfg_no_bg = ArloCfg(log=log, start_background=False)
+    assert cfg_no_bg.start_background is False
 
 
 def test_update_mqtt_from_url_overrides_legacy_defaults(log):

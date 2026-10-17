@@ -99,12 +99,19 @@ def read_env_config() -> dict[str, Any]:
         "ARLO_MODE_API": "mode_api",
         "ARLO_USER_AGENT": "user_agent",
         "ARLO_MQTT_HOST": "mqtt_host",
+        "ARLO_INLINE_MODE": "inline_mode",
+        "ARLO_START_BACKGROUND": "start_background",
     }
 
     for env_var, cfg_key in env_mappings.items():
         val = os.environ.get(env_var)
         if val is not None and val != "":
             env_cfg[cfg_key] = val
+
+    if "inline_mode" in env_cfg:
+        env_cfg["inline_mode"] = str(env_cfg["inline_mode"]).lower() in ("true", "1", "yes")
+    if "start_background" in env_cfg:
+        env_cfg["start_background"] = str(env_cfg["start_background"]).lower() in ("true", "1", "yes")
 
     # Allow ARLO_TFA as an alias for ARLO_TFA_TYPE
     if "tfa_type" not in env_cfg:

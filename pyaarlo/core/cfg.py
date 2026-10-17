@@ -350,8 +350,22 @@ class ArloCfg:
         return cast(int, self._kw.get("library_days", PRELOAD_DAYS))
 
     @property
+    def inline_mode(self) -> bool:
+        if "synchronous_mode" in self._kw:
+            self._log.warning(
+                "'synchronous_mode' is deprecated and will be removed in a future release; use 'inline_mode' instead"
+            )
+            return cast(bool, self._kw.get("inline_mode", self._kw.get("synchronous_mode", False)))
+        return cast(bool, self._kw.get("inline_mode", False))
+
+    @property
     def synchronous_mode(self) -> bool:
-        return cast(bool, self._kw.get("synchronous_mode", False))
+        """Deprecated: use inline_mode instead."""
+        return self.inline_mode
+
+    @property
+    def start_background(self) -> bool:
+        return cast(bool, self._kw.get("start_background", True))
 
     @property
     def user_stream_delay(self) -> int:

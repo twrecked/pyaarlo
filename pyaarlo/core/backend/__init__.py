@@ -1137,7 +1137,10 @@ class ArloBackEnd:
         :return: either a response packet or an event packet
         """
         if wait_for is None:
-            wait_for = "event" if self._cfg.synchronous_mode else "nothing"
+            if self._cfg.inline_mode:
+                wait_for = "event" if self._cfg.start_background else "response"
+            else:
+                wait_for = "response" if not self._cfg.start_background else "nothing"
 
         if wait_for == "event":
             self._vdebug("notify+event running")
@@ -1204,7 +1207,10 @@ class ArloBackEnd:
             wait_for="response"
     ):
         if wait_for is None:
-            wait_for = "resource" if self._cfg.synchronous_mode else "response"
+            if self._cfg.inline_mode and self._cfg.start_background:
+                wait_for = "resource"
+            else:
+                wait_for = "response"
 
         if wait_for == "resource":
             self._vdebug("post+resource running")

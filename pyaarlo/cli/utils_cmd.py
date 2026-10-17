@@ -177,6 +177,7 @@ def anonymize(
     username: str | None,
     password: str | None,
     backend: str | None,
+    inline: bool | None,
     ignore_cache: bool,
 ) -> None:
     """Anonymize sensitive tokens and IDs from stdin."""
@@ -190,6 +191,7 @@ def anonymize(
         username=username,
         password=password,
         backend=backend,
+        inline=inline,
     )
 
     async def _run() -> int:
@@ -242,6 +244,7 @@ def dump(
     username: str | None,
     password: str | None,
     backend: str | None,
+    inline: bool | None,
     ignore_cache: bool,
 ) -> None:
     """Dump raw Arlo state or device configurations."""
@@ -255,6 +258,7 @@ def dump(
         username=username,
         password=password,
         backend=backend,
+        inline=inline,
     )
 
     async def _run() -> int:

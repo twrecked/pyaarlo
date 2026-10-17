@@ -108,8 +108,8 @@ class PyArlo:
     * **stream_timeout** - Time, in seconds, for the event stream to close after receiving no packets. 0 means
       no timeout. Default 0 seconds. Setting this to `120` can be useful for catching dead connections - ie, an
       ISP forced a new IP on you.
-    * **synchronous_mode** - Wait for operations to complete before returing. If you are coming from Pyarlo this
-      will make Pyaarlo behave more like you expect.
+    * **inline_mode** - Wait for operations to complete inline before returning. (Formerly `synchronous_mode`).
+    * **start_background** - Start background event stream and housekeeping tasks. Default `True`.
     * **save_media_to** - Save media to a local directory.
 
     **Debug `kwargs` parameters:**
@@ -247,23 +247,24 @@ class PyArlo:
         self._core.st.set(["ARLO", TOTAL_BELLS_KEY], len(self._objs.doorbells), prefix="aarlo")
         self._core.st.set(["ARLO", TOTAL_LIGHTS_KEY], len(self._objs.lights), prefix="aarlo")
 
-        # Subscribe to events.
-        await self._core.be.start()
+        # Subscribe to events and start background loops if enabled.
+        if self._core.cfg.start_background:
+            await self._core.be.start()
 
-        # Now ping the bases.
-        await self._ping_bases()
+            # Now ping the bases.
+            await self._ping_bases()
 
-        # Start initial refresh and, if needed, wait for it to finish.
-        if self._core.cfg.synchronous_mode or self._core.cfg.wait_for_initial_setup:
-            await self._initial_refresh(wait=self._core.cfg.synchronous_mode)
-            self.debug("initial setup finished...")
-        else:
-            self._core.tasks.run_now(self._initial_refresh, wait=self._core.cfg.synchronous_mode)
+            # Start initial refresh and, if needed, wait for it to finish.
+            if self._core.cfg.inline_mode or self._core.cfg.wait_for_initial_setup:
+                await self._initial_refresh(wait=self._core.cfg.inline_mode)
+                self.debug("initial setup finished...")
+            else:
+                self._core.tasks.run_now(self._initial_refresh, wait=self._core.cfg.inline_mode)
 
-        # Register house keeping cron jobs.
-        self.debug("registering cron jobs")
-        _ = self._core.tasks.run_every(self._fast_refresh, FAST_REFRESH_INTERVAL)
-        _ = self._core.tasks.run_every(self._slow_refresh, SLOW_REFRESH_INTERVAL)
+            # Register house keeping cron jobs.
+            self.debug("registering cron jobs")
+            _ = self._core.tasks.run_every(self._fast_refresh, FAST_REFRESH_INTERVAL)
+            _ = self._core.tasks.run_every(self._slow_refresh, SLOW_REFRESH_INTERVAL)
 
     def __repr__(self):
         # Representation string of object.

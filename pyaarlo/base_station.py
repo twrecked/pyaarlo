@@ -357,8 +357,8 @@ class ArloBaseStation(ArloDevice):
                             "Fetching device list (hoping this will fix arming/disarming)"
                         )
                         await self._core.be.devices()
-                        if self._core.cfg.synchronous_mode:
-                            self.debug("trying again, but synchronous")
+                        if self._core.cfg.inline_mode:
+                            self.debug("trying again, but inline")
                             await _set_mode_v2_cb(attempt=attempt + 1)
                         else:
                             self._core.tasks.run_now(_set_mode_v2_cb, attempt=attempt + 1)
@@ -410,7 +410,7 @@ class ArloBaseStation(ArloDevice):
         """Get and update the available modes for the base."""
         if self._v1_modes:
             # Work around slow arlo connections.
-            if initial and self._core.cfg.synchronous_mode:
+            if initial and self._core.cfg.inline_mode:
                 await asyncio.sleep(5)
             resp = await self._core.be.notify(
                 device_id=self.device_id,

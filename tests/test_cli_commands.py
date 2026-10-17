@@ -18,6 +18,7 @@ def test_pyaarlo_help():
     result = runner.invoke(pyaarlo_cli, ["--help"])
     assert result.exit_code == 0
     assert "--backend" in result.output
+    assert "--inline" in result.output
     assert "login" in result.output
     assert "cache" in result.output
     assert "light" in result.output

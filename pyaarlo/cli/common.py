@@ -22,6 +22,7 @@ class CLIContext:
         username: str | None = None,
         password: str | None = None,
         backend: str | None = None,
+        inline: bool | None = None,
     ) -> None:
         self.config_path = config_path
         self.ignore_cache = ignore_cache
@@ -33,6 +34,8 @@ class CLIContext:
             self.cli_overrides["password"] = password
         if backend is not None:
             self.cli_overrides["backend"] = backend.lower()
+        if inline is not None:
+            self.cli_overrides["inline_mode"] = inline
 
         self._config: dict[str, Any] | None = None
 
@@ -66,6 +69,7 @@ def common_options(f: Callable[..., Any]) -> Callable[..., Any]:
         click.option("-u", "--username", default=None, help="Arlo username (overrides config/env)"),
         click.option("-p", "--password", default=None, help="Arlo password (overrides config/env)"),
         click.option("--backend", type=click.Choice(["auto", "sse", "mqtt"], case_sensitive=False), default=None, help="Event stream backend (auto, sse, mqtt)"),
+        click.option("--inline/--no-inline", default=None, help="Wait for operations to complete inline before returning"),
         click.option("--ignore-cache", is_flag=True, default=False, help="Bypass cache and query Arlo live"),
     ]
     for option in reversed(options):
@@ -98,6 +102,7 @@ async def create_pyarlo(
     cfg: dict[str, Any],
     wait_for_setup: bool = True,
     dump: bool = False,
+    start_background: bool | None = None,
 ) -> PyArlo:
     """Create and initialize an async PyArlo instance from resolved configuration."""
     username = cfg.get("username")
@@ -105,6 +110,8 @@ async def create_pyarlo(
 
     if not username or not password:
         raise ValueError("Missing Arlo username or password. Specify in config.json, environment, or --username/--password")
+
+    bg_flag = start_background if start_background is not None else cfg.get("start_background", False)
 
     arlo = await PyArlo.create(
         username=username,
@@ -119,9 +126,11 @@ async def create_pyarlo(
         backend=cfg.get("backend", "auto"),
         user_agent=cfg.get("user_agent", "arlo"),
         mqtt_host=cfg.get("mqtt_host"),
+        inline_mode=cfg.get("inline_mode", False),
+        start_background=bg_flag,
         save_session=True,
         save_state=True,
-        wait_for_initial_setup=wait_for_setup,
+        wait_for_initial_setup=wait_for_setup if bg_flag else False,
         dump=dump,
     )
 

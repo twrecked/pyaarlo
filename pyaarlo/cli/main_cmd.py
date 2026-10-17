@@ -32,6 +32,7 @@ def cli(
     username: str | None,
     password: str | None,
     backend: str | None,
+    inline: bool | None,
     ignore_cache: bool,
 ) -> None:
     """PyArlo command-line interface for device actions and automation."""
@@ -43,6 +44,7 @@ def cli(
         username=username,
         password=password,
         backend=backend,
+        inline=inline,
     )
 
 

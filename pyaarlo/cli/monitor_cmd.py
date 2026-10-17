@@ -42,6 +42,7 @@ def cli(
     username: str | None,
     password: str | None,
     backend: str | None,
+    inline: bool | None,
     ignore_cache: bool,
 ) -> None:
     """Connect to Arlo and stream live device events."""
@@ -55,6 +56,7 @@ def cli(
         username=username,
         password=password,
         backend=backend,
+        inline=inline,
     )
 
     device_filters = parse_targets([filter_device]) if filter_device else []
@@ -63,7 +65,7 @@ def cli(
 
     async def _monitor() -> int:
         sys.stderr.write("Connecting to Arlo event stream...\n")
-        arlo = await create_pyarlo(cli_ctx.config, wait_for_setup=True)
+        arlo = await create_pyarlo(cli_ctx.config, wait_for_setup=True, start_background=True)
 
         stop_event = asyncio.Event()
 

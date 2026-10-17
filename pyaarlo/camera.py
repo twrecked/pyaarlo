@@ -746,12 +746,12 @@ class ArloCamera(ArloChildDevice):
         """Requests latest list of recordings from the backend server.
 
         :param wait if True then wait for completion, if False then don't wait,
-        if None then use synchronous_mode setting.
+        if None then use inline_mode setting.
 
         Reloads the videos library from Arlo.
         """
         if wait is None:
-            wait = self._core.cfg.synchronous_mode
+            wait = self._core.cfg.inline_mode
         if wait:
             self.debug("doing media update")
             await self._update_from_media_library()
@@ -763,12 +763,12 @@ class ArloCamera(ArloChildDevice):
         """Requests last thumbnail from the backend server.
 
         :param wait if True then wait for completion, if False then don't wait,
-        if None then use synchronous_mode setting.
+        if None then use inline_mode setting.
 
         Updates the last image.
         """
         if wait is None:
-            wait = self._core.cfg.synchronous_mode
+            wait = self._core.cfg.inline_mode
         if wait:
             self.debug("doing image update")
             await self._update_image_from_capture()
