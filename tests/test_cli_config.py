@@ -92,22 +92,23 @@ def test_cli_config_tfa_spec():
     assert parse_tfa_spec("email") == ("email", "console")
 
 
-def test_cli_config_compound_env_vars():
+def test_cli_config_compound_env_vars(tmp_path):
+    empty_cfg = tmp_path / "empty.json"
     # Test ARLO_TFA_TYPE="email:imap"
     with patch.dict("os.environ", {"ARLO_TFA_TYPE": "email:imap"}, clear=True):
-        cfg = load_config()
+        cfg = load_config(config_path=empty_cfg)
         assert cfg["tfa_type"] == "email"
         assert cfg["tfa_source"] == "imap"
 
     # Test ARLO_TFA="push"
     with patch.dict("os.environ", {"ARLO_TFA": "push"}, clear=True):
-        cfg = load_config()
+        cfg = load_config(config_path=empty_cfg)
         assert cfg["tfa_type"] == "push"
         assert cfg["tfa_source"] == "push"
 
     # Test ARLO_TFA_TYPE="sms"
     with patch.dict("os.environ", {"ARLO_TFA_TYPE": "sms"}, clear=True):
-        cfg = load_config()
+        cfg = load_config(config_path=empty_cfg)
         assert cfg["tfa_type"] == "sms"
         assert cfg["tfa_source"] == "console"
 

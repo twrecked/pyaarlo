@@ -65,9 +65,7 @@ def cli(
 # -------------------------------------------------------------------------
 @cli.command()
 @click.option("--status", is_flag=True, default=False, help="Display token timeouts and authentication status")
-@click.option("--tfa", default=None, help="2FA delivery and entry spec (e.g. email:imap, email:console, push, sms)")
-@click.option("--tfa-type", default=None, help="2FA delivery mechanism (email, sms, push)")
-@click.option("--tfa-source", default=None, help="2FA entry mechanism (console, imap, push, rest-api)")
+@click.option("--tfa", default=None, help="2FA delivery and entry spec (e.g. push, email:imap, email:console, sms)")
 @click.option("--push", is_flag=True, default=False, help="Shortcut for --tfa push")
 @click.option("--force", is_flag=True, default=False, help="Force full re-authentication even if session token is still valid")
 @click.option("--tfa-host", default=None, help="IMAP server host for 2FA")
@@ -78,8 +76,6 @@ def login(
     cli_ctx: CLIContext,
     status: bool,
     tfa: str | None,
-    tfa_type: str | None,
-    tfa_source: str | None,
     push: bool,
     force: bool,
     tfa_host: str | None,
@@ -94,17 +90,10 @@ def login(
         sys.exit(code)
 
     if push:
-        cli_ctx.cli_overrides["tfa_type"] = "push"
-        cli_ctx.cli_overrides["tfa_source"] = "push"
+        cli_ctx.cli_overrides["tfa"] = "push"
     elif tfa:
-        t_type, t_source = parse_tfa_spec(tfa)
-        cli_ctx.cli_overrides["tfa_type"] = t_type
-        cli_ctx.cli_overrides["tfa_source"] = t_source
+        cli_ctx.cli_overrides["tfa"] = tfa.strip().lower()
 
-    if tfa_type is not None:
-        cli_ctx.cli_overrides["tfa_type"] = tfa_type
-    if tfa_source is not None:
-        cli_ctx.cli_overrides["tfa_source"] = tfa_source
     if tfa_host is not None:
         cli_ctx.cli_overrides["tfa_host"] = tfa_host
     if tfa_user is not None:
@@ -118,7 +107,7 @@ def login(
 
     async def _login() -> int:
         click.echo(
-            f"Authenticating with Arlo (2FA: {cli_ctx.config.get('tfa_type')}:{cli_ctx.config.get('tfa_source')})..."
+            f"Authenticating with Arlo (2FA: {cli_ctx.config.get('tfa')})..."
         )
         arlo = await create_pyarlo(cli_ctx.config, wait_for_setup=True)
         try:
@@ -252,9 +241,13 @@ def _run_config_wizard(current: dict[str, Any] | None = None, is_update: bool = 
         new_cfg["password"] = click.prompt("Arlo password", hide_input=True)
 
     # 3. 2FA Delivery
-    curr_tfa_type = current.get("tfa_type", "push").lower()
-    if curr_tfa_type not in ("push", "email", "sms"):
-        curr_tfa_type = "push"
+    curr_tfa = current.get("tfa")
+    if not curr_tfa:
+        t_type = current.get("tfa_type", "push").lower()
+        t_src = current.get("tfa_source", "push").lower()
+        curr_tfa = "push" if t_type == "push" else ("sms" if t_type == "sms" else f"email:{t_src}")
+
+    curr_tfa_type, curr_tfa_src = parse_tfa_spec(curr_tfa)
 
     click.echo("\nSelect 2FA delivery method:")
     click.echo("  push  - Arlo mobile app push notification (Recommended - no code entry needed)")
@@ -266,36 +259,33 @@ def _run_config_wizard(current: dict[str, Any] | None = None, is_update: bool = 
         default=curr_tfa_type,
     ).lower()
 
+    # Clean up legacy keys
+    new_cfg.pop("tfa_type", None)
+    new_cfg.pop("tfa_source", None)
+
     if tfa_type == "push":
-        new_cfg["tfa_type"] = "push"
-        new_cfg["tfa_source"] = "push"
+        new_cfg["tfa"] = "push"
         new_cfg.pop("tfa_host", None)
         new_cfg.pop("tfa_username", None)
         new_cfg.pop("tfa_password", None)
 
     elif tfa_type == "sms":
-        new_cfg["tfa_type"] = "sms"
-        new_cfg["tfa_source"] = "console"
+        new_cfg["tfa"] = "sms"
         new_cfg.pop("tfa_host", None)
         new_cfg.pop("tfa_username", None)
         new_cfg.pop("tfa_password", None)
 
     elif tfa_type == "email":
-        new_cfg["tfa_type"] = "email"
-        curr_tfa_source = current.get("tfa_source", "console").lower()
-        if curr_tfa_source not in ("console", "imap"):
-            curr_tfa_source = "console"
-
         click.echo("\nHow should PyArlo retrieve the email verification code?")
         click.echo("  console - Prompt you interactively on the terminal to type the code")
         click.echo("  imap    - Connect to your email inbox automatically via IMAP")
         tfa_source = click.prompt(
             "Email code entry method",
             type=click.Choice(["console", "imap"], case_sensitive=False),
-            default=curr_tfa_source,
+            default=curr_tfa_src if curr_tfa_type == "email" else "console",
         ).lower()
 
-        new_cfg["tfa_source"] = tfa_source
+        new_cfg["tfa"] = f"email:{tfa_source}"
 
         if tfa_source == "imap":
             default_host = current.get("tfa_host")
@@ -331,11 +321,7 @@ def _run_config_wizard(current: dict[str, Any] | None = None, is_update: bool = 
     return new_cfg
 
 
-@config_group.command("show")
-@click.option("--unmask", is_flag=True, default=False, help="Display passwords in plain text instead of masking")
-@click.pass_obj
-def config_show(cli_ctx: CLIContext, unmask: bool) -> None:
-    """Display current configuration and file path."""
+def _show_config_impl(cli_ctx: CLIContext, unmask: bool) -> None:
     target_path = Path(cli_ctx.config_path) if cli_ctx.config_path else get_default_config_path()
     file_cfg = read_config_file(target_path)
     active_cfg = cli_ctx.config
@@ -366,12 +352,20 @@ def config_show(cli_ctx: CLIContext, unmask: bool) -> None:
     sys.exit(0)
 
 
+@config_group.command("show")
+@click.option("--unmask", is_flag=True, default=False, help="Display passwords in plain text instead of masking")
+@click.pass_obj
+def config_show(cli_ctx: CLIContext, unmask: bool) -> None:
+    """Display current configuration and file path."""
+    _show_config_impl(cli_ctx, unmask)
+
+
 @config_group.command("dump")
 @click.option("--unmask", is_flag=True, default=False, help="Display passwords in plain text instead of masking")
 @click.pass_obj
 def config_dump(cli_ctx: CLIContext, unmask: bool) -> None:
     """Alias for 'pyaarlo config show'."""
-    config_show.callback(cli_ctx, unmask=unmask)  # type: ignore
+    _show_config_impl(cli_ctx, unmask)
 
 
 @config_group.command("create")
@@ -462,9 +456,11 @@ def config_set(cli_ctx: CLIContext, key: str, value: str) -> None:
 
     if key_lower in ("tfa", "tfa_type"):
         t_type, t_source = parse_tfa_spec(value)
-        cfg_data["tfa_type"] = t_type
-        cfg_data["tfa_source"] = t_source
-        click.echo(f"Set tfa_type='{t_type}' and tfa_source='{t_source}'")
+        normalized_tfa = value if ":" in value or value in ("push", "sms") else f"{t_type}:{t_source}"
+        cfg_data["tfa"] = normalized_tfa
+        cfg_data.pop("tfa_type", None)
+        cfg_data.pop("tfa_source", None)
+        click.echo(f"Set tfa='{normalized_tfa}'")
     else:
         # Convert booleans if applicable
         if value.lower() in ("true", "yes", "1"):

@@ -156,3 +156,30 @@ def test_update_mqtt_from_url_overrides_legacy_defaults(log):
     assert cfg.mqtt_port == 8084
     assert cfg.mqtt_transport == "websockets"
 
+
+def test_tfa_single_property_config(log):
+    # Push
+    cfg_push = ArloCfg(log=log, tfa="push")
+    assert cfg_push.tfa == "push"
+    assert cfg_push.tfa_type == "push"
+    assert cfg_push.tfa_source == "push"
+
+    # Email IMAP
+    cfg_imap = ArloCfg(log=log, tfa="email:imap")
+    assert cfg_imap.tfa == "email:imap"
+    assert cfg_imap.tfa_type == "email"
+    assert cfg_imap.tfa_source == "imap"
+
+    # SMS
+    cfg_sms = ArloCfg(log=log, tfa="sms")
+    assert cfg_sms.tfa == "sms"
+    assert cfg_sms.tfa_type == "sms"
+    assert cfg_sms.tfa_source == "console"
+
+    # Legacy fallback: tfa_type + tfa_source kwargs
+    cfg_legacy = ArloCfg(log=log, tfa_type="email", tfa_source="imap")
+    assert cfg_legacy.tfa == "email:imap"
+    assert cfg_legacy.tfa_type == "email"
+    assert cfg_legacy.tfa_source == "imap"
+
+

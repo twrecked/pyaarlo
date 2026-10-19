@@ -24,6 +24,34 @@ from ..constant import (
 from .logger import ArloLogger
 
 
+def parse_tfa_spec(spec: str) -> tuple[str, str]:
+    """Parse a 2FA specification string into (tfa_type, tfa_source).
+
+    Examples:
+        "push" -> ("push", "push")
+        "email:imap" -> ("email", "imap")
+        "email:console" -> ("email", "console")
+        "sms:console" -> ("sms", "console")
+        "sms" -> ("sms", "console")
+        "imap" -> ("email", "imap")
+        "console" -> ("email", "console")
+        "email" -> ("email", "console")
+    """
+    cleaned = spec.strip().lower()
+    if ":" in cleaned:
+        t_type, t_source = cleaned.split(":", 1)
+        return t_type.strip(), t_source.strip()
+    if cleaned == "push":
+        return "push", "push"
+    if cleaned == "sms":
+        return "sms", "console"
+    if cleaned == "imap":
+        return "email", "imap"
+    if cleaned in ("console", "email"):
+        return "email", "console"
+    return cleaned, "console"
+
+
 class ArloCfg:
     """Helper class to get at Arlo configuration options.
 
@@ -259,12 +287,28 @@ class ArloCfg:
         return cast(bool, self._kw.get("verbose_debug", False))
 
     @property
-    def tfa_source(self) -> str:
-        return cast(str, self._kw.get("tfa_source", TFA_CONSOLE_SOURCE))
+    def tfa(self) -> str:
+        if "tfa" in self._kw and self._kw["tfa"]:
+            return cast(str, self._kw["tfa"]).lower()
+        if "tfa_type" in self._kw and self._kw["tfa_type"]:
+            t_type = cast(str, self._kw["tfa_type"]).lower()
+            if ":" in t_type or t_type in ("push", "sms"):
+                return t_type
+            source = cast(str, self._kw.get("tfa_source", "console")).lower()
+            return f"{t_type}:{source}"
+        return "email:console"
 
     @property
     def tfa_type(self) -> str:
-        return cast(str, self._kw.get("tfa_type", TFA_EMAIL_TYPE)).lower()
+        t_type, _ = parse_tfa_spec(self.tfa)
+        return t_type
+
+    @property
+    def tfa_source(self) -> str:
+        if "tfa_source" in self._kw and self._kw["tfa_source"]:
+            return cast(str, self._kw["tfa_source"]).lower()
+        _, t_source = parse_tfa_spec(self.tfa)
+        return t_source
 
     @property
     def tfa_delay(self) -> int:

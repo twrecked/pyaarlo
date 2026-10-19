@@ -165,8 +165,9 @@ async def create_pyarlo(
     arlo = await PyArlo.create(
         username=username,
         password=password,
-        tfa_source=cfg.get("tfa_source", "console"),
-        tfa_type=cfg.get("tfa_type", "email"),
+        tfa=cfg.get("tfa"),
+        tfa_source=cfg.get("tfa_source"),
+        tfa_type=cfg.get("tfa_type"),
         tfa_host=cfg.get("tfa_host"),
         tfa_username=cfg.get("tfa_username"),
         tfa_password=cfg.get("tfa_password"),

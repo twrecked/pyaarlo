@@ -95,8 +95,6 @@ def test_pyaarlo_login_help():
     result = runner.invoke(pyaarlo_cli, ["login", "--help"])
     assert result.exit_code == 0
     assert "--tfa" in result.output
-    assert "--tfa-type" in result.output
-    assert "--tfa-source" in result.output
     assert "--push" in result.output
     assert "--force" in result.output
 
@@ -208,8 +206,9 @@ def test_auth_status_formatting(tmp_path):
 
 def test_pyaarlo_login_status_cli(tmp_path):
     runner = CliRunner()
+    empty_cfg = tmp_path / "empty.json"
     # Test with no session
-    result = runner.invoke(pyaarlo_cli, ["login", "--status"])
+    result = runner.invoke(pyaarlo_cli, ["--config", str(empty_cfg), "login", "--status"])
     assert result.exit_code == 1
     assert "Authentication Status:" in result.output
     assert "Session Token:            NOT FOUND" in result.output
@@ -227,7 +226,7 @@ def test_pyaarlo_config_show_and_set(tmp_path):
     # Set tfa compound spec
     res = runner.invoke(pyaarlo_cli, ["--config", str(cfg_file), "config", "set", "tfa", "push"])
     assert res.exit_code == 0
-    assert "tfa_type='push'" in res.output
+    assert "tfa='push'" in res.output
 
     # Show config (masked)
     runner.invoke(pyaarlo_cli, ["--config", str(cfg_file), "config", "set", "password", "supersecret"])
@@ -256,8 +255,7 @@ def test_pyaarlo_config_create_and_update_wizard(tmp_path):
     from pyaarlo.cli.config import read_config_file
     saved = read_config_file(cfg_file)
     assert saved["username"] == "bob@example.com"
-    assert saved["tfa_type"] == "push"
-    assert saved["tfa_source"] == "push"
+    assert saved["tfa"] == "push"
 
     # 2. Update to email:imap
     # Inputs:
@@ -276,8 +274,7 @@ def test_pyaarlo_config_create_and_update_wizard(tmp_path):
 
     saved_up = read_config_file(cfg_file)
     assert saved_up["username"] == "bob@example.com"
-    assert saved_up["tfa_type"] == "email"
-    assert saved_up["tfa_source"] == "imap"
+    assert saved_up["tfa"] == "email:imap"
     assert saved_up["tfa_password"] == "imappass"
 
 

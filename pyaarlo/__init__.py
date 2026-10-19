@@ -121,18 +121,15 @@ class PyArlo:
 
     **2FA authentication `kwargs` parameters:**
 
-    These parameters are needed for 2FA.
-
-    * **tfa_source** - Where to get the token from. Default is `console`. Can be `imap` to use email or
-      `rest-api` to use rest API website.
-    * **tfa_type** - How to get the 2FA token delivered. Default is `email` but can be `sms`.
-    * **tfa_timeout** - When using `imap` or `rest-api`, how long to wait, in seconds, between checks.
-    * **tfa_total_timeout** - When using `imap` or `rest-api`, how long to wait, in seconds, for all checks.
-    * **tfa_host** - When using `imap` or `rest-api`, host name of server.
-    * **tfa_username** - When using `imap` or `rest-api`, user name on server. If `None` will use
+    * **tfa** - 2FA specification: `'push'` (mobile app push approval),
+      `'email:imap'` (automated email check via IMAP), `'email:console'` (terminal prompt),
+      or `'sms'` (terminal prompt for SMS code).
+    * **tfa_host** - When using IMAP, host name of IMAP server.
+    * **tfa_username** - When using IMAP, user name on server. If `None` will use
       Arlo username.
-    * **tfa_password** - When using `imap` or `rest-api`, password/token on server. If `None`
-      will use Arlo password.
+    * **tfa_password** - When using IMAP, password/app-password on server.
+    * **tfa_source** - (Legacy / optional) Override token retrieval source (`'push'`, `'console'`, `'imap'`).
+    * **tfa_type** - (Legacy / optional) Override token delivery type (`'push'`, `'email'`, `'sms'`).
     * **cipher_list** - Set if your IMAP server is using less secure ciphers.
 
     **Infrequently used `kwargs` parameters:**

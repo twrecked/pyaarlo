@@ -145,8 +145,7 @@ async def main():
     arlo = await PyArlo.create(
         username="user@example.com",
         password="your-password",
-        tfa_type="push",
-        tfa_source="push",
+        tfa="push",
     )
 
     try:
@@ -200,7 +199,7 @@ When logging in, Arlo sends a push notification to your trusted mobile device. P
 - **CLI:** `pyaarlo login --push` or `export ARLO_TFA="push"`
 - **Python:**
   ```python
-  arlo = await PyArlo.create(username="...", password="...", tfa_type="push", tfa_source="push")
+  arlo = await PyArlo.create(username="...", password="...", tfa="push")
   ```
 
 ### 2. Email via IMAP (`email:imap`) — Automated
@@ -214,18 +213,18 @@ PyArlo connects to your email account over IMAP and automatically reads the veri
   ```python
   arlo = await PyArlo.create(
       username="...", password="...",
-      tfa_type="email", tfa_source="imap",
+      tfa="email:imap",
       tfa_host="imap.gmail.com", tfa_username="...", tfa_password="..."
   )
   ```
 
-### 3. Interactive Console (`email:console` or `sms:console`)
+### 3. Interactive Console (`email:console` or `sms`)
 PyArlo requests Arlo to send a code via email or SMS, and prompts you to type the code into the terminal.
 
 - **CLI:** `pyaarlo login --tfa sms` or `pyaarlo login --tfa email:console`
 - **Python:**
   ```python
-  arlo = await PyArlo.create(username="...", password="...", tfa_type="sms", tfa_source="console")
+  arlo = await PyArlo.create(username="...", password="...", tfa="sms")
   ```
 
 ---

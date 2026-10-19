@@ -17,8 +17,7 @@ async def main():
     arlo = await PyArlo.create(
         username="user@example.com",
         password="your-password",
-        tfa_type="push",
-        tfa_source="push",
+        tfa="push",
     )
 
     try:
@@ -36,8 +35,7 @@ asyncio.run(main())
 |---|---|---|---|
 | `username` | `str` | *Required* | Arlo account email address |
 | `password` | `str` | *Required* | Arlo account password |
-| `tfa_type` | `str` | `"email"` | 2FA delivery method: `"push"`, `"email"`, or `"sms"` |
-| `tfa_source` | `str` | `"console"` | 2FA retrieval method: `"push"`, `"console"`, or `"imap"` |
+| `tfa` | `str` | `"push"` | Unified 2FA specification: `"push"`, `"email:imap"`, `"email:console"`, or `"sms"` |
 | `tfa_host` | `str` | `None` | IMAP server hostname (e.g. `"imap.gmail.com"`) |
 | `tfa_username` | `str` | `None` | IMAP account username |
 | `tfa_password` | `str` | `None` | IMAP app-password |

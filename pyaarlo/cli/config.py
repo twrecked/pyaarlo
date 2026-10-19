@@ -7,6 +7,8 @@ from typing import Any
 
 import platformdirs
 
+from ..core.cfg import parse_tfa_spec
+
 APP_NAME = "pyaarlo"
 
 
@@ -28,34 +30,6 @@ def get_default_config_path() -> Path:
 def get_default_cache_path() -> Path:
     """Return default cache file path."""
     return get_cache_dir() / "cache.json"
-
-
-def parse_tfa_spec(spec: str) -> tuple[str, str]:
-    """Parse a 2FA specification string into (tfa_type, tfa_source).
-
-    Examples:
-        "push" -> ("push", "push")
-        "email:imap" -> ("email", "imap")
-        "email:console" -> ("email", "console")
-        "sms:console" -> ("sms", "console")
-        "sms" -> ("sms", "console")
-        "imap" -> ("email", "imap")
-        "console" -> ("email", "console")
-        "email" -> ("email", "console")
-    """
-    cleaned = spec.strip().lower()
-    if ":" in cleaned:
-        t_type, t_source = cleaned.split(":", 1)
-        return t_type.strip(), t_source.strip()
-    if cleaned == "push":
-        return "push", "push"
-    if cleaned == "sms":
-        return "sms", "console"
-    if cleaned == "imap":
-        return "email", "imap"
-    if cleaned in ("console", "email"):
-        return "email", "console"
-    return cleaned, "console"
 
 
 def read_config_file(config_path: Path | str | None = None) -> dict[str, Any]:
@@ -88,8 +62,9 @@ def read_env_config() -> dict[str, Any]:
     env_mappings = {
         "ARLO_USERNAME": "username",
         "ARLO_PASSWORD": "password",
+        "ARLO_TFA": "tfa",
+        "ARLO_TFA_TYPE": "tfa",
         "ARLO_TFA_SOURCE": "tfa_source",
-        "ARLO_TFA_TYPE": "tfa_type",
         "ARLO_TFA_HOST": "tfa_host",
         "ARLO_TFA_USERNAME": "tfa_username",
         "ARLO_TFA_PASSWORD": "tfa_password",
@@ -112,12 +87,6 @@ def read_env_config() -> dict[str, Any]:
         env_cfg["inline_mode"] = str(env_cfg["inline_mode"]).lower() in ("true", "1", "yes")
     if "start_background" in env_cfg:
         env_cfg["start_background"] = str(env_cfg["start_background"]).lower() in ("true", "1", "yes")
-
-    # Allow ARLO_TFA as an alias for ARLO_TFA_TYPE
-    if "tfa_type" not in env_cfg:
-        arlo_tfa = os.environ.get("ARLO_TFA")
-        if arlo_tfa:
-            env_cfg["tfa_type"] = arlo_tfa
 
     # Backwards-compatible IMAP fallbacks for test.py compatibility
     if "tfa_host" not in env_cfg:
@@ -147,8 +116,6 @@ def load_config(
         "cache_dir": str(get_cache_dir()),
         "backend": "auto",
         "mode_api": "auto",
-        "tfa_type": "email",
-        "tfa_source": "console",
     }
 
     # 2. JSON config file
@@ -163,17 +130,25 @@ def load_config(
     if cli_overrides:
         config.update({k: v for k, v in cli_overrides.items() if v is not None})
 
-    # 5. Normalize 2FA configuration if compound string (e.g. "email:imap", "push", "sms") was passed
-    tfa_spec = config.pop("tfa", None) or config.get("tfa_type")
-    if tfa_spec and isinstance(tfa_spec, str):
-        parsed_type, parsed_source = parse_tfa_spec(tfa_spec)
-        config["tfa_type"] = parsed_type
-        # If tfa_source wasn't explicitly given in cli or env, use parsed source
-        explicit_source = (
-            (cli_overrides and "tfa_source" in cli_overrides and cli_overrides["tfa_source"])
-            or (env_cfg and "tfa_source" in env_cfg and env_cfg["tfa_source"])
-        )
-        if not explicit_source:
-            config["tfa_source"] = parsed_source
+    # 5. Normalize 2FA configuration
+    tfa_spec = config.get("tfa")
+    if not tfa_spec:
+        if config.get("tfa_type") and config.get("tfa_source"):
+            tfa_spec = f"{config['tfa_type']}:{config['tfa_source']}"
+        elif config.get("tfa_type"):
+            tfa_spec = config["tfa_type"]
+        else:
+            tfa_spec = "push"
+
+    parsed_type, parsed_source = parse_tfa_spec(tfa_spec)
+    config["tfa"] = tfa_spec
+    config["tfa_type"] = parsed_type
+
+    # If tfa_source wasn't explicitly given in cli or env, use parsed source
+    explicit_source = (
+        (cli_overrides and "tfa_source" in cli_overrides and cli_overrides["tfa_source"])
+        or (env_cfg and "tfa_source" in env_cfg and env_cfg["tfa_source"])
+    )
+    config["tfa_source"] = config.get("tfa_source") if explicit_source else parsed_source
 
     return config
