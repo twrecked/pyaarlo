@@ -80,6 +80,11 @@ Perform instant actions on your devices with sub-second response times:
 # Check token status and expiration
 pyaarlo login --status
 
+# Interactive configuration wizard (creates or updates ~/.config/pyaarlo/config.json)
+pyaarlo config create
+pyaarlo config update
+pyaarlo config show
+
 # Authenticate or refresh tokens (supports push, email:imap, sms)
 pyaarlo login --push
 
@@ -227,6 +232,15 @@ PyArlo requests Arlo to send a code via email or SMS, and prompts you to type th
 
 <a name="diagnostics--error-reporting"></a>
 ## Diagnostics & Error Reporting
+
+### Automated Debug Report (`--debug-report`)
+You can append `--debug-report` to any `pyaarlo` command. It automatically records all debug logs, anonymizes sensitive tokens/passwords, and encrypts the diagnostic package using PyArlo's public key:
+
+```bash
+pyaarlo --debug-report light turn-on "Side Light"
+pyaarlo --debug-report login
+```
+This writes `pyaarlo-debug-report.enc`, which you can safely attach directly to a [GitHub Issue](https://github.com/twrecked/pyaarlo/issues).
 
 ### Enabling Verbose Logs
 Pass `-v` (INFO) or `-vv` (DEBUG) to any CLI tool, or enable debug logging in Python:

@@ -24,6 +24,7 @@ def test_pyaarlo_help():
     assert "light" in result.output
     assert "location" in result.output
     assert "camera" in result.output
+    assert "config" in result.output
     assert "media" in result.output
     assert "list" in result.output
 
@@ -212,4 +213,71 @@ def test_pyaarlo_login_status_cli(tmp_path):
     assert result.exit_code == 1
     assert "Authentication Status:" in result.output
     assert "Session Token:            NOT FOUND" in result.output
+
+
+def test_pyaarlo_config_show_and_set(tmp_path):
+    runner = CliRunner()
+    cfg_file = tmp_path / "config.json"
+
+    # Set username
+    res = runner.invoke(pyaarlo_cli, ["--config", str(cfg_file), "config", "set", "username", "alice@example.com"])
+    assert res.exit_code == 0
+    assert "alice@example.com" in res.output
+
+    # Set tfa compound spec
+    res = runner.invoke(pyaarlo_cli, ["--config", str(cfg_file), "config", "set", "tfa", "push"])
+    assert res.exit_code == 0
+    assert "tfa_type='push'" in res.output
+
+    # Show config (masked)
+    runner.invoke(pyaarlo_cli, ["--config", str(cfg_file), "config", "set", "password", "supersecret"])
+    res = runner.invoke(pyaarlo_cli, ["--config", str(cfg_file), "config", "show"])
+    assert res.exit_code == 0
+    assert "********" in res.output
+    assert "supersecret" not in res.output
+
+    # Show config (unmasked)
+    res_unmasked = runner.invoke(pyaarlo_cli, ["--config", str(cfg_file), "config", "show", "--unmask"])
+    assert res_unmasked.exit_code == 0
+    assert "supersecret" in res_unmasked.output
+
+
+def test_pyaarlo_config_create_and_update_wizard(tmp_path):
+    runner = CliRunner()
+    cfg_file = tmp_path / "wizard_config.json"
+
+    # 1. Create with push
+    # Inputs: username, password, tfa_type (push), backend (auto), test auth? (no)
+    user_inputs = "bob@example.com\nmypassword\npush\nauto\nn\n"
+    res = runner.invoke(pyaarlo_cli, ["--config", str(cfg_file), "config", "create"], input=user_inputs)
+    assert res.exit_code == 0
+    assert cfg_file.is_file()
+
+    from pyaarlo.cli.config import read_config_file
+    saved = read_config_file(cfg_file)
+    assert saved["username"] == "bob@example.com"
+    assert saved["tfa_type"] == "push"
+    assert saved["tfa_source"] == "push"
+
+    # 2. Update to email:imap
+    # Inputs:
+    # username (enter to keep bob@example.com)
+    # keep password? (y)
+    # 2fa method (email)
+    # email code entry (imap)
+    # imap host (enter for default imap.example.com)
+    # imap user (enter for bob@example.com)
+    # imap pass (imappass)
+    # backend (enter for auto)
+    # test auth? (n)
+    update_inputs = "\ny\nemail\nimap\n\n\nimappass\n\nn\n"
+    res_up = runner.invoke(pyaarlo_cli, ["--config", str(cfg_file), "config", "update"], input=update_inputs)
+    assert res_up.exit_code == 0
+
+    saved_up = read_config_file(cfg_file)
+    assert saved_up["username"] == "bob@example.com"
+    assert saved_up["tfa_type"] == "email"
+    assert saved_up["tfa_source"] == "imap"
+    assert saved_up["tfa_password"] == "imappass"
+
 

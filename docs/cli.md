@@ -61,6 +61,7 @@ These flags are available across `pyaarlo`, `pyaarlo-monitor`, and `pyaarlo-util
 - `--backend [auto|sse|mqtt]`: Select event stream protocol.
 - `--inline / --no-inline`: Wait for operations to complete inline before returning.
 - `--ignore-cache`: Bypass local cache and query Arlo servers directly.
+- `--debug-report [file]`: Generate an anonymized, encrypted diagnostic report (default: `pyaarlo-debug-report.enc`) for safe issue reporting.
 
 ---
 
@@ -103,6 +104,28 @@ pyaarlo cache fill
 
 # Clear the local cache file
 pyaarlo cache clear
+```
+
+### `pyaarlo config`
+Views, creates, updates, or directly sets configuration values in `config.json`.
+
+```bash
+# Display active configuration and file location (passwords masked)
+pyaarlo config show
+
+# Display configuration with passwords in plain text
+pyaarlo config show --unmask
+
+# Interactive questionnaire to create a new config file
+pyaarlo config create
+
+# Interactive wizard pre-filled with existing settings (press Enter to keep values)
+pyaarlo config update
+
+# Quickly set a specific configuration key
+pyaarlo config set tfa push
+pyaarlo config set backend sse
+pyaarlo config set username user@example.com
 ```
 
 ### `pyaarlo light`

@@ -14,106 +14,19 @@ from .common import (
     CLIContext,
     common_options,
     create_pyarlo,
+    run_async_cli,
     setup_logging,
 )
 from ..utils import to_b64
 
-BEGIN_PYAARLO_DUMP = "-----BEGIN PYAARLO DUMP-----"
-END_PYAARLO_DUMP = "-----END PYAARLO DUMP-----"
-
-PUBLIC_KEY = """-----BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1oYXnbQPxREiVPUIRkgk
-h+ehjxHnwz34NsjhjgN1oSKmHpf4cL4L/V4tMnj5NELEmLyTrzAZbeewUMwyiwXO
-3l+cSjjoDKcPBSj4uxjWsq74Q5TLHGjOtkFwaqqxtvsVn3fGFWBO405xpvp7jPUc
-BOvBQaUBUaR9Tbw5anMOzeavUwUTRp2rjtbWyj2P7PEp49Ixzw0w+RjIVrzzevAo
-AD7SVb6U8P77fht4k9krbIFckC/ByY48HhmF+edh1GZAgLCHuf43tGg2upuH5wf+
-AGv/Xlc+9ScTjEp37uPiCpHcB1ur83AFTjcceDIm+VDKF4zQrj88zmL7JqZy+Upx
-UQIDAQAB
------END PUBLIC KEY-----"""
-
-
-def encrypt_to_string(obj: Any, public_key_file: str | None = None) -> str:
-    """Encrypt object using RSA + AES."""
-    from Crypto.Cipher import AES, PKCS1_OAEP
-    from Crypto.PublicKey import RSA
-    from Crypto.Random import get_random_bytes
-
-    # pickle and pad object
-    pickled = pickle.dumps(obj)
-    pickled += b" " * (16 - len(pickled) % 16)
-
-    # create AES key and encrypt pickled object
-    key = get_random_bytes(16)
-    aes_cipher = AES.new(key, AES.MODE_EAX)
-    encrypted_bytes, tag = aes_cipher.encrypt_and_digest(pickled)
-    nonce = aes_cipher.nonce
-
-    # encrypt AES key with RSA public key
-    if public_key_file is None:
-        rsa_cipher = RSA.importKey(PUBLIC_KEY)
-    else:
-        with open(public_key_file, "r") as f:
-            rsa_cipher = RSA.importKey(f.read())
-
-    rsa_envelope = PKCS1_OAEP.new(rsa_cipher)
-    enc_key = rsa_envelope.encrypt(key)
-
-    # create key/object dictionary, pickle and base64 encode
-    envelope = pickle.dumps({"k": enc_key, "n": nonce, "o": encrypted_bytes, "t": tag})
-    return base64.encodebytes(envelope).decode().rstrip()
-
-
-def decrypt_from_string(
-    key_obj_str: str,
-    private_key_file: str = "./rsa.private",
-    passphrase: str | None = None,
-) -> Any:
-    """Decrypt object using RSA + AES."""
-    from Crypto.Cipher import AES, PKCS1_OAEP
-    from Crypto.PublicKey import RSA
-
-    envelope = base64.b64decode(key_obj_str)
-    data = pickle.loads(envelope)
-
-    with open(private_key_file, "r") as f:
-        rsa_cipher = RSA.importKey(f.read(), passphrase=passphrase)
-
-    rsa_envelope = PKCS1_OAEP.new(rsa_cipher)
-    aes_key = rsa_envelope.decrypt(data["k"])
-
-    aes_cipher = AES.new(aes_key, AES.MODE_EAX, nonce=data["n"])
-    decrypted_bytes = aes_cipher.decrypt_and_verify(data["o"], data["t"])
-    return pickle.loads(decrypted_bytes)
-
-
-def anonymize_text(
-    text: str,
-    devices: list[dict[str, Any]],
-    username: str | None = None,
-    password: str | None = None,
-) -> str:
-    """Replace sensitive IDs with masked strings."""
-    keys = ["deviceId", "uniqueId", "userId", "xCloudId", "id", "xcloud_id"]
-    valuables: dict[str, str] = {}
-
-    for device in devices:
-        for k in keys:
-            val = device.get(k)
-            if val and isinstance(val, str) and val not in valuables:
-                valuables[val] = "X" * len(val)
-        owner_id = device.get("owner", {}).get("ownerId") if isinstance(device.get("owner"), dict) else None
-        if owner_id and isinstance(owner_id, str):
-            valuables[owner_id] = "X" * len(owner_id)
-
-    if username:
-        valuables[username] = "USERNAME"
-    if password:
-        valuables[to_b64(password)] = "PASSWORD"
-
-    anon = text
-    for valuable, replacement in valuables.items():
-        anon = anon.replace(valuable, replacement)
-    return anon
+from .diagnostics import (
+    BEGIN_PYAARLO_DUMP,
+    END_PYAARLO_DUMP,
+    PUBLIC_KEY,
+    anonymize_text,
+    decrypt_from_string,
+    encrypt_to_string,
+)
 
 
 @click.group()
@@ -179,6 +92,7 @@ def anonymize(
     backend: str | None,
     inline: bool | None,
     ignore_cache: bool,
+    debug_report: str | None,
 ) -> None:
     """Anonymize sensitive tokens and IDs from stdin."""
     import asyncio
@@ -192,6 +106,7 @@ def anonymize(
         password=password,
         backend=backend,
         inline=inline,
+        debug_report=debug_report,
     )
 
     async def _run() -> int:
@@ -224,8 +139,7 @@ def anonymize(
         sys.stdout.write(anon_text)
         return 0
 
-    exit_code = asyncio.run(_run())
-    sys.exit(exit_code)
+    run_async_cli(cli_ctx, _run())
 
 
 @cli.command()
@@ -246,6 +160,7 @@ def dump(
     backend: str | None,
     inline: bool | None,
     ignore_cache: bool,
+    debug_report: str | None,
 ) -> None:
     """Dump raw Arlo state or device configurations."""
     import asyncio
@@ -259,6 +174,7 @@ def dump(
         password=password,
         backend=backend,
         inline=inline,
+        debug_report=debug_report,
     )
 
     async def _run() -> int:
@@ -299,8 +215,7 @@ def dump(
         finally:
             await arlo.stop(logout=False)
 
-    exit_code = asyncio.run(_run())
-    sys.exit(exit_code)
+    run_async_cli(cli_ctx, _run())
 
 
 def main() -> None:

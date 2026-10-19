@@ -13,6 +13,7 @@ from .common import (
     CLIContext,
     common_options,
     create_pyarlo,
+    run_async_cli,
     setup_logging,
 )
 from .targets import parse_targets, match_device
@@ -44,6 +45,7 @@ def cli(
     backend: str | None,
     inline: bool | None,
     ignore_cache: bool,
+    debug_report: str | None,
 ) -> None:
     """Connect to Arlo and stream live device events."""
     setup_logging(verbose)
@@ -57,6 +59,7 @@ def cli(
         password=password,
         backend=backend,
         inline=inline,
+        debug_report=debug_report,
     )
 
     device_filters = parse_targets([filter_device]) if filter_device else []
@@ -173,14 +176,7 @@ def cli(
 
         return 0
 
-    try:
-        exit_code = asyncio.run(_monitor())
-        sys.exit(exit_code)
-    except KeyboardInterrupt:
-        sys.exit(0)
-    except Exception as err:
-        sys.stderr.write(f"Error: {err}\n")
-        sys.exit(1)
+    run_async_cli(cli_ctx, _monitor())
 
 
 def main() -> None:

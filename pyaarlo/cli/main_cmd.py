@@ -18,9 +18,17 @@ from .common import (
     create_pyarlo,
     get_auth_status,
     print_auth_status,
+    run_async_cli,
     setup_logging,
 )
-from .config import get_default_cache_path, parse_tfa_spec
+from .config import (
+    get_default_cache_path,
+    get_default_config_path,
+    load_config,
+    parse_tfa_spec,
+    read_config_file,
+    save_config_file,
+)
 from .targets import parse_targets, resolve_devices, resolve_location
 
 
@@ -36,6 +44,7 @@ def cli(
     backend: str | None,
     inline: bool | None,
     ignore_cache: bool,
+    debug_report: str | None,
 ) -> None:
     """PyArlo command-line interface for device actions and automation."""
     setup_logging(verbose)
@@ -47,6 +56,7 @@ def cli(
         password=password,
         backend=backend,
         inline=inline,
+        debug_report=debug_report,
     )
 
 
@@ -80,6 +90,7 @@ def login(
     if status:
         auth_status = get_auth_status(cli_ctx.config)
         code = print_auth_status(auth_status)
+        cli_ctx.finish_debug_report()
         sys.exit(code)
 
     if push:
@@ -123,8 +134,7 @@ def login(
         finally:
             await arlo.stop(logout=False)
 
-    exit_code = asyncio.run(_login())
-    sys.exit(exit_code)
+    run_async_cli(cli_ctx, _login())
 
 
 # -------------------------------------------------------------------------
@@ -153,28 +163,31 @@ def cache_fill(cli_ctx: CLIContext) -> None:
         finally:
             await arlo.stop(logout=False)
 
-    exit_code = asyncio.run(_fill())
-    sys.exit(exit_code)
+    run_async_cli(cli_ctx, _fill())
 
 
 @cache.command("clear")
-def cache_clear() -> None:
+@click.pass_obj
+def cache_clear(cli_ctx: CLIContext) -> None:
     """Remove local cache file."""
     path = get_default_cache_path()
     if clear_cache(path):
         click.echo(f"Cache cleared: {path}")
     else:
         click.echo(f"No cache file existed at {path}")
+    cli_ctx.finish_debug_report()
     sys.exit(0)
 
 
 @cache.command("show")
-def cache_show() -> None:
+@click.pass_obj
+def cache_show(cli_ctx: CLIContext) -> None:
     """Display information about current cache."""
     cache_path = get_default_cache_path()
     cached = load_cache(cache_path)
     if not cached:
         click.echo(f"No cache found at {cache_path}")
+        cli_ctx.finish_debug_report()
         sys.exit(0)
 
     ts = cached.get("timestamp", 0)
@@ -198,6 +211,273 @@ def cache_show() -> None:
     click.echo(f"Locations:      {len(locations)}")
     for loc in locations:
         click.echo(f"  - {loc.get('name')} (ID: {loc.get('id')}, Mode: {loc.get('mode')})")
+    cli_ctx.finish_debug_report()
+    sys.exit(0)
+
+
+# -------------------------------------------------------------------------
+# Config
+# -------------------------------------------------------------------------
+@cli.group("config")
+def config_group() -> None:
+    """View, create, update, or set configuration values."""
+    pass
+
+
+def _run_config_wizard(current: dict[str, Any] | None = None, is_update: bool = False) -> dict[str, Any]:
+    current = current or {}
+    new_cfg: dict[str, Any] = dict(current)
+
+    click.echo("\n--- PyArlo Configuration Wizard ---")
+    if is_update:
+        click.echo("Press Enter to keep the current value shown in brackets.\n")
+    else:
+        click.echo("Please answer the following questions to create your configuration.\n")
+
+    # 1. Username
+    default_user = current.get("username", "")
+    username = click.prompt(
+        "Arlo username (email)",
+        default=default_user if default_user else None,
+    )
+    new_cfg["username"] = username
+
+    # 2. Password
+    if is_update and current.get("password"):
+        if click.confirm("Keep existing Arlo password?", default=True):
+            new_cfg["password"] = current["password"]
+        else:
+            new_cfg["password"] = click.prompt("Enter new Arlo password", hide_input=True)
+    else:
+        new_cfg["password"] = click.prompt("Arlo password", hide_input=True)
+
+    # 3. 2FA Delivery
+    curr_tfa_type = current.get("tfa_type", "push").lower()
+    if curr_tfa_type not in ("push", "email", "sms"):
+        curr_tfa_type = "push"
+
+    click.echo("\nSelect 2FA delivery method:")
+    click.echo("  push  - Arlo mobile app push notification (Recommended - no code entry needed)")
+    click.echo("  email - Verification code sent to your email inbox")
+    click.echo("  sms   - Verification code sent via text message (SMS)")
+    tfa_type = click.prompt(
+        "2FA delivery method",
+        type=click.Choice(["push", "email", "sms"], case_sensitive=False),
+        default=curr_tfa_type,
+    ).lower()
+
+    if tfa_type == "push":
+        new_cfg["tfa_type"] = "push"
+        new_cfg["tfa_source"] = "push"
+        new_cfg.pop("tfa_host", None)
+        new_cfg.pop("tfa_username", None)
+        new_cfg.pop("tfa_password", None)
+
+    elif tfa_type == "sms":
+        new_cfg["tfa_type"] = "sms"
+        new_cfg["tfa_source"] = "console"
+        new_cfg.pop("tfa_host", None)
+        new_cfg.pop("tfa_username", None)
+        new_cfg.pop("tfa_password", None)
+
+    elif tfa_type == "email":
+        new_cfg["tfa_type"] = "email"
+        curr_tfa_source = current.get("tfa_source", "console").lower()
+        if curr_tfa_source not in ("console", "imap"):
+            curr_tfa_source = "console"
+
+        click.echo("\nHow should PyArlo retrieve the email verification code?")
+        click.echo("  console - Prompt you interactively on the terminal to type the code")
+        click.echo("  imap    - Connect to your email inbox automatically via IMAP")
+        tfa_source = click.prompt(
+            "Email code entry method",
+            type=click.Choice(["console", "imap"], case_sensitive=False),
+            default=curr_tfa_source,
+        ).lower()
+
+        new_cfg["tfa_source"] = tfa_source
+
+        if tfa_source == "imap":
+            default_host = current.get("tfa_host")
+            if not default_host:
+                default_host = "imap.gmail.com" if "@gmail" in username.lower() else "imap.example.com"
+            new_cfg["tfa_host"] = click.prompt("IMAP server host", default=default_host)
+
+            default_imap_user = current.get("tfa_username", username)
+            new_cfg["tfa_username"] = click.prompt("IMAP username", default=default_imap_user)
+
+            if is_update and current.get("tfa_password"):
+                if click.confirm("Keep existing IMAP password?", default=True):
+                    new_cfg["tfa_password"] = current["tfa_password"]
+                else:
+                    new_cfg["tfa_password"] = click.prompt("Enter new IMAP password/app-password", hide_input=True)
+            else:
+                new_cfg["tfa_password"] = click.prompt("IMAP password or app-password", hide_input=True)
+        else:
+            new_cfg.pop("tfa_host", None)
+            new_cfg.pop("tfa_username", None)
+            new_cfg.pop("tfa_password", None)
+
+    # 4. Backend
+    curr_backend = current.get("backend", "auto").lower()
+    if curr_backend not in ("auto", "mqtt", "sse"):
+        curr_backend = "auto"
+    new_cfg["backend"] = click.prompt(
+        "\nEvent stream backend",
+        type=click.Choice(["auto", "mqtt", "sse"], case_sensitive=False),
+        default=curr_backend,
+    ).lower()
+
+    return new_cfg
+
+
+@config_group.command("show")
+@click.option("--unmask", is_flag=True, default=False, help="Display passwords in plain text instead of masking")
+@click.pass_obj
+def config_show(cli_ctx: CLIContext, unmask: bool) -> None:
+    """Display current configuration and file path."""
+    target_path = Path(cli_ctx.config_path) if cli_ctx.config_path else get_default_config_path()
+    file_cfg = read_config_file(target_path)
+    active_cfg = cli_ctx.config
+
+    click.echo(f"Config File Path: {target_path}")
+    click.echo(f"File Status:      {'Found' if target_path.is_file() else 'Not found'}\n")
+
+    def _mask_val(key: str, val: Any) -> Any:
+        if not unmask and key in ("password", "tfa_password") and val:
+            return "********"
+        return val
+
+    if file_cfg:
+        click.echo("Config File Contents:")
+        for k, v in sorted(file_cfg.items()):
+            click.echo(f"  {k}: {repr(_mask_val(k, v))}")
+    else:
+        click.echo("Config File Contents: (empty or missing)")
+
+    click.echo("\nActive Resolved Configuration (including environment & defaults):")
+    for k, v in sorted(active_cfg.items()):
+        click.echo(f"  {k}: {repr(_mask_val(k, v))}")
+
+    if not unmask and (active_cfg.get("password") or active_cfg.get("tfa_password")):
+        click.echo("\n(Passwords are masked. Use 'pyaarlo config show --unmask' to display in plain text.)")
+
+    cli_ctx.finish_debug_report()
+    sys.exit(0)
+
+
+@config_group.command("dump")
+@click.option("--unmask", is_flag=True, default=False, help="Display passwords in plain text instead of masking")
+@click.pass_obj
+def config_dump(cli_ctx: CLIContext, unmask: bool) -> None:
+    """Alias for 'pyaarlo config show'."""
+    config_show.callback(cli_ctx, unmask=unmask)  # type: ignore
+
+
+@config_group.command("create")
+@click.option("--force", is_flag=True, default=False, help="Overwrite existing configuration file without prompting")
+@click.pass_obj
+def config_create(cli_ctx: CLIContext, force: bool) -> None:
+    """Interactive wizard to create a new configuration file."""
+    target_path = Path(cli_ctx.config_path) if cli_ctx.config_path else get_default_config_path()
+    if target_path.is_file() and not force:
+        if not click.confirm(f"Configuration file already exists at {target_path}. Overwrite?", default=False):
+            click.echo("Aborted. Use 'pyaarlo config update' to edit existing settings.")
+            cli_ctx.finish_debug_report()
+            sys.exit(0)
+
+    new_cfg = _run_config_wizard(is_update=False)
+    save_config_file(new_cfg, target_path)
+    click.echo(f"\nConfiguration successfully saved to {target_path}!")
+
+    if click.confirm("\nTest authentication with Arlo now?", default=True):
+        click.echo("Connecting to Arlo to verify credentials...")
+
+        async def _test() -> int:
+            try:
+                test_cfg = load_config(config_path=target_path)
+                arlo = await create_pyarlo(test_cfg, wait_for_setup=False, start_background=False)
+                try:
+                    fill_cache(arlo)
+                    click.echo("Authentication successful! Cache populated.")
+                    return 0
+                finally:
+                    await arlo.stop(logout=False)
+            except Exception as err:
+                click.echo(f"Authentication failed: {err}", err=True)
+                return 1
+
+        run_async_cli(cli_ctx, _test())
+    else:
+        cli_ctx.finish_debug_report()
+        sys.exit(0)
+
+
+@config_group.command("update")
+@click.pass_obj
+def config_update(cli_ctx: CLIContext) -> None:
+    """Interactive wizard to update existing configuration with defaults."""
+    target_path = Path(cli_ctx.config_path) if cli_ctx.config_path else get_default_config_path()
+    existing = read_config_file(target_path)
+    if not existing:
+        click.echo(f"No existing configuration found at {target_path}. Starting new configuration.\n")
+
+    updated_cfg = _run_config_wizard(current=existing, is_update=bool(existing))
+    save_config_file(updated_cfg, target_path)
+    click.echo(f"\nConfiguration successfully updated at {target_path}!")
+
+    if click.confirm("\nTest authentication with Arlo now?", default=True):
+        click.echo("Connecting to Arlo to verify credentials...")
+
+        async def _test() -> int:
+            try:
+                test_cfg = load_config(config_path=target_path)
+                arlo = await create_pyarlo(test_cfg, wait_for_setup=False, start_background=False)
+                try:
+                    fill_cache(arlo)
+                    click.echo("Authentication successful! Cache updated.")
+                    return 0
+                finally:
+                    await arlo.stop(logout=False)
+            except Exception as err:
+                click.echo(f"Authentication failed: {err}", err=True)
+                return 1
+
+        run_async_cli(cli_ctx, _test())
+    else:
+        cli_ctx.finish_debug_report()
+        sys.exit(0)
+
+
+@config_group.command("set")
+@click.argument("key")
+@click.argument("value")
+@click.pass_obj
+def config_set(cli_ctx: CLIContext, key: str, value: str) -> None:
+    """Set a single configuration key and value directly."""
+    target_path = Path(cli_ctx.config_path) if cli_ctx.config_path else get_default_config_path()
+    cfg_data = read_config_file(target_path)
+
+    key_lower = key.strip().lower()
+
+    if key_lower in ("tfa", "tfa_type"):
+        t_type, t_source = parse_tfa_spec(value)
+        cfg_data["tfa_type"] = t_type
+        cfg_data["tfa_source"] = t_source
+        click.echo(f"Set tfa_type='{t_type}' and tfa_source='{t_source}'")
+    else:
+        # Convert booleans if applicable
+        if value.lower() in ("true", "yes", "1"):
+            cfg_data[key] = True
+        elif value.lower() in ("false", "no", "0"):
+            cfg_data[key] = False
+        else:
+            cfg_data[key] = value
+        click.echo(f"Set {key}={repr(cfg_data[key])}")
+
+    save_config_file(cfg_data, target_path)
+    click.echo(f"Saved to {target_path}")
+    cli_ctx.finish_debug_report()
     sys.exit(0)
 
 
@@ -250,8 +530,7 @@ def light_turn_on(cli_ctx: CLIContext, targets: tuple[str, ...], brightness: int
         finally:
             await arlo.stop(logout=False)
 
-    exit_code = asyncio.run(_turn_on())
-    sys.exit(exit_code)
+    run_async_cli(cli_ctx, _turn_on())
 
 
 @light.command("turn-off")
@@ -292,8 +571,7 @@ def light_turn_off(cli_ctx: CLIContext, targets: tuple[str, ...]) -> None:
         finally:
             await arlo.stop(logout=False)
 
-    exit_code = asyncio.run(_turn_off())
-    sys.exit(exit_code)
+    run_async_cli(cli_ctx, _turn_off())
 
 
 @light.command("brightness")
@@ -335,8 +613,7 @@ def light_brightness(cli_ctx: CLIContext, level: int, targets: tuple[str, ...]) 
         finally:
             await arlo.stop(logout=False)
 
-    exit_code = asyncio.run(_set_brightness())
-    sys.exit(exit_code)
+    run_async_cli(cli_ctx, _set_brightness())
 
 
 # -------------------------------------------------------------------------
@@ -376,8 +653,7 @@ def location_list(cli_ctx: CLIContext) -> None:
         finally:
             await arlo.stop(logout=False)
 
-    exit_code = asyncio.run(_list())
-    sys.exit(exit_code)
+    run_async_cli(cli_ctx, _list())
 
 
 @location.command("set-mode")
@@ -416,8 +692,7 @@ def location_set_mode(cli_ctx: CLIContext, mode: str, loc_target: str | None) ->
         finally:
             await arlo.stop(logout=False)
 
-    exit_code = asyncio.run(_set_mode())
-    sys.exit(exit_code)
+    run_async_cli(cli_ctx, _set_mode())
 
 
 # -------------------------------------------------------------------------
@@ -461,8 +736,7 @@ def camera_snapshot(cli_ctx: CLIContext, targets: tuple[str, ...]) -> None:
         finally:
             await arlo.stop(logout=False)
 
-    exit_code = asyncio.run(_snapshot())
-    sys.exit(exit_code)
+    run_async_cli(cli_ctx, _snapshot())
 
 
 @camera.command("stream")
@@ -500,8 +774,7 @@ def camera_stream(cli_ctx: CLIContext, target: str, start_ffmpeg: bool) -> None:
         finally:
             await arlo.stop(logout=False)
 
-    exit_code = asyncio.run(_stream())
-    sys.exit(exit_code)
+    run_async_cli(cli_ctx, _stream())
 
 
 # -------------------------------------------------------------------------
@@ -645,8 +918,7 @@ def media_list(
         finally:
             await arlo.stop(logout=False)
 
-    exit_code = asyncio.run(_run())
-    sys.exit(exit_code)
+    run_async_cli(cli_ctx, _run())
 
 
 @media.command("download")
@@ -730,8 +1002,7 @@ def media_download(
         finally:
             await arlo.stop(logout=False)
 
-    exit_code = asyncio.run(_run())
-    sys.exit(exit_code)
+    run_async_cli(cli_ctx, _run())
 
 
 # -------------------------------------------------------------------------
@@ -800,8 +1071,7 @@ def list_cmd(cli_ctx: CLIContext, item: str, compact: bool) -> None:
                     modes = list(loc.get("available_modes", {}).keys())
                     click.echo(f"  Available Modes: {', '.join(modes)}")
 
-    exit_code = asyncio.run(_list())
-    sys.exit(exit_code)
+    run_async_cli(cli_ctx, _list())
 
 
 def main() -> None:

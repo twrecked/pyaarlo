@@ -10,6 +10,7 @@ import click
 
 from .config import load_config
 from .cache import load_cache, is_cache_stale, fill_cache
+from .diagnostics import DebugReportCapture
 from .. import PyArlo
 
 
@@ -23,10 +24,12 @@ class CLIContext:
         password: str | None = None,
         backend: str | None = None,
         inline: bool | None = None,
+        debug_report: str | None = None,
     ) -> None:
         self.config_path = config_path
         self.ignore_cache = ignore_cache
         self.verbose = verbose
+        self.debug_report = debug_report
         self.cli_overrides: dict[str, Any] = {}
         if username is not None:
             self.cli_overrides["username"] = username
@@ -39,11 +42,34 @@ class CLIContext:
 
         self._config: dict[str, Any] | None = None
 
+        self.report_capture: DebugReportCapture | None = None
+        if debug_report:
+            self.report_capture = DebugReportCapture(filename=debug_report)
+            self.report_capture.start(
+                username=self.config.get("username"),
+                password=self.config.get("password"),
+            )
+
     @property
     def config(self) -> dict[str, Any]:
         if self._config is None:
             self._config = load_config(self.cli_overrides, self.config_path)
         return self._config
+
+    def finish_debug_report(
+        self,
+        exception: BaseException | None = None,
+        devices: list[dict[str, Any]] | None = None,
+    ) -> Any | None:
+        if self.report_capture is not None:
+            return self.report_capture.finish(
+                output_filename=self.debug_report,
+                devices=devices,
+                username=self.config.get("username"),
+                password=self.config.get("password"),
+                exception=exception,
+            )
+        return None
 
 
 def setup_logging(verbose: int) -> None:
@@ -71,10 +97,31 @@ def common_options(f: Callable[..., Any]) -> Callable[..., Any]:
         click.option("--backend", type=click.Choice(["auto", "sse", "mqtt"], case_sensitive=False), default=None, help="Event stream backend (auto, sse, mqtt)"),
         click.option("--inline/--no-inline", default=None, help="Wait for operations to complete inline before returning"),
         click.option("--ignore-cache", is_flag=True, default=False, help="Bypass cache and query Arlo live"),
+        click.option("--debug-report", "debug_report", is_flag=False, flag_value="pyaarlo-debug-report.enc", default=None, help="Generate an anonymized, encrypted diagnostic report for issue reporting"),
     ]
     for option in reversed(options):
         f = option(f)
     return f
+
+
+def run_async_cli(cli_ctx: CLIContext, coro: Coroutine[Any, Any, int]) -> None:
+    """Execute an async CLI coroutine, ensuring debug reports and clean exits are handled."""
+    exc: BaseException | None = None
+    exit_code = 0
+    try:
+        exit_code = asyncio.run(coro)
+    except SystemExit as se:
+        exit_code = se.code if isinstance(se.code, int) else (0 if se.code is None else 1)
+    except KeyboardInterrupt:
+        sys.stderr.write("\nInterrupted by user.\n")
+        exit_code = 0
+    except BaseException as err:
+        exc = err
+        exit_code = 1
+        sys.stderr.write(f"Error: {err}\n")
+    finally:
+        cli_ctx.finish_debug_report(exception=exc)
+    sys.exit(exit_code)
 
 
 def async_command(coro_fn: Callable[..., Coroutine[Any, Any, int | None]]) -> Callable[..., None]:
