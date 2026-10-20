@@ -13,7 +13,7 @@ class ArloChildDevice(ArloDevice):
     def __init__(self, name: str, core: ArloCore, objs: ArloObjects, attrs):
         super().__init__(name, core, objs, attrs)
 
-        self.debug("parent is {}".format(self._parent_id))
+        self.vdebug("parent is {}".format(self._parent_id))
         self.vdebug("resource is {}".format(self.resource_id))
 
     def _event_handler(self, resource, event):

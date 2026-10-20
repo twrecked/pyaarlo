@@ -86,8 +86,7 @@ class ArloCamera(ArloChildDevice):
         # default blank image when waiting for camera image to appear
         self._blank_image = base64.standard_b64decode(BLANK_IMAGE)
 
-        # XXX temporary...
-        self.debug(f"camera-count={len(objs.cameras)}")
+        self.vdebug(f"camera-count={len(objs.cameras)}")
 
     def _parse_statistic(self, data, scale):
         """Parse binary statistics returned from the history API"""

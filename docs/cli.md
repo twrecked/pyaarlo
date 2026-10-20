@@ -38,8 +38,7 @@ Example `config.json`:
 |---|---|
 | `ARLO_USERNAME` | Arlo account username (email) |
 | `ARLO_PASSWORD` | Arlo account password |
-| `ARLO_TFA` or `ARLO_TFA_TYPE` | 2FA specification (e.g. `push`, `email:imap`, `email:console`, `sms`) |
-| `ARLO_TFA_SOURCE` | Explicit 2FA retrieval source (`push`, `console`, `imap`) |
+| `ARLO_TFA` | 2FA specification (e.g. `push`, `email:imap`, `email:console`, `sms`) |
 | `ARLO_TFA_HOST` | IMAP server host for email 2FA (or `IMAP_HOST`) |
 | `ARLO_TFA_USERNAME` | IMAP username (or `IMAP_USERNAME`) |
 | `ARLO_TFA_PASSWORD` | IMAP app-password (or `IMAP_PASSWORD`) |
