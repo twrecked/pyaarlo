@@ -4,6 +4,10 @@ import logging
 _LOGGER = logging.getLogger("pyaarlo")
 _PACKET_LOGGER = logging.getLogger("pyaarlo.packet")
 
+# Default packet logger to INFO so it does not inherit DEBUG from parent pyaarlo
+if _PACKET_LOGGER.level == logging.NOTSET:
+    _PACKET_LOGGER.setLevel(logging.INFO)
+
 
 class ArloLogger:
     """An all-in-one-place logger.
