@@ -166,6 +166,13 @@ class ArloDoorBell(ArloChildDevice):
         """Returns True if doorbell is in silent mode."""
         return self._load(SILENT_MODE_KEY, {}).get(SILENT_MODE_ACTIVE_KEY, False)
 
+    @is_silenced.setter
+    def is_silenced(self, value: bool):
+        if value:
+            self._core.tasks.run_now(self.silence_on)
+        else:
+            self._core.tasks.run_now(self.silence_off)
+
     @property
     def calls_are_silenced(self):
         """Returns True if doorbell calls are silenced."""
@@ -187,6 +194,13 @@ class ArloDoorBell(ArloChildDevice):
     def siren_state(self):
         """Returns current siren state ('on' or 'off')."""
         return self._load(SIREN_STATE_KEY, "off")
+
+    @siren_state.setter
+    def siren_state(self, state: str | bool):
+        if state in ("on", True):
+            self._core.tasks.run_now(self.siren_on)
+        else:
+            self._core.tasks.run_now(self.siren_off)
 
     async def siren_on(self, duration=300, volume=8):
         """Turn doorbell siren on.

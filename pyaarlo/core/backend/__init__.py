@@ -1112,18 +1112,6 @@ class ArloBackEnd:
         if logout:
             await self.put(LOGOUT_PATH)
 
-    async def check_token(self):
-        """See if the token nearing its timeout.
-
-        If so, restart the event loop.
-        """
-        remaining = int(self._req.details.token_expires_in) - int(time.time())
-        self._vdebug(f"check-token: now={int(time.time())}, expires={int(self._req.details.token_expires_in - 300)}")
-        if self._req.details.token_expires_in - 300 < time.time():
-            self._debug(f"check-token: token is expiring in {remaining} seconds, reconnecting")
-            await self._event_reconnect()
-        self._debug(f"check-token: token still good for {remaining} seconds")
-
     async def notify(self, device_id, xcloud_id, body, timeout=None, wait_for=None):
         """Send in a notification.
 

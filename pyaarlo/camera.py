@@ -687,7 +687,12 @@ class ArloCamera(ArloChildDevice):
 
     @brightness.setter
     def brightness(self, brightness):
-        """
+        """Set camera brightness (sync wrapper)."""
+        self._core.tasks.run_now(self.set_brightness, brightness=brightness)
+
+    async def set_brightness(self, brightness):
+        """Set camera brightness (-2 to 2) asynchronously.
+
         NOTE: Brightness is between -2 and 2 in increments of 1 (-2, -1, 0, 1, 2).
         Setting it to an invalid value has no effect.
         """
@@ -697,7 +702,7 @@ class ArloCamera(ArloChildDevice):
             "publishResponse": True,
             "properties": {"brightness": brightness},
         }
-        self._core.be.notify(
+        await self._core.be.notify(
             device_id=self.device_id,
             xcloud_id=self.xcloud_id,
             body=body
@@ -1109,6 +1114,13 @@ class ArloCamera(ArloChildDevice):
     def siren_state(self):
         return self._load(SIREN_STATE_KEY, "off")
 
+    @siren_state.setter
+    def siren_state(self, state: str | bool):
+        if state in ("on", True):
+            self._core.tasks.run_now(self.siren_on)
+        else:
+            self._core.tasks.run_now(self.siren_off)
+
     async def siren_on(self, duration=300, volume=8):
         """Turn camera siren on.
 
@@ -1156,6 +1168,13 @@ class ArloCamera(ArloChildDevice):
         """Returns `True` if the camera turned on."""
         return not self._load(PRIVACY_KEY, False)
 
+    @is_on.setter
+    def is_on(self, value: bool):
+        if value:
+            self._core.tasks.run_now(self.turn_on)
+        else:
+            self._core.tasks.run_now(self.turn_off)
+
     async def turn_on(self):
         """Turn the camera on."""
         body = {
@@ -1184,10 +1203,10 @@ class ArloCamera(ArloChildDevice):
             body=body
         )
 
-    def get_audio_playback_status(self):
+    async def get_audio_playback_status(self):
         """Gets the current playback status and available track list"""
         body = {"action": "get", "publishResponse": True, "resource": "audioPlayback"}
-        self._core.be.notify(
+        await self._core.be.notify(
             device_id=self.device_id,
             xcloud_id=self.xcloud_id,
             body=body
@@ -1344,6 +1363,23 @@ class ArloCamera(ArloChildDevice):
             },
         )
         return True
+
+    async def set_nightlight(self, enabled=None, brightness=None, rgb=None, temperature=None, mode=None):
+        """Batch set nightlight properties in a single network request."""
+        properties = {}
+        if enabled is not None:
+            properties["enabled"] = bool(enabled)
+        if brightness is not None:
+            properties["brightness"] = brightness
+        if rgb is not None:
+            properties["mode"] = "rgb"
+            properties["rgb"] = {"red": rgb[0], "green": rgb[1], "blue": rgb[2]}
+        elif temperature is not None:
+            properties["mode"] = "temperature"
+            properties["temperature"] = str(temperature)
+        elif mode is not None:
+            properties["mode"] = mode
+        return await self._set_nightlight_properties(properties)
 
     async def nightlight_on(self):
         """Turns the nightlight on."""

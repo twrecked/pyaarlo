@@ -490,6 +490,13 @@ class ArloBaseStation(ArloDevice):
         """Returns the current siren state (`on` or `off`)."""
         return self._load(SIREN_STATE_KEY, "off")
 
+    @siren_state.setter
+    def siren_state(self, state: str | bool):
+        if state in ("on", True):
+            self._core.tasks.run_now(self.siren_on)
+        else:
+            self._core.tasks.run_now(self.siren_off)
+
     async def siren_on(self, duration=300, volume=8):
         """Turn base siren on.
 

@@ -33,6 +33,23 @@ class ArloLight(ArloChildDevice):
     def is_on(self):
         return self._load(LAMP_STATE_KEY, "off") == "on"
 
+    @is_on.setter
+    def is_on(self, value: bool):
+        if value:
+            self._core.tasks.run_now(self.turn_on)
+        else:
+            self._core.tasks.run_now(self.turn_off)
+
+    @property
+    def brightness(self):
+        """Returns the light brightness."""
+        return self._load(BRIGHTNESS_KEY, None)
+
+    @brightness.setter
+    def brightness(self, value: int):
+        """Set the light brightness (sync wrapper)."""
+        self._core.tasks.run_now(self.set_brightness, brightness=value)
+
     async def turn_on(self, brightness=None, rgb=None):
         """Turn the light on.
 
