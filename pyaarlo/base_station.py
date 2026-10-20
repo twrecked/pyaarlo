@@ -575,9 +575,10 @@ class ArloBaseStation(ArloDevice):
         self.debug(f"supports {cap} is {supports}")
         return supports
 
-    async def build_ratls(self, public=False):
-        self._ratls = ArloRatls(self._core, self, public=public)
-        await self._ratls.start()
+    async def build_ratls(self, public=False, force=False):
+        if not self._ratls:
+            self._ratls = ArloRatls(self._core, self, public=public)
+        await self._ratls.start(force=force)
 
     async def keep_ratls_open(self):
         if self._ratls:
@@ -608,31 +609,27 @@ class ArloBaseStationVideo(ArloVideo):
 
         self._base = base
 
-    def download_video(self, filename=None):
-
-        video_url = f"{RATLS_DOWNLOAD_PATH}/{self.video_url}"
-        response = self._base.ratls.get(video_url, raw=True)
-        if response is None:
+    async def download_video(self, filename=None):
+        if not self._base.ratls:
             return False
 
-        with open(filename, "wb") as data:
-            data.write(response.read())
+        video_url = f"{RATLS_DOWNLOAD_PATH}/{self.video_url}"
+        content = await self._base.ratls.get(video_url, raw=True)
+        if content is None:
+            return False
+
+        if filename:
+            with open(filename, "wb") as data:
+                data.write(content)
         return True
 
     @property
     def created_at(self):
-        """Returns date video was creaed, adjusted to ms"""
+        """Returns date video was created, adjusted to ms"""
         timestamp = super().created_at
         if timestamp:
             return timestamp * 1000
         return None
-
-    @property
-    def stream_video(self):
-        response = self._base.ratls.get(f"{RATLS_DOWNLOAD_PATH}/{self.video_url}", raw=True)
-        response.raise_for_status()
-        for data in response.iter_content(4096):
-            yield data
 
 
 class ArloBaseStationMediaLibrary(ArloMediaLibrary):
@@ -649,20 +646,24 @@ class ArloBaseStationMediaLibrary(ArloMediaLibrary):
     async def _fetch_library(self, date_from, date_to):
         """Fetch the library from the device.
         """
-        list = []
+        if not self._base.ratls:
+            return []
 
-        # Fetch each page individually, since the base station still only return results for one date at a time
-        days = self._core.cfg.library_days
-        for i in range(0, days + 1):
-            date = (datetime.strptime(date_to, "%Y%m%d") - timedelta(days=days - i)).strftime("%Y%m%d")
+        results = []
+        d_start = datetime.strptime(date_from, "%Y%m%d")
+        d_end = datetime.strptime(date_to, "%Y%m%d")
+        delta = (d_end - d_start).days
+
+        # Query each date individually across the range
+        for i in range(max(0, delta + 1)):
+            date = (d_start + timedelta(days=i)).strftime("%Y%m%d")
             for camera in self._objs.cameras:
-                if camera.parent_id == self._base.device_id:
-                    # This URL is mysterious -- it won't return multiple days of videos
+                if camera.parent_id == self._base.device_id or camera.device_id == self._base.device_id:
                     data = await self._base.ratls.get(f"{RATLS_LIBRARY_PATH}/{date}/{date}/{camera.device_id}")
-                    if data and "data" in data:
-                        list += data["data"]
+                    if data and isinstance(data, dict) and "data" in data and isinstance(data["data"], list):
+                        results += data["data"]
 
-        return list
+        return results
 
     def _create_video(self, video, camera):
         """Build the video object.

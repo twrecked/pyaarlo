@@ -102,6 +102,11 @@ pyaarlo media list --days 1 --compact
 pyaarlo media list --object animal
 pyaarlo media download --limit 5 -o ./media
 
+# Local storage (RATLS direct USB/SD access on SmartHub / Base Station)
+pyaarlo local-media status "Front Base"
+pyaarlo local-media list --base "Front Base" --compact
+pyaarlo local-media download --base "Front Base" --limit 5 -o ./local_media
+
 # List devices and status
 pyaarlo list devices --compact
 ```

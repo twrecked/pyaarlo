@@ -187,6 +187,26 @@ pyaarlo media download --limit 5 -o ./media
 pyaarlo media download -c "Front Door Bell" --thumbnails --limit 3
 ```
 
+### `pyaarlo local-media`
+Accesses and downloads recordings directly from SmartHub / Base Station local USB/microSD storage via mTLS (RATLS).
+
+```bash
+# Check local storage support, certificate status, and test mTLS connectivity
+pyaarlo local-media status "Front Base"
+
+# List local recordings stored on base station USB
+pyaarlo local-media list --base "Front Base" --compact
+
+# Filter local recordings by camera and date
+pyaarlo local-media list -c "Front" --days 3
+
+# Download local recordings directly over LAN to ./local_media
+pyaarlo local-media download --base "Front Base" --limit 5 -o ./local_media
+
+# Connect via public WAN IP instead of local LAN IP
+pyaarlo local-media list --base "Front Base" --public
+```
+
 ### `pyaarlo camera`
 Interacts with cameras.
 

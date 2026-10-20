@@ -30,6 +30,7 @@ from .config import (
     save_config_file,
 )
 from .targets import parse_targets, resolve_devices, resolve_location
+from .. import PyArlo
 
 
 @click.group()
@@ -995,6 +996,299 @@ def media_download(
 
             click.echo(f"Successfully downloaded {count}/{len(filtered)} file(s).")
             return 0 if count == len(filtered) else 1
+        finally:
+            await arlo.stop(logout=False)
+
+    run_async_cli(cli_ctx, _run())
+
+
+# -------------------------------------------------------------------------
+# Local Media (RATLS Direct Storage Access)
+# -------------------------------------------------------------------------
+@cli.group("local-media")
+def local_media_group() -> None:
+    """Access and download recordings directly from base station local storage via RATLS."""
+    pass
+
+
+def _find_ratls_base(arlo: PyArlo, base_target: str | None) -> Any:
+    """Find candidate base station for RATLS operations."""
+    if base_target:
+        matched, _ = resolve_devices(arlo.base_stations, [base_target])
+        if matched:
+            return matched[0]
+        return None
+
+    candidates = [
+        b for b in arlo.base_stations
+        if getattr(b, "model_id", "").upper().startswith(("VMB4", "VMB5"))
+    ]
+    if len(candidates) == 1:
+        return candidates[0]
+    elif len(candidates) > 1:
+        return candidates[0]
+    elif arlo.base_stations:
+        return arlo.base_stations[0]
+    return None
+
+
+async def _ensure_ratls_connected(arlo: PyArlo, base: Any, public: bool = False, force: bool = False) -> Any:
+    """Connect to base station RATLS, reusing cached lease if available or opening port on demand."""
+    from ..ratls import ArloRatls
+
+    if not getattr(base, "ratls", None):
+        base._ratls = ArloRatls(arlo._core, base, public=public)
+
+    ratls = base.ratls
+    assert ratls is not None
+
+    if not force and await ratls.try_connect_cached():
+        click.echo(f"Reusing active local storage lease on {base.name} (direct LAN access)...")
+        return ratls
+
+    # If no cached lease or verification failed, open port via cloud event stream
+    click.echo(f"Opening local storage port on {base.name} via cloud event stream...")
+    if not getattr(arlo._core.be, "stream_connected", False):
+        await arlo._core.be.start()
+
+    await ratls.open_port(force=True)
+    return ratls
+
+
+@local_media_group.command("status")
+@click.argument("base_station", required=False, default=None)
+@click.option("--public", is_flag=True, default=False, help="Test public WAN IP instead of local LAN IP")
+@click.option("--force", is_flag=True, default=False, help="Force re-opening port even if cached lease is active")
+@click.pass_obj
+def local_media_status(cli_ctx: CLIContext, base_station: str | None, public: bool, force: bool) -> None:
+    """Check base station local storage support, certificates, and mTLS connectivity."""
+    async def _status() -> int:
+        use_cache = not cli_ctx.ignore_cache
+        arlo = await create_pyarlo(
+            cli_ctx.config,
+            wait_for_setup=False,
+            start_background=False,
+            refresh_devices=not use_cache,
+        )
+        try:
+            base = _find_ratls_base(arlo, base_station)
+            if not base:
+                click.echo("Error: No suitable base station found for local storage.", err=True)
+                return 1
+
+            click.echo(f"Selected Base Station: {base.name} ({base.model_id}, {base.device_id})")
+            ratls = await _ensure_ratls_connected(arlo, base, public=public, force=force)
+            if not ratls:
+                click.echo("Error: Failed to initialize RATLS.", err=True)
+                return 1
+
+            certs_path = ratls.security.device_certs_path(base.unique_id)
+            click.echo(f"  Device ID:          {base.device_id}")
+            click.echo(f"  Certificates:       Provisioned ({certs_path})")
+            click.echo(f"  Local IP & Port:    {ratls.private_ip}:{ratls.port}")
+            click.echo(f"  Public IP:          {ratls.public_ip}")
+            click.echo(f"  mTLS Endpoint:      {ratls.url}")
+            click.echo(f"  Connectivity:       OK (mTLS session established)")
+            return 0
+        except Exception as err:
+            click.echo(f"Error establishing RATLS connection: {err}", err=True)
+            return 1
+        finally:
+            await arlo.stop(logout=False)
+
+    run_async_cli(cli_ctx, _status())
+
+
+@local_media_group.command("list")
+@click.option("-b", "--base", "base_station", default=None, help="Base station name or ID")
+@click.option("-c", "--camera", "cameras", default=None, help="Filter by camera name or device ID (comma-separated)")
+@click.option("--days", type=int, default=1, help="Number of days back to search (default: 1)")
+@click.option("--date", "single_date", default=None, help="Specific date to search (YYYY-MM-DD)")
+@click.option("--from", "date_from", default=None, help="Start date (YYYY-MM-DD)")
+@click.option("--to", "date_to", default=None, help="End date (YYYY-MM-DD)")
+@click.option("--public", is_flag=True, default=False, help="Connect via public WAN IP instead of local LAN IP")
+@click.option("--compact", is_flag=True, default=False, help="Display one line per recording")
+@click.option("--json", "json_output", is_flag=True, default=False, help="Display as JSON lines")
+@click.pass_obj
+def local_media_list(
+    cli_ctx: CLIContext,
+    base_station: str | None,
+    cameras: str | None,
+    days: int,
+    single_date: str | None,
+    date_from: str | None,
+    date_to: str | None,
+    public: bool,
+    compact: bool,
+    json_output: bool,
+) -> None:
+    """List recordings stored on base station USB / local storage."""
+    import json
+
+    d_from, d_to = _resolve_date_range(days, single_date, date_from, date_to)
+    cam_targets = parse_targets([cameras]) if cameras else []
+
+    async def _list() -> int:
+        use_cache = not cli_ctx.ignore_cache
+        arlo = await create_pyarlo(
+            cli_ctx.config,
+            wait_for_setup=False,
+            start_background=False,
+            refresh_devices=not use_cache,
+        )
+        try:
+            base = _find_ratls_base(arlo, base_station)
+            if not base:
+                click.echo("Error: No suitable base station found for local storage.", err=True)
+                return 1
+
+            await _ensure_ratls_connected(arlo, base, public=public)
+            await base.build_media_library()
+
+            raw_videos = await base.ml._fetch_library(d_from, d_to)
+            if not raw_videos:
+                click.echo(f"No local recordings found between {d_from} and {d_to} on {base.name}.")
+                return 0
+
+            videos = []
+            for item in raw_videos:
+                cam = next((c for c in arlo.cameras if c.device_id == item.get("deviceId")), None)
+                if cam:
+                    videos.append(base.ml._create_video(item, cam))
+
+            filtered = _filter_videos(videos, cam_targets, None)
+            if not filtered:
+                click.echo(f"No recordings matching filters found between {d_from} and {d_to}.")
+                return 0
+
+            for vid in filtered:
+                cam = getattr(vid, "camera", None)
+                cam_name = getattr(cam, "name", "unknown")
+                cam_id = getattr(cam, "device_id", "unknown")
+                obj_label = getattr(vid, "object_type", None) or getattr(vid, "triggered_by", None) or "recording"
+                duration = getattr(vid, "media_duration_seconds", 0)
+                dt = getattr(vid, "datetime", None)
+                dt_str = dt.strftime("%Y-%m-%d %H:%M:%S") if dt else "unknown"
+                vid_id = getattr(vid, "id", "")
+                url = getattr(vid, "video_url", "")
+
+                if json_output:
+                    payload = {
+                        "id": vid_id,
+                        "timestamp": dt_str,
+                        "camera": cam_name,
+                        "camera_id": cam_id,
+                        "object": obj_label,
+                        "duration": duration,
+                        "url": url,
+                    }
+                    click.echo(json.dumps(payload))
+                elif compact:
+                    click.echo(f"{dt_str} [{cam_name}] {obj_label} ({duration}s) - id={vid_id}")
+                else:
+                    click.echo(f"[{dt_str}] {cam_name}: {obj_label} ({duration}s)")
+                    click.echo(f"  ID:       {vid_id}")
+                    click.echo(f"  File/URL: {url}")
+            return 0
+        except Exception as err:
+            click.echo(f"Error accessing local storage: {err}", err=True)
+            return 1
+        finally:
+            await arlo.stop(logout=False)
+
+    run_async_cli(cli_ctx, _list())
+
+
+@local_media_group.command("download")
+@click.option("-b", "--base", "base_station", default=None, help="Base station name or ID")
+@click.option("-c", "--camera", "cameras", default=None, help="Filter by camera name or device ID (comma-separated)")
+@click.option("--days", type=int, default=1, help="Number of days back to search (default: 1)")
+@click.option("--date", "single_date", default=None, help="Specific date to search (YYYY-MM-DD)")
+@click.option("--from", "date_from", default=None, help="Start date (YYYY-MM-DD)")
+@click.option("--to", "date_to", default=None, help="End date (YYYY-MM-DD)")
+@click.option("-o", "--output-dir", default="./local_media", help="Destination folder (default: ./local_media)")
+@click.option("--limit", type=int, default=None, help="Maximum number of files to download")
+@click.option("--public", is_flag=True, default=False, help="Connect via public WAN IP instead of local LAN IP")
+@click.pass_obj
+def local_media_download(
+    cli_ctx: CLIContext,
+    base_station: str | None,
+    cameras: str | None,
+    days: int,
+    single_date: str | None,
+    date_from: str | None,
+    date_to: str | None,
+    output_dir: str,
+    limit: int | None,
+    public: bool,
+) -> None:
+    """Download recordings directly from base station local storage over LAN."""
+    d_from, d_to = _resolve_date_range(days, single_date, date_from, date_to)
+    cam_targets = parse_targets([cameras]) if cameras else []
+
+    async def _run() -> int:
+        use_cache = not cli_ctx.ignore_cache
+        arlo = await create_pyarlo(
+            cli_ctx.config,
+            wait_for_setup=False,
+            start_background=False,
+            refresh_devices=not use_cache,
+        )
+        try:
+            base = _find_ratls_base(arlo, base_station)
+            if not base:
+                click.echo("Error: No suitable base station found for local storage.", err=True)
+                return 1
+
+            await _ensure_ratls_connected(arlo, base, public=public)
+            await base.build_media_library()
+
+            raw_videos = await base.ml._fetch_library(d_from, d_to)
+            if not raw_videos:
+                click.echo(f"No local recordings found between {d_from} and {d_to} on {base.name}.")
+                return 0
+
+            videos = []
+            for item in raw_videos:
+                cam = next((c for c in arlo.cameras if c.device_id == item.get("deviceId")), None)
+                if cam:
+                    videos.append(base.ml._create_video(item, cam))
+
+            filtered = _filter_videos(videos, cam_targets, None)
+            if not filtered:
+                click.echo(f"No recordings matching filters found between {d_from} and {d_to}.")
+                return 0
+
+            if limit is not None and limit > 0:
+                filtered = filtered[:limit]
+
+            dest_dir = Path(output_dir)
+            dest_dir.mkdir(parents=True, exist_ok=True)
+
+            click.echo(f"Downloading {len(filtered)} local video(s) from {base.name} to {dest_dir}...")
+            count = 0
+            for vid in filtered:
+                cam = getattr(vid, "camera", None)
+                cam_name = getattr(cam, "name", "cam").replace(" ", "_").lower()
+                dt = getattr(vid, "datetime", None)
+                dt_str = dt.strftime("%Y%m%d_%H%M%S") if dt else f"id_{getattr(vid, 'id', '0')}"
+                obj_label = getattr(vid, "object_type", None) or getattr(vid, "triggered_by", None) or "recording"
+                ext = getattr(vid, "extension", "mp4")
+
+                filename = str(dest_dir / f"{dt_str}_{cam_name}_{obj_label}.{ext}")
+
+                ok = await vid.download_video(filename)
+                if ok:
+                    click.echo(f"  [OK] {filename}")
+                    count += 1
+                else:
+                    click.echo(f"  [FAILED] {filename}", err=True)
+
+            click.echo(f"Successfully downloaded {count}/{len(filtered)} file(s) from local storage.")
+            return 0 if count == len(filtered) else 1
+        except Exception as err:
+            click.echo(f"Error downloading from local storage: {err}", err=True)
+            return 1
         finally:
             await arlo.stop(logout=False)
 

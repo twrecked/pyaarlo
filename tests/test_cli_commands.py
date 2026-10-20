@@ -26,6 +26,7 @@ def test_pyaarlo_help():
     assert "camera" in result.output
     assert "config" in result.output
     assert "media" in result.output
+    assert "local-media" in result.output
     assert "list" in result.output
 
 
@@ -46,6 +47,30 @@ def test_pyaarlo_media_help():
     assert res_down.exit_code == 0
     assert "--output-dir" in res_down.output
     assert "--thumbnails" in res_down.output
+
+
+def test_pyaarlo_local_media_help():
+    runner = CliRunner()
+    result = runner.invoke(pyaarlo_cli, ["local-media", "--help"])
+    assert result.exit_code == 0
+    assert "status" in result.output
+    assert "list" in result.output
+    assert "download" in result.output
+
+    res_stat = runner.invoke(pyaarlo_cli, ["local-media", "status", "--help"])
+    assert res_stat.exit_code == 0
+    assert "--public" in res_stat.output
+
+    res_list = runner.invoke(pyaarlo_cli, ["local-media", "list", "--help"])
+    assert res_list.exit_code == 0
+    assert "--base" in res_list.output
+    assert "--camera" in res_list.output
+    assert "--public" in res_list.output
+
+    res_down = runner.invoke(pyaarlo_cli, ["local-media", "download", "--help"])
+    assert res_down.exit_code == 0
+    assert "--base" in res_down.output
+    assert "--output-dir" in res_down.output
 
 
 def test_media_date_and_filter_helpers():

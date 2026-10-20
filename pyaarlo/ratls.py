@@ -2,6 +2,7 @@ import asyncio
 import ssl
 import json
 import os
+import time
 from urllib.request import Request, build_opener, HTTPSHandler
 
 from .constant import (
@@ -28,15 +29,62 @@ class ArloRatls:
     def _debug(self, msg):
         self._core.log.debug(f"ratls: {msg}")
 
-    async def start(self):
+    async def start(self, force: bool = False):
         await self._check_device_certs()
-        await self.open_port()
+        await self.open_port(force=force)
 
-    async def open_port(self):
-        """ RATLS port will automatically close after 10 minutes """
+    def has_active_lease(self) -> bool:
+        """Check if an unexpired port lease is cached in storage."""
+        lease = self._core.st.get(["ARLO", "RATLS_LEASE", self._unique_id])
+        if not lease or not isinstance(lease, dict):
+            return False
+        expires_at = lease.get("expires_at", 0)
+        # Keep 120-second safety margin
+        return time.time() < (expires_at - 120)
+
+    async def try_connect_cached(self) -> bool:
+        """Attempt to connect to the base station using an existing unexpired lease."""
+        if not self.has_active_lease():
+            return False
+
+        lease = self._core.st.get(["ARLO", "RATLS_LEASE", self._unique_id])
+        if not lease or "token" not in lease or "details" not in lease:
+            return False
+
+        self._debug(f"Attempting to reuse cached lease for {self._unique_id}")
+        self._base_station_token = lease["token"]
+        self._base_connection_details = lease["details"]
+
+        await self._check_device_certs()
+        self._setup_base_client()
+
+        # Verify connectivity directly against base station
+        try:
+            response = await self.get(RATLS_CONNECTIVITY_PATH)
+            if response and response.get("success"):
+                self._debug(f"Cached lease connectivity verified on {self.url}")
+                return True
+        except Exception as e:
+            self._debug(f"Cached lease verification failed: {e}")
+
+        # Invalidate stale lease
+        self._core.st.unset(["ARLO", "RATLS_LEASE", self._unique_id])
+        self._base_connection_details = None
+        self._base_station_token = None
+        return False
+
+    async def open_port(self, force: bool = False):
+        """Open or reuse the 10-minute RATLS port lease."""
+        if not force and await self.try_connect_cached():
+            return self._base_connection_details
+
         self._base_station_token = await self._get_station_token()
 
-        self._debug(f"Opening port for {self._unique_id}")
+        self._debug(f"Opening port for {self._unique_id} via cloud notify")
+
+        # To receive the event response, the backend event stream must be active.
+        if not getattr(self._core.be, "is_connected", False):
+            await self._core.be.connect()
 
         response = await self._core.be.notify(
             self._base.device_id,
@@ -44,21 +92,29 @@ class ArloRatls:
             {
                 "action": "open",
                 "resource": "storage/ratls",
-                "from": self._base.user_id,
+                "from": self._base.user_id or self._core.be.user_id,
                 "publishResponse": True
             },
             wait_for="event"
         )
 
-        if response is None or not response['success']:
+        if response is None or not response.get("success"):
             raise Exception(f"Failed to open ratls port: {response}")
 
-        self._base_connection_details = response['properties']
+        self._base_connection_details = response["properties"]
         self._setup_base_client()
 
         response = await self.get(RATLS_CONNECTIVITY_PATH)
-        if response is None or not response['success']:
+        if response is None or not response.get("success"):
             raise Exception(f"Failed to gain connectivity to ratls!")
+
+        # Save active lease to storage (10 minutes)
+        lease_data = {
+            "token": self._base_station_token,
+            "details": self._base_connection_details,
+            "expires_at": time.time() + 600,
+        }
+        self._core.st.set(["ARLO", "RATLS_LEASE", self._unique_id], lease_data, prefix="aarlo")
 
         return self._base_connection_details
 
@@ -72,9 +128,10 @@ class ArloRatls:
         def _do_get():
             try:
                 response = self._base_client.open(request)
+                content = response.read()
                 if raw:
-                    return response
-                return json.loads(response.read())
+                    return content
+                return json.loads(content.decode("utf-8"))
             except Exception as e:
                 self._core.log.warning("request-error={}".format(type(e).__name__))
                 return None
