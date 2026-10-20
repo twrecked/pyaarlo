@@ -85,13 +85,15 @@ def setup_logging(verbose: int) -> None:
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
     logging.getLogger("pyaarlo").setLevel(level)
+    if verbose >= 3:
+        logging.getLogger("pyaarlo.packet").setLevel(logging.DEBUG)
 
 
 def common_options(f: Callable[..., Any]) -> Callable[..., Any]:
     """Decorator to apply common CLI options across commands."""
     options = [
         click.option("-c", "--config", "config_path", default=None, help="Path to JSON config file"),
-        click.option("-v", "--verbose", count=True, help="Increase verbosity (-v for INFO, -vv for DEBUG)"),
+        click.option("-v", "--verbose", count=True, help="Increase verbosity (-v for INFO, -vv for DEBUG, -vvv for packet trace)"),
         click.option("-u", "--username", default=None, help="Arlo username (overrides config/env)"),
         click.option("-p", "--password", default=None, help="Arlo password (overrides config/env)"),
         click.option("--backend", type=click.Choice(["auto", "sse", "mqtt"], case_sensitive=False), default=None, help="Event stream backend (auto, sse, mqtt)"),

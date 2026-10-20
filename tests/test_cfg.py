@@ -183,3 +183,29 @@ def test_tfa_single_property_config(log):
     assert cfg_legacy.tfa_source == "imap"
 
 
+def test_arlo_logger_packet_sublogger(caplog):
+    import logging
+    from pyaarlo.core.logger import ArloLogger
+
+    packet_logger = logging.getLogger("pyaarlo.packet")
+
+    # By default, packet logger is not DEBUG
+    packet_logger.setLevel(logging.INFO)
+    logger = ArloLogger(verbose=False)
+    with caplog.at_level(logging.DEBUG):
+        caplog.clear()
+        logger.vdebug("packet_test_hidden")
+        assert "packet_test_hidden" not in caplog.text
+
+    # When pyaarlo.packet is set to DEBUG
+    packet_logger.setLevel(logging.DEBUG)
+    with caplog.at_level(logging.DEBUG):
+        caplog.clear()
+        logger.vdebug("packet_test_visible")
+        assert "packet_test_visible" in caplog.text
+
+    # When verbose=True is passed
+    logger_verbose = ArloLogger(verbose=True)
+    assert packet_logger.level == logging.DEBUG
+
+

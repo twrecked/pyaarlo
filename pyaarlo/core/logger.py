@@ -2,20 +2,22 @@ import logging
 
 
 _LOGGER = logging.getLogger("pyaarlo")
+_PACKET_LOGGER = logging.getLogger("pyaarlo.packet")
 
 
 class ArloLogger:
     """An all-in-one-place logger.
 
-    And instance is created very early on and passed to all sub-components.
+    An instance is created very early on and passed to all sub-components.
     """
 
     def __init__(self, verbose: bool = False):
-        self._verbose_debug: bool = verbose
         self._last_error: str | None = None
+        if verbose:
+            _PACKET_LOGGER.setLevel(logging.DEBUG)
 
         self.debug("logger created")
-        self.vdebug("verbose debug enabled")
+        self.vdebug("verbose packet debug enabled")
 
     def error(self, msg: str) -> None:
         self._last_error = msg
@@ -37,6 +39,5 @@ class ArloLogger:
         _LOGGER.debug(msg)
 
     def vdebug(self, msg: str) -> None:
-        if self._verbose_debug:
-            _LOGGER.debug(msg)
+        _PACKET_LOGGER.debug(msg)
 
