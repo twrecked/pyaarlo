@@ -7,13 +7,15 @@ An asynchronous Python library and command-line automation toolkit for Netgear/A
 
 ---
 
-> ### ⚠️ Alpha Release Notice (`v0.9.0-alpha`)
+> ### ⚠️ Alpha Release Notice (`v0.9.0-alpha.1`)
 >
 > **PyArlo v0.9 is a major rewrite transitioning the entire codebase from legacy synchronous threads to native Python `asyncio`.**
 >
 > **This is an active alpha release — please expect bugs, edge cases, and evolving APIs.**
 >
-> If you encounter issues, regressions, or unexpected behavior, please [open a GitHub issue](https://github.com/twrecked/pyaarlo/issues). Please include your Python version, Arlo device models, and sanitized/encrypted debug logs.
+> *Note on Hardware Testing:* The maintainer does not own or have access to every Arlo hardware model (such as all generations of cameras, floodlights, doorbells, chimes, and SmartHubs) and cannot test every permutation. Community testing and feedback are essential to stabilizing this release!
+>
+> If you encounter issues, regressions, or unexpected behavior with your hardware, please [open a GitHub issue](https://github.com/twrecked/pyaarlo/issues). Please include your Python version, Arlo device models, and sanitized/encrypted debug logs generated with `--debug-report`.
 >
 > If you need the legacy synchronous documentation for PyArlo v0.8, it is archived in [README_v8.md](README_v8.md).
 
@@ -25,6 +27,7 @@ An asynchronous Python library and command-line automation toolkit for Netgear/A
 - [Command Line Interface (CLI)](#command-line-interface)
 - [Using the Python Module](#using-the-python-module)
 - [Two-Factor Authentication (2FA)](#two-factor-authentication)
+- [Operational Notes & Recommendations](#notes--recommendations)
 - [Diagnostics & Error Reporting](#diagnostics--error-reporting)
 - [Documentation Links](#documentation-links)
 - [Credits](#credits)
@@ -231,6 +234,28 @@ PyArlo requests Arlo to send a code via email or SMS, and prompts you to type th
   ```python
   arlo = await PyArlo.create(username="...", password="...", tfa="sms")
   ```
+
+---
+
+<a name="notes--recommendations"></a>
+## Operational Notes & Recommendations
+
+### Choosing an Event Stream Backend (MQTT vs. SSE)
+PyArlo supports two streaming backends for real-time device updates:
+
+1. **MQTT (`mqtt`) — Default**:
+   - Modern, lightweight WebSocket protocol used by Arlo's official mobile apps.
+   - **Supports multiple concurrent connections**: you can run `pyaarlo-monitor` in one terminal while running action commands or scripts in another without interrupting your session.
+   - *Limitation*: Arlo does not publish every legacy event type (such as stream snapshot notifications) over MQTT.
+2. **SSE (`sse`) — Legacy**:
+   - HTTP Server-Sent Events stream (`/subscribe`).
+   - Emits a broader range of legacy event types (like stream snapshots).
+   - *Limitation*: Arlo restricts SSE to a **single active connection** per account. Opening a second stream will disconnect the first. You can select it with `--backend sse` or `--sse` on `pyaarlo-monitor`.
+
+### Dedicated Arlo Account Recommendation
+Even though MQTT allows concurrent event streams with your primary mobile app without immediately logging you out, **we strongly recommend creating a separate, dedicated Arlo account and sharing your cameras/devices to it**:
+- **Security & Least Privilege**: Protects your primary account credentials and limits access strictly to the shared devices.
+- **Session Stability**: Prevents token refresh races and conflicting login state between automation scripts, Home Assistant, and your mobile phone app.
 
 ---
 

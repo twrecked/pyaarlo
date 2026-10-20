@@ -1,3 +1,35 @@
+0.9.0-alpha.1
+  Major Architecture (Breaking Changes)
+  - Async-First Core: Transitioned the entire library to native asyncio (Python >= 3.10)
+    replacing background threads with non-blocking coroutines.
+  - Asynchronous Factory: Replaced synchronous constructor with await PyArlo.create().
+  - Coroutine Methods: Converted device action, mode, media, and streaming methods to
+    awaitable coroutines (e.g. await light.turn_on(), await location.set_mode(),
+    await arlo.stop()).
+  - Inline Mode: Renamed synchronous_mode to inline_mode to clearly represent waiting
+    for operations inline, with backward-compatible deprecation fallback.
+  - One-Shot Execution: Added start_background=False (bypasses persistent MQTT/SSE stream)
+    and refresh_devices=False (reuses local storage catalog) for sub-second CLI actions.
+  - Optimistic Token Reuse: Reuses unexpired session tokens directly without making
+    redundant /api/validateAccessToken pre-validation calls, with automatic 401 re-auth.
+  - Unified 2FA Parameter: Consolidated 2FA into a single tfa parameter (e.g. 'push',
+    'email:imap', 'email:console', 'sms') eliminating separate tfa_source requirements.
+
+  Features & CLI Suite
+  - Three Dedicated CLI Binaries:
+    * pyaarlo: High-performance device actions, location modes, cache, and media.
+    * pyaarlo-monitor: Real-time event stream listener with filtering and formatting.
+    * pyaarlo-utils: Diagnostic utilities for dumping, anonymizing, and encrypting logs.
+  - Interactive Configuration Wizard: Added pyaarlo config with create, update, show,
+    and set commands for managing ~/.config/pyaarlo/config.json.
+  - Cross-Platform Standards: Added platformdirs for OS-preferred config and cache paths.
+  - Cloud Media Command: Added pyaarlo media list and pyaarlo media download with
+    date, camera, and smart object filters (person, vehicle, animal, package).
+  - Direct Storage Access (RATLS): Added pyaarlo local-media status, list, and download
+    with 10-minute port lease caching and on-demand event stream startup.
+  - Automated Issue Diagnostics: Added --debug-report option to all CLI commands to
+    generate anonymized, RSA-encrypted diagnostic dumps for GitHub issue reporting.
+
 0.8.0.27
   Bug Fixes
   - MQTT & Auth Token Reconnect: Enable the periodic reconnect daemon for MQTT
