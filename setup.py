@@ -1,6 +1,6 @@
 # coding=utf-8
 """Python Arlo setup script."""
-from setuptools import setup
+from setuptools import setup, find_packages
 
 
 def readme():
@@ -12,7 +12,7 @@ setup(
 
     name='pyaarlo',
     version='0.9.0-alpha.1',
-    packages=['pyaarlo'],
+    packages=find_packages(exclude=['tests', 'tests.*']),
 
     python_requires='>=3.10',
     install_requires=[
