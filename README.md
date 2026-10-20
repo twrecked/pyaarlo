@@ -311,4 +311,4 @@ If troubleshooting unexpected Arlo web changes:
 
 Special thanks to:
 * [Pyarlo](https://github.com/tchellomello/python-arlo) and [Arlo](https://github.com/jeffreydwalter/arlo) for the original foundational reverse-engineering work.
-* [JetBrains](https://www.jetbrains.com/?from=hass-aarlo) for supporting the project with open source development licenses.
+* [JetBrains](https://www.jetbrains.com/?from=hass-aarlo) for their past support providing open source development licenses throughout most of the v0.8 releases.
