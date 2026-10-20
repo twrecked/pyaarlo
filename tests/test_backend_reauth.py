@@ -212,7 +212,7 @@ async def test_start_schedules_reconnect_configured(session_and_backend):
 
     await backend.start()
 
-    mock_tasks.run_every.assert_called_once_with(backend._event_reconnect, 3600)
+    mock_tasks.run_in.assert_called_once_with(backend._event_reconnect, 3600)
     assert backend._reconnect_job is not None
 
 
@@ -232,7 +232,7 @@ async def test_start_schedules_reconnect_fallback_expires_in(session_and_backend
     await backend.start()
 
     # Expires in 7200s - 300s margin = 6900s
-    args, _ = mock_tasks.run_every.call_args
+    args, _ = mock_tasks.run_in.call_args
     assert args[0] == backend._event_reconnect
     assert 6800 <= args[1] <= 6900
     assert backend._reconnect_job is not None

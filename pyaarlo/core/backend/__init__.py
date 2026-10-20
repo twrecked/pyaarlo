@@ -413,6 +413,9 @@ class ArloBackEnd:
             if self._event.loop_exiting:
                 break
 
+            # schedule next token renewal before starting event device
+            self._schedule_token_renewal()
+
             self._debug("starting event device")
             await self._event.stream.run()
             self._debug("exited event device")
@@ -1061,25 +1064,33 @@ class ArloBackEnd:
             count += 1
         # XXX: check count and fail?
 
-        # start reconnect daemon
-        reconnect_interval = self._cfg.reconnect_every
-        if reconnect_interval == 0:
-            token_expires_in = getattr(self._req.details, "token_expires_in", None)
-            if token_expires_in:
-                delta = int(token_expires_in - time.time())
-                if delta > 600:
-                    reconnect_interval = delta - 300
-                else:
-                    reconnect_interval = 90 * 60
-            else:
-                reconnect_interval = 90 * 60
-
-        if reconnect_interval != 0:
-            self._debug(f"automatically reconnecting every {reconnect_interval}s")
-            self._reconnect_job = self._tasks.run_every(self._event_reconnect, reconnect_interval)
+        # start reconnect daemon based on token expiry
+        self._schedule_token_renewal()
 
         self._debug("stream up")
         return True
+
+    def _schedule_token_renewal(self):
+        if self._reconnect_job is not None:
+            self._tasks.cancel(self._reconnect_job)
+            self._reconnect_job = None
+
+        if self._cfg.reconnect_every != 0:
+            reconnect_interval = self._cfg.reconnect_every
+        else:
+            token_expires_in = getattr(self._req.details, "token_expires_in", None)
+            if token_expires_in:
+                delta = int(token_expires_in - time.time())
+                if delta > 360:
+                    reconnect_interval = delta - 300
+                else:
+                    reconnect_interval = max(60, delta - 60)
+            else:
+                reconnect_interval = 90 * 60
+
+        if reconnect_interval > 0:
+            self._debug(f"automatically scheduling token renewal in {reconnect_interval}s")
+            self._reconnect_job = self._tasks.run_in(self._event_reconnect, reconnect_interval)
 
     @property
     def is_connected(self):
