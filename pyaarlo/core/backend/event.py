@@ -240,12 +240,17 @@ class _MQTT:
             self._client.on_connect = self._on_connect
             self._client.on_disconnect = self._on_disconnect
             self._client.on_message = self._on_message
-            ssl_context = ssl.create_default_context()
-            if not self._session.cfg.mqtt_hostname_check:
-                ssl_context.check_hostname = False
-                ssl_context.verify_mode = ssl.CERT_NONE
-            else:
-                ssl_context.check_hostname = True
+
+            def _setup_ssl_context():
+                ctx = ssl.create_default_context()
+                if not self._session.cfg.mqtt_hostname_check:
+                    ctx.check_hostname = False
+                    ctx.verify_mode = ssl.CERT_NONE
+                else:
+                    ctx.check_hostname = True
+                return ctx
+
+            ssl_context = await asyncio.to_thread(_setup_ssl_context)
             self._client.tls_set_context(ssl_context)
             self._client.username_pw_set(f"{self._session.details.user_id}", self._session.details.token)
             if self._session.cfg.mqtt_transport == "websockets":
@@ -257,7 +262,12 @@ class _MQTT:
             )
 
             # Connect.
-            _ = self._client.connect(self._session.cfg.mqtt_host, port=self._session.cfg.mqtt_port, keepalive=60)
+            _ = await asyncio.to_thread(
+                self._client.connect,
+                self._session.cfg.mqtt_host,
+                port=self._session.cfg.mqtt_port,
+                keepalive=60,
+            )
             
             # Start loop in a background thread as paho-mqtt is sync
             self._client.loop_start()

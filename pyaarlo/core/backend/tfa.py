@@ -109,16 +109,14 @@ class _TFAImap(_TFABase):
             await self.stop()
 
         try:
-            # allow default ciphers to be specified
-            cipher_list = self._cfg.cipher_list
-            if cipher_list != "":
-                ctx = ssl.create_default_context()
-                ctx.set_ciphers(cipher_list)
-                self._debug(f"imap is using custom ciphers {cipher_list}")
-            else:
-                ctx = None
-
             def _do_login():
+                cipher_list = self._cfg.cipher_list
+                if cipher_list != "":
+                    ctx = ssl.create_default_context()
+                    ctx.set_ciphers(cipher_list)
+                    self._debug(f"imap is using custom ciphers {cipher_list}")
+                else:
+                    ctx = None
                 imap = imaplib.IMAP4_SSL(self._cfg.tfa_host, port=self._cfg.tfa_port, ssl_context=ctx)
                 if self._cfg.verbose:
                     imap.debug = 4
