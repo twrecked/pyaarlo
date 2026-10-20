@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import datetime
 import io
+import json
 import logging
 import os
 import pickle
@@ -19,13 +20,13 @@ BEGIN_PYAARLO_DUMP = "-----BEGIN PYAARLO DUMP-----"
 END_PYAARLO_DUMP = "-----END PYAARLO DUMP-----"
 
 PUBLIC_KEY = """-----BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1oYXnbQPxREiVPUIRkgk
-h+ehjxHnwz34NsjhjgN1oSKmHpf4cL4L/V4tMnj5NELEmLyTrzAZbeewUMwyiwXO
-3l+cSjjoDKcPBSj4uxjWsq74Q5TLHGjOtkFwaqqxtvsVn3fGFWBO405xpvp7jPUc
-BOvBQaUBUaR9Tbw5anMOzeavUwUTRp2rjtbWyj2P7PEp49Ixzw0w+RjIVrzzevAo
-AD7SVb6U8P77fht4k9krbIFckC/ByY48HhmF+edh1GZAgLCHuf43tGg2upuH5wf+
-AGv/Xlc+9ScTjEp37uPiCpHcB1ur83AFTjcceDIm+VDKF4zQrj88zmL7JqZy+Upx
-UQIDAQAB
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxzl3k6V+70R3znooqXtr
+pN54HrzirF0ogaioOUvL8tK0uE/FLDoeYBJdAGhe9iHYx6wMFUGX9Lp3yduWFr+y
+e9azVZTCApLs+DXsofnWN7KoFhb852BeXEHx7qsOqyz7DtahXpJ9HdjW7R50rO48
+ZMbKlVjTiQU98ZsbW2E9EKj2Fn3RONjZkO5AaIC2P+9/4dMPn1hKrADH/pNlDQIa
+2BKh4BzbDV4wE6o+ZyLozuMEH2Wo/AjTN7mr3xoX+u8/AiGMKel/NdFdp+XayJEZ
+x9Q+WOLpRng74qG1lhGFf2l8RQqxVykX0JXxkNiuTckXpfP4ITkYZgaJ5NLZuEns
+LwIDAQAB
 -----END PUBLIC KEY-----"""
 
 
@@ -35,12 +36,19 @@ def encrypt_to_string(obj: Any, public_key_file: str | None = None) -> str:
     from Crypto.PublicKey import RSA
     from Crypto.Random import get_random_bytes
 
-    pickled = pickle.dumps(obj)
-    pickled += b" " * (16 - len(pickled) % 16)
+    if isinstance(obj, str):
+        obj_bytes = obj.encode("utf-8")
+    elif isinstance(obj, bytes):
+        obj_bytes = obj
+    else:
+        try:
+            obj_bytes = json.dumps(obj).encode("utf-8")
+        except (TypeError, ValueError):
+            obj_bytes = str(obj).encode("utf-8")
 
     key = get_random_bytes(16)
     aes_cipher = AES.new(key, AES.MODE_EAX)
-    encrypted_bytes, tag = aes_cipher.encrypt_and_digest(pickled)
+    encrypted_bytes, tag = aes_cipher.encrypt_and_digest(obj_bytes)
     nonce = aes_cipher.nonce
 
     if public_key_file is None:
@@ -52,8 +60,15 @@ def encrypt_to_string(obj: Any, public_key_file: str | None = None) -> str:
     rsa_envelope = PKCS1_OAEP.new(rsa_cipher)
     enc_key = rsa_envelope.encrypt(key)
 
-    envelope = pickle.dumps({"k": enc_key, "n": nonce, "o": encrypted_bytes, "t": tag})
-    return base64.encodebytes(envelope).decode().rstrip()
+    envelope = {
+        "v": 2,
+        "k": base64.b64encode(enc_key).decode("ascii"),
+        "n": base64.b64encode(nonce).decode("ascii"),
+        "o": base64.b64encode(encrypted_bytes).decode("ascii"),
+        "t": base64.b64encode(tag).decode("ascii"),
+    }
+    envelope_json = json.dumps(envelope).encode("utf-8")
+    return base64.encodebytes(envelope_json).decode("ascii").rstrip()
 
 
 def decrypt_from_string(
@@ -65,18 +80,40 @@ def decrypt_from_string(
     from Crypto.Cipher import AES, PKCS1_OAEP
     from Crypto.PublicKey import RSA
 
-    envelope = base64.b64decode(key_obj_str)
-    data = pickle.loads(envelope)
+    envelope_bytes = base64.b64decode(key_obj_str)
+
+    is_legacy = False
+    try:
+        data = json.loads(envelope_bytes.decode("utf-8"))
+        enc_key = base64.b64decode(data["k"])
+        nonce = base64.b64decode(data["n"])
+        ciphertext = base64.b64decode(data["o"])
+        tag = base64.b64decode(data["t"])
+    except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError):
+        is_legacy = True
+        data = pickle.loads(envelope_bytes)
+        enc_key = data["k"]
+        nonce = data["n"]
+        ciphertext = data["o"]
+        tag = data["t"]
 
     with open(private_key_file, "r") as f:
         rsa_cipher = RSA.importKey(f.read(), passphrase=passphrase)
 
     rsa_envelope = PKCS1_OAEP.new(rsa_cipher)
-    aes_key = rsa_envelope.decrypt(data["k"])
+    aes_key = rsa_envelope.decrypt(enc_key)
 
-    aes_cipher = AES.new(aes_key, AES.MODE_EAX, nonce=data["n"])
-    decrypted_bytes = aes_cipher.decrypt_and_verify(data["o"], data["t"])
-    return pickle.loads(decrypted_bytes)
+    aes_cipher = AES.new(aes_key, AES.MODE_EAX, nonce=nonce)
+    decrypted_bytes = aes_cipher.decrypt_and_verify(ciphertext, tag)
+
+    if is_legacy:
+        return pickle.loads(decrypted_bytes)
+
+    dec_text = decrypted_bytes.decode("utf-8")
+    try:
+        return json.loads(dec_text)
+    except (json.JSONDecodeError, ValueError):
+        return dec_text
 
 
 def anonymize_text(

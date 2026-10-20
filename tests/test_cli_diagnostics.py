@@ -73,3 +73,64 @@ def test_pyaarlo_cli_debug_report_flag(tmp_path):
     result = runner.invoke(pyaarlo_cli, ["--debug-report", str(report_file), "login", "--status"])
     assert report_file.is_file()
     assert "PyArlo Debug Report Generated" in result.output
+
+
+def test_encrypt_decrypt_v2_json_roundtrip(tmp_path):
+    import json
+    import base64
+    from Crypto.PublicKey import RSA
+
+    key = RSA.generate(2048)
+    priv_file = tmp_path / "rsa.private"
+    pub_file = tmp_path / "rsa.public"
+    priv_file.write_text(key.export_key().decode("ascii"))
+    pub_file.write_text(key.publickey().export_key().decode("ascii"))
+
+    # Test string round-trip
+    secret_text = "diagnostics: error at line 42 with token ABC"
+    enc = encrypt_to_string(secret_text, public_key_file=str(pub_file))
+
+    # Verify envelope is v2 JSON
+    envelope = json.loads(base64.b64decode(enc).decode("utf-8"))
+    assert envelope["v"] == 2
+    assert all(k in envelope for k in ("k", "n", "o", "t"))
+
+    # Decrypt and verify
+    decrypted = decrypt_from_string(enc, private_key_file=str(priv_file))
+    assert decrypted == secret_text
+
+    # Test dict round-trip
+    secret_dict = {"status": "ok", "devices": [1, 2, 3]}
+    enc_dict = encrypt_to_string(secret_dict, public_key_file=str(pub_file))
+    dec_dict = decrypt_from_string(enc_dict, private_key_file=str(priv_file))
+    assert dec_dict == secret_dict
+
+
+def test_decrypt_legacy_v1_pickle_backwards_compatible(tmp_path):
+    import pickle
+    import base64
+    from Crypto.Cipher import AES, PKCS1_OAEP
+    from Crypto.PublicKey import RSA
+    from Crypto.Random import get_random_bytes
+
+    key = RSA.generate(2048)
+    priv_file = tmp_path / "rsa.private"
+    priv_file.write_text(key.export_key().decode("ascii"))
+
+    # Construct legacy v1 envelope using pickle
+    msg = "legacy pickled secret payload"
+    pickled_obj = pickle.dumps(msg)
+    aes_key = get_random_bytes(16)
+    cipher = AES.new(aes_key, AES.MODE_EAX)
+    ciphertext, tag = cipher.encrypt_and_digest(pickled_obj)
+
+    rsa_cipher = PKCS1_OAEP.new(key.publickey())
+    enc_key = rsa_cipher.encrypt(aes_key)
+
+    v1_envelope = pickle.dumps({"k": enc_key, "n": cipher.nonce, "o": ciphertext, "t": tag})
+    v1_b64 = base64.encodebytes(v1_envelope).decode().rstrip()
+
+    # Ensure decrypt_from_string still decrypts legacy v1 pickle
+    decrypted = decrypt_from_string(v1_b64, private_key_file=str(priv_file))
+    assert decrypted == msg
+
