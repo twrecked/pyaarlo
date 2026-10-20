@@ -39,6 +39,7 @@ asyncio.run(main())
 | `tfa_host` | `str` | `None` | IMAP server hostname (e.g. `"imap.gmail.com"`) |
 | `tfa_username` | `str` | `None` | IMAP account username |
 | `tfa_password` | `str` | `None` | IMAP app-password |
+| `user_agent` | `str` | `"arlo"` | User agent preset (`"arlo"`, `"ipad"`, `"mac"`, `"linux"`). Dictates streaming format (RTSP, HLS, or DASH). |
 | `inline_mode` | `bool` | `False` | When `True`, device actions wait inline for Arlo's response or event acknowledgment before returning. (Replaces `synchronous_mode`). |
 | `start_background` | `bool` | `True` | Start the persistent event stream (MQTT/SSE) and background refresh loops. Set to `False` for fast one-shot scripts. |
 | `refresh_devices` | `bool` | `True` | Query Arlo for fresh device catalogs on connect. Set to `False` to reuse cached device metadata. |
@@ -120,10 +121,43 @@ await loc.set_mode("standby")
 ```python
 # Request fresh thumbnail/snapshot
 await camera.request_snapshot()
+print(f"Latest thumbnail URL: {camera.last_thumbnail}")
 
-# Get live stream URL
+# Trigger media/thumbnail update
+await camera.update_last_image()
+await camera.update_media()
+
+# Get live stream URL (RTSP by default, or HLS if user_agent="ipad")
 stream_url = await camera.get_stream()
 print(f"Stream URL: {stream_url}")
+# Note: Arlo automatically terminates the stream if no player connects within 30 seconds.
+
+# State inspection
+print(camera.is_streaming)   # bool
+print(camera.is_recording)   # bool
+print(camera.unseen_videos)  # int count
+```
+
+### Base Stations (`ArloBaseStation`)
+```python
+base = arlo.base_stations[0]
+
+# Mode management (for V1/V2 traditional accounts)
+print(f"Current mode: {base.mode}")
+print(f"Available modes: {base.available_modes}")
+await base.set_mode("armed")
+
+# Built-in Siren (on supported models, e.g. VMB4000, VMB4500)
+if base.has_capability("siren"):
+    await base.siren_on(duration=300, volume=8)
+    await base.siren_off()
+```
+
+### Doorbells (`ArloDoorBell`)
+```python
+doorbell = arlo.doorbells[0]
+print(f"Button pressed: {doorbell.is_ding}")
+print(f"Motion active: {doorbell.has_motion}")
 ```
 
 ---
@@ -147,7 +181,7 @@ camera.add_attr_callback("*", on_attribute_change)
 Common attributes:
 - `motionDetected`: `True` / `False`
 - `audioDetected`: `True` / `False`
-- `ding`: `True` / `False` (doorbell press)
+- `ding`: `True` / `False` (doorbell button press)
 - `batteryLevel`: integer percentage
 - `chargingState`: `"Charging"`, `"Discharging"`, etc.
 - `lampState`: `"on"`, `"off"`
@@ -155,9 +189,9 @@ Common attributes:
 
 ---
 
-## 6. Media Library (`ArloMediaLibrary`)
+## 6. Cloud Media Library (`ArloMediaLibrary`)
 
-Access recorded videos and snapshots:
+Access recorded videos and snapshots stored in Arlo Cloud Storage:
 
 ```python
 # Sync recordings between dates (YYYYMMDD)
@@ -168,4 +202,32 @@ for vid in videos:
     
     # Download video file
     await vid.download_video(f"./media/{vid.id}.mp4")
+
+    # Download thumbnail image
+    await vid.download_thumbnail(f"./media/{vid.id}.jpg")
+```
+
+---
+
+## 7. Base Station Direct Storage (RATLS)
+
+Access and download local recordings stored on USB/microSD drives attached to your SmartHub / Base Station (e.g. VMB4000, VMB5000) directly over your local network via mTLS:
+
+```python
+base = arlo.base_stations[0]
+
+# Open direct mTLS connection to local base station (with automatic lease caching)
+await base.build_ratls(public=False)
+print(f"Local mTLS Endpoint: {base.ratls.url}")
+
+# Build local media library and query recordings
+await base.build_media_library()
+local_videos = await base.ml._fetch_library("20261010", "20261017")
+
+for item in local_videos:
+    cam = next((c for c in arlo.cameras if c.device_id == item.get("deviceId")), None)
+    if cam:
+        video_obj = base.ml._create_video(item, cam)
+        print(f"Local clip: {video_obj.datetime} from {cam.name}")
+        await video_obj.download_video(f"./local_media/{video_obj.id}.mp4")
 ```

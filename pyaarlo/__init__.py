@@ -110,6 +110,7 @@ class PyArlo:
       ISP forced a new IP on you.
     * **inline_mode** - Wait for operations to complete inline before returning. (Formerly `synchronous_mode`).
     * **start_background** - Start background event stream and housekeeping tasks. Default `True`.
+    * **refresh_devices** - Query Arlo for fresh device definitions on connect. Default `True`. Set to `False` to reuse local cache.
     * **save_media_to** - Save media to a local directory.
 
     **Debug `kwargs` parameters:**

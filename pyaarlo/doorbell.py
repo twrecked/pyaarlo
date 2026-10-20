@@ -146,27 +146,34 @@ class ArloDoorBell(ArloChildDevice):
             self._save_and_do_callbacks(SILENT_MODE_KEY, silence_settings)
 
     async def silence_off(self):
+        """Turn off silent mode (allow calls and chimes)."""
         await self._silence(active=False, calls=False, chimes={})
 
     async def silence_on(self):
+        """Turn on silent mode (silence both calls and chimes)."""
         await self._silence(active=True, calls=True, chimes=self._build_chimes(True))
 
     async def silence_chimes(self):
+        """Silence chimes only, leaving calls enabled."""
         await self._silence(active=True, calls=False, chimes=self._build_chimes(True))
 
     async def silence_calls(self):
+        """Silence calls only, leaving chimes enabled."""
         await self._silence(active=True, calls=True, chimes=self._build_chimes(False))
 
     @property
     def is_silenced(self):
+        """Returns True if doorbell is in silent mode."""
         return self._load(SILENT_MODE_KEY, {}).get(SILENT_MODE_ACTIVE_KEY, False)
 
     @property
     def calls_are_silenced(self):
+        """Returns True if doorbell calls are silenced."""
         return self._load(SILENT_MODE_KEY, {}).get(SILENT_MODE_CALL_KEY, False)
 
     @property
     def chimes_are_silenced(self):
+        """Returns True if doorbell chimes are silenced."""
         for on_or_off in self._load(SILENT_MODE_KEY, {}).get(CHIMES_KEY, {}).values():
             if on_or_off is True:
                 return True
@@ -178,15 +185,16 @@ class ArloDoorBell(ArloChildDevice):
 
     @property
     def siren_state(self):
+        """Returns current siren state ('on' or 'off')."""
         return self._load(SIREN_STATE_KEY, "off")
 
     async def siren_on(self, duration=300, volume=8):
-        """Turn camera siren on.
+        """Turn doorbell siren on.
 
-        Does nothing if camera doesn't support sirens.
+        Does nothing if doorbell doesn't support sirens.
 
         :param duration: how long, in seconds, to sound for
-        :param volume: how long, from 1 to 8, to sound
+        :param volume: how loud, from 1 to 8, to sound
         """
         body = {
             "action": "set",
@@ -206,9 +214,9 @@ class ArloDoorBell(ArloChildDevice):
         )
 
     async def siren_off(self):
-        """Turn camera siren off.
+        """Turn doorbell siren off.
 
-        Does nothing if camera doesn't support sirens.
+        Does nothing if doorbell doesn't support sirens.
         """
         body = {
             "action": "set",

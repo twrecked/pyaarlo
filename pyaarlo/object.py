@@ -98,7 +98,7 @@ class ArloObject:
 
     @property
     def device_type(self):
-        """Returns the device id."""
+        """Returns the device type."""
         return self._type
 
     @property
@@ -112,7 +112,7 @@ class ArloObject:
 
     @property
     def unique_id(self):
-        """Returns the unique name."""
+        """Returns the unique device identifier."""
         if self._uid is None:
             self._uid = f"{self._type}-{self._id}"
         return self._uid

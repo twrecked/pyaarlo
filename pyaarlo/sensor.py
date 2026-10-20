@@ -37,26 +37,32 @@ class ArloSensor(ArloChildDevice):
 
     @property
     def has_motion(self):
+        """Returns True if motion is currently detected by the sensor."""
         return self._load(MOTION_STATE_KEY, False)
 
     @property
     def is_open(self):
+        """Returns True if sensor contact is open (e.g. door/window open)."""
         return self._load(CONTACT_STATE_KEY, False)
 
     @property
     def is_wet(self):
+        """Returns True if water or leak is detected by the sensor."""
         return self._load(WATER_STATE_KEY, False)
 
     @property
     def is_low_light(self):
+        """Returns True if ambient light sensor reports low light."""
         return self._load(ALS_STATE_KEY, False)
 
     @property
     def is_being_tampered_with(self):
+        """Returns True if the sensor tamper switch has been activated."""
         return self._load(TAMPER_STATE_KEY, False)
 
     @property
     def temperature(self):
+        """Returns the current ambient temperature reading, or None if unavailable."""
         return self._load(TEMPERATURE_KEY, None)
 
     def has_capability(self, cap) -> bool:

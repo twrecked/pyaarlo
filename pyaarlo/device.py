@@ -146,11 +146,11 @@ class ArloDevice(ArloObject):
         """Returns `True` if the device is on, `False` otherwise."""
         return True
 
-    def turn_on(self):
+    async def turn_on(self):
         """Turn the device on."""
         pass
 
-    def turn_off(self):
+    async def turn_off(self):
         """Turn the device off."""
         pass
 

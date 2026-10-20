@@ -855,11 +855,13 @@ class ArloCamera(ArloChildDevice):
             )
 
     async def request_snapshot(self):
-        """Requests a snapshot from the camera without blocking.
+        """Requests a snapshot from the camera asynchronously without waiting.
 
-        The snapshot can be handled with callbacks registered to
-        LAST_IMAGE_SRC_KEY - lastImageSource starting with snapshot/, or capture/
-        LAST_IMAGE_DATA_KEY - presignedLastImageData containing the image data.
+        This method triggers the camera to take a snapshot and returns immediately (None).
+        The resulting snapshot will update `last_thumbnail` and fire attribute callbacks
+        for `lastImageSource` and `presignedLastImageData`.
+
+        To wait for the image and receive binary bytes directly, use `get_snapshot()`.
         """
         await self._request_snapshot()
 

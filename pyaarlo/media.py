@@ -427,6 +427,11 @@ class ArloMediaObject:
         return self._attrs.get("presignedThumbnailUrl", None)
 
     async def download_thumbnail(self, filename=None):
+        """Download thumbnail image file to disk or return image bytes.
+
+        :param filename: Optional path to save image file to. If None, returns raw bytes.
+        :return: True if saved to filename, or image bytes if filename is None.
+        """
         return await http_get_async(self.thumbnail_url, filename)
 
 
@@ -461,6 +466,11 @@ class ArloVideo(ArloMediaObject):
         return self._attrs.get("presignedContentUrl", None)
 
     async def download_video(self, filename=None):
+        """Download video file to disk or return video bytes.
+
+        :param filename: Optional path to save video file to. If None, returns raw bytes.
+        :return: True if saved to filename, or video bytes if filename is None.
+        """
         return await http_get_async(self.video_url, filename)
 
     @property
