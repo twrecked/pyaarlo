@@ -85,29 +85,94 @@ def anonymize_text(
     username: str | None = None,
     password: str | None = None,
 ) -> str:
-    """Replace sensitive IDs, usernames, and passwords with masked strings."""
-    keys = ["deviceId", "uniqueId", "userId", "xCloudId", "id", "xcloud_id", "serial_number", "serialNumber"]
+    """Replace sensitive IDs, usernames, and passwords with consistent, readable pseudonyms."""
     valuables: dict[str, str] = {}
+
+    type_prefixes = {
+        "base_station": "BASE",
+        "basestation": "BASE",
+        "camera": "CAM",
+        "cameras": "CAM",
+        "light": "LIGHT",
+        "lights": "LIGHT",
+        "doorbell": "DOORBELL",
+        "doorbells": "DOORBELL",
+        "sensor": "SENSOR",
+        "sensors": "SENSOR",
+        "siren": "SIREN",
+        "chime": "CHIME",
+    }
+
+    type_counts: dict[str, int] = {}
+    user_counts: dict[str, str] = {}
+    owner_counts: dict[str, str] = {}
+    xcloud_counts: dict[str, str] = {}
+    user_idx = 1
+    owner_idx = 1
+    xcloud_idx = 1
 
     if devices:
         for device in devices:
-            for k in keys:
-                val = device.get(k)
-                if val and isinstance(val, str) and len(val) >= 4 and val not in valuables:
-                    valuables[val] = "X" * len(val)
-            owner_id = device.get("owner", {}).get("ownerId") if isinstance(device.get("owner"), dict) else None
-            if owner_id and isinstance(owner_id, str):
-                valuables[owner_id] = "X" * len(owner_id)
+            raw_type = str(device.get("type") or device.get("deviceType") or "dev").lower()
+            prefix = type_prefixes.get(raw_type, "DEV")
 
+            count = type_counts.setdefault(prefix, 1)
+            type_counts[prefix] += 1
+            tag = f"{prefix}_{count:02d}"
+
+            # 1. Device ID
+            dev_id = device.get("deviceId") or device.get("id")
+            if dev_id and isinstance(dev_id, str) and len(dev_id) >= 4:
+                valuables.setdefault(dev_id, f"{tag}_ID")
+
+            # 2. Unique ID
+            unique_id = device.get("uniqueId")
+            if unique_id and isinstance(unique_id, str) and len(unique_id) >= 4:
+                valuables.setdefault(unique_id, f"{tag}_UID")
+
+            # 3. Serial Number
+            serial = device.get("serial_number") or device.get("serialNumber")
+            if serial and isinstance(serial, str) and len(serial) >= 4:
+                valuables.setdefault(serial, f"{tag}_SN")
+
+            # 4. xCloud ID
+            xcloud = device.get("xCloudId") or device.get("xcloud_id")
+            if xcloud and isinstance(xcloud, str) and len(xcloud) >= 4:
+                if xcloud not in xcloud_counts:
+                    xcloud_counts[xcloud] = f"XCLOUD_{xcloud_idx:02d}_ID"
+                    xcloud_idx += 1
+                valuables.setdefault(xcloud, xcloud_counts[xcloud])
+
+            # 5. User ID
+            uid = device.get("userId")
+            if uid and isinstance(uid, str) and len(uid) >= 4:
+                if uid not in user_counts:
+                    user_counts[uid] = f"USER_{user_idx:02d}_ID"
+                    user_idx += 1
+                valuables.setdefault(uid, user_counts[uid])
+
+            # 6. Owner ID
+            owner_dict = device.get("owner")
+            owner_id = owner_dict.get("ownerId") if isinstance(owner_dict, dict) else None
+            if owner_id and isinstance(owner_id, str) and len(owner_id) >= 4:
+                if owner_id not in owner_counts:
+                    owner_counts[owner_id] = f"OWNER_{owner_idx:02d}_ID"
+                    owner_idx += 1
+                valuables.setdefault(owner_id, owner_counts[owner_id])
+
+    # Username and password
     if username:
         valuables[username] = "USERNAME"
     if password:
         valuables[to_b64(password)] = "PASSWORD"
         valuables[password] = "PASSWORD"
 
+    # Replace in order of decreasing length to prevent partial substring matches
     anon = text
-    for valuable, replacement in valuables.items():
+    for valuable in sorted(valuables.keys(), key=len, reverse=True):
+        replacement = valuables[valuable]
         anon = anon.replace(valuable, replacement)
+
     return anon
 
 

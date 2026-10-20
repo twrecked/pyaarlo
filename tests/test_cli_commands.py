@@ -192,7 +192,8 @@ def test_pyaarlo_utils_anonymize():
     assert "DEV123456" not in anon
     assert "USR987654" not in anon
     assert "test@example.com" not in anon
-    assert "XXXXXXXXX" in anon
+    assert "DEV_01_ID" in anon
+    assert "USER_01_ID" in anon
     assert "USERNAME" in anon
 
 

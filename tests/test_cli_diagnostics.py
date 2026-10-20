@@ -27,6 +27,8 @@ def test_anonymize_text_privacy():
     assert "USR999" not in anon
     assert "USERNAME" in anon
     assert "PASSWORD" in anon
+    assert "DEV_01_ID" in anon
+    assert "OWNER_01_ID" in anon
 
 
 def test_debug_report_capture_lifecycle(tmp_path):
