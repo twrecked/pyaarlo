@@ -418,11 +418,13 @@ class PyArlo:
 
     async def _refresh_bases(self, initial):
         for base in self._objs.base_stations:
-            await base.update_modes(initial)
+            if not self._v3_modes or initial:
+                await base.update_modes(initial)
             await base.keep_ratls_open()
             await base.update_states()
-        for location in self._objs.locations:
-            await location.update_modes(initial)
+        if not self._v3_modes or initial:
+            for location in self._objs.locations:
+                await location.update_modes(initial)
 
     async def _refresh_modes(self):
         self.vdebug("refresh modes")
@@ -437,9 +439,6 @@ class PyArlo:
         self.vdebug("fast refresh")
         self._core.tasks.run_now(self._core.st.save)
         await self._ping_bases()
-
-        # See if the backend need to reconnect.
-        await self._core.be.check_token()
 
         # do we need to reload the modes?
         if self._core.cfg.refresh_modes_every != 0:
