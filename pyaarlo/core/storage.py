@@ -1,3 +1,4 @@
+import asyncio
 import fnmatch
 import pickle
 import os
@@ -17,9 +18,6 @@ class ArloStorage:
         self._state_file: str | None = self._cfg.state_file
         self._db: dict[str, Any] = {}
 
-        self._create_storage_directory()
-        self.load()
-
         self._log.debug("storage: created")
 
     def _create_storage_directory(self):
@@ -27,7 +25,7 @@ class ArloStorage:
         """
         try:
             if not os.path.exists(self._cfg.storage_dir):
-                os.mkdir(self._cfg.storage_dir)
+                os.makedirs(self._cfg.storage_dir, exist_ok=True)
         except Exception as _e:
             self._log.warning(f"Problem creating {self._cfg.storage_dir}")
 
@@ -43,7 +41,7 @@ class ArloStorage:
                 mkeys.append(mkey)
         return mkeys
 
-    def load(self):
+    def load_sync(self):
         if self._state_file is not None:
             try:
                 with open(self._state_file, "rb") as dump:
@@ -51,15 +49,41 @@ class ArloStorage:
             except Exception:
                 self._log.debug("storage: file not read")
 
-    def save(self):
+    async def load(self):
+        if self._state_file is not None:
+            def _do_load():
+                try:
+                    with open(self._state_file, "rb") as dump:
+                        return pickle.load(dump)
+                except Exception:
+                    self._log.debug("storage: file not read")
+                    return {}
+
+            self._db = await asyncio.to_thread(_do_load)
+
+    def save_sync(self):
         if self._state_file is not None:
             try:
-                # Shallow copy the dict atomically to prevent iteration errors during pickle
+                self._create_storage_directory()
                 db_copy = self._db.copy()
                 with open(self._state_file, "wb") as dump:
                     pickle.dump(db_copy, dump)
             except Exception:
                 self._log.warning("storage: file not written")
+
+    async def save(self):
+        if self._state_file is not None:
+            db_copy = self._db.copy()
+
+            def _do_save():
+                try:
+                    self._create_storage_directory()
+                    with open(self._state_file, "wb") as dump:
+                        pickle.dump(db_copy, dump)
+                except Exception:
+                    self._log.warning("storage: file not written")
+
+            await asyncio.to_thread(_do_save)
 
     def file_name(self) -> str | None:
         return self._state_file

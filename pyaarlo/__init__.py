@@ -218,6 +218,9 @@ class PyArlo:
     async def _setup(self, **kwargs):
         """Async initialization logic.
         """
+        # Load cached storage state non-blockingly
+        await self._core.st.load()
+
         # Try to connect.
         await self._core.be.connect()
         if not self._core.be.is_connected:
@@ -493,7 +496,7 @@ class PyArlo:
 
     async def stop(self, logout=False):
         """Stop connection to Arlo and, optionally, logout."""
-        self._core.st.save()
+        await self._core.st.save()
         self._core.tasks.stop()
         if self._objs.ml is not None:
             self._objs.ml.stop()
