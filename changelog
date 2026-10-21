@@ -27,6 +27,8 @@
     are strictly coerced to int/bool at runtime, preventing string values from causing
     TypeErrors in asyncio.sleep(). Added numeric type parsing in `pyaarlo config set`,
     and defensive float conversion in ArloTaskManager.run_in/run_every.
+  - CLI Configuration Forwarding: Updated create_pyarlo() in common.py to forward all
+    configuration settings (such as recent_time) to PyArlo.create().
 
 0.9.0-alpha.1
   Major Architecture (Breaking Changes)

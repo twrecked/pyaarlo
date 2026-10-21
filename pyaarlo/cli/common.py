@@ -164,28 +164,20 @@ async def create_pyarlo(
     bg_flag = start_background if start_background is not None else cfg.get("start_background", False)
     ref_devices = refresh_devices if refresh_devices is not None else cfg.get("refresh_devices", True)
 
-    arlo = await PyArlo.create(
-        username=username,
-        password=password,
-        tfa=cfg.get("tfa"),
-        tfa_source=cfg.get("tfa_source"),
-        tfa_type=cfg.get("tfa_type"),
-        tfa_host=cfg.get("tfa_host"),
-        tfa_username=cfg.get("tfa_username"),
-        tfa_password=cfg.get("tfa_password"),
-        storage_dir=cfg.get("storage_dir"),
-        mode_api=cfg.get("mode_api", "auto"),
-        backend=cfg.get("backend", "auto"),
-        user_agent=cfg.get("user_agent", "arlo"),
-        mqtt_host=cfg.get("mqtt_host"),
-        inline_mode=cfg.get("inline_mode", False),
-        start_background=bg_flag,
-        refresh_devices=ref_devices,
-        save_session=True,
-        save_state=True,
-        wait_for_initial_setup=wait_for_setup if bg_flag else False,
-        dump=dump,
-    )
+    create_kwargs = dict(cfg)
+    create_kwargs.update({
+        "username": username,
+        "password": password,
+        "inline_mode": cfg.get("inline_mode", False),
+        "start_background": bg_flag,
+        "refresh_devices": ref_devices,
+        "save_session": True,
+        "save_state": True,
+        "wait_for_initial_setup": wait_for_setup if bg_flag else False,
+        "dump": dump,
+    })
+
+    arlo = await PyArlo.create(**create_kwargs)
 
     if not arlo.is_connected:
         raise RuntimeError("Failed to connect or authenticate with Arlo")
