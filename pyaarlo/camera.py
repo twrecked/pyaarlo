@@ -11,6 +11,7 @@ from .constant import (
     ACTIVITY_STATE_KEY,
     AUDIO_ANALYTICS_KEY,
     AUDIO_POSITION_KEY,
+    AUDIO_SPEAKER_KEY,
     AUDIO_TRACK_KEY,
     BLANK_IMAGE,
     BRIGHTNESS_KEY,
@@ -1116,10 +1117,14 @@ class ArloCamera(ArloChildDevice):
 
     @siren_state.setter
     def siren_state(self, state: str | bool):
+        self._core.tasks.run_now(self.set_siren_state, state=state)
+
+    async def set_siren_state(self, state: str | bool, duration=300, volume=8):
+        """Set camera siren state."""
         if state in ("on", True):
-            self._core.tasks.run_now(self.siren_on)
+            await self.siren_on(duration=duration, volume=volume)
         else:
-            self._core.tasks.run_now(self.siren_off)
+            await self.siren_off()
 
     async def siren_on(self, duration=300, volume=8):
         """Turn camera siren on.
@@ -1170,10 +1175,14 @@ class ArloCamera(ArloChildDevice):
 
     @is_on.setter
     def is_on(self, value: bool):
+        self._core.tasks.run_now(self.set_is_on, value=value)
+
+    async def set_is_on(self, value: bool):
+        """Set camera power/privacy state."""
         if value:
-            self._core.tasks.run_now(self.turn_on)
+            await self.turn_on()
         else:
-            self._core.tasks.run_now(self.turn_off)
+            await self.turn_off()
 
     async def turn_on(self):
         """Turn the camera on."""
@@ -1330,6 +1339,19 @@ class ArloCamera(ArloChildDevice):
             body=body
         )
 
+    @property
+    def volume(self) -> int:
+        """Returns speaker volume (0-100)."""
+        speaker = self._load(AUDIO_SPEAKER_KEY, {})
+        if isinstance(speaker, dict):
+            return speaker.get("volume", 50)
+        return 50
+
+    @volume.setter
+    def volume(self, volume: int):
+        """Set the speaker volume (sync wrapper)."""
+        self._core.tasks.run_now(self.set_volume, volume=volume)
+
     async def set_volume(self, mute=False, volume=50):
         """Sets the music volume.
 
@@ -1363,6 +1385,24 @@ class ArloCamera(ArloChildDevice):
             },
         )
         return True
+
+    @property
+    def nightlight_is_on(self) -> bool:
+        """Returns True if nightlight is on."""
+        return self._load(LAMP_STATE_KEY, "off") == "on"
+
+    @nightlight_is_on.setter
+    def nightlight_is_on(self, value: bool):
+        self._core.tasks.run_now(self.set_nightlight, enabled=value)
+
+    @property
+    def nightlight_brightness(self) -> int | None:
+        """Returns nightlight brightness (0-255)."""
+        return self._load(LIGHT_BRIGHTNESS_KEY, None)
+
+    @nightlight_brightness.setter
+    def nightlight_brightness(self, brightness: int):
+        self._core.tasks.run_now(self.set_nightlight_brightness, brightness=brightness)
 
     async def set_nightlight(self, enabled=None, brightness=None, rgb=None, temperature=None, mode=None):
         """Batch set nightlight properties in a single network request."""
@@ -1440,16 +1480,49 @@ class ArloCamera(ArloChildDevice):
         )
         return True
 
-    async def set_spotlight_on(self):
-        """Turns the spotlight on"""
+    @property
+    def spotlight_state(self) -> str:
+        """Returns current spotlight state ('on' or 'off')."""
+        return self._load(SPOTLIGHT_KEY, "off")
+
+    @property
+    def spotlight_is_on(self) -> bool:
+        """Returns True if spotlight is on."""
+        return self._load(SPOTLIGHT_KEY, "off") == "on"
+
+    @spotlight_is_on.setter
+    def spotlight_is_on(self, value: bool):
+        self._core.tasks.run_now(self.set_spotlight, on=value)
+
+    @property
+    def spotlight_brightness(self) -> int | None:
+        """Returns spotlight brightness (0-255)."""
+        intensity = self._load(SPOTLIGHT_BRIGHTNESS_KEY, None)
+        if intensity is not None:
+            return int(intensity / 100 * 255)
+        return None
+
+    @spotlight_brightness.setter
+    def spotlight_brightness(self, brightness: int):
+        self._core.tasks.run_now(self.set_spotlight_brightness, brightness=brightness)
+
+    async def spotlight_on(self):
+        """Turns the spotlight on."""
         return await self._set_spotlight_properties({"enabled": True})
 
-    async def set_spotlight_off(self):
-        """Turns the spotlight off"""
+    async def spotlight_off(self):
+        """Turns the spotlight off."""
         return await self._set_spotlight_properties({"enabled": False})
 
+    async def set_spotlight(self, on: bool):
+        """Set spotlight state."""
+        if on:
+            return await self.spotlight_on()
+        else:
+            return await self.spotlight_off()
+
     async def set_spotlight_brightness(self, brightness):
-        """Sets the nightlight brightness.
+        """Sets the spotlight brightness.
 
         :param brightness: brightness (0-255)
         """
@@ -1473,6 +1546,32 @@ class ArloCamera(ArloChildDevice):
         )
         return True
 
+    @property
+    def floodlight_is_on(self) -> bool:
+        """Returns True if floodlight is on."""
+        fl = self._load(FLOODLIGHT_KEY, {})
+        if isinstance(fl, dict):
+            return bool(fl.get("on", False))
+        return False
+
+    @floodlight_is_on.setter
+    def floodlight_is_on(self, value: bool):
+        self._core.tasks.run_now(self.set_floodlight, on=value)
+
+    @property
+    def floodlight_brightness(self) -> int | None:
+        """Returns floodlight brightness (0-255)."""
+        fl = self._load(FLOODLIGHT_KEY, {})
+        if isinstance(fl, dict):
+            b = fl.get(FLOODLIGHT_BRIGHTNESS1_KEY)
+            if b is not None:
+                return int(b / 100 * 255)
+        return None
+
+    @floodlight_brightness.setter
+    def floodlight_brightness(self, brightness: int):
+        self._core.tasks.run_now(self.set_floodlight_brightness, brightness=brightness)
+
     async def floodlight_on(self):
         """Turns the floodlight on."""
         return await self._set_floodlight_properties({"on": True})
@@ -1481,8 +1580,15 @@ class ArloCamera(ArloChildDevice):
         """Turns the floodlight off."""
         return await self._set_floodlight_properties({"on": False})
 
+    async def set_floodlight(self, on: bool):
+        """Set floodlight on/off state."""
+        if on:
+            return await self.floodlight_on()
+        else:
+            return await self.floodlight_off()
+
     async def set_floodlight_brightness(self, brightness):
-        """Turns the floodlight brightness value (0-255)."""
+        """Sets the floodlight brightness value (0-255)."""
         percentage = int(brightness / 255 * 100)
         return await self._set_floodlight_properties({
             FLOODLIGHT_BRIGHTNESS1_KEY: percentage,

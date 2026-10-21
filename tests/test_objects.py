@@ -184,3 +184,104 @@ async def test_extra_device_states_filtering(core_factory, objs):
     pyarlo_extra.info = lambda *args: None
     pyarlo_extra._build_objects()
     assert len(pyarlo_extra._objs.cameras) == 2
+
+
+@pytest.mark.asyncio
+async def test_camera_and_device_normalized_setters_and_properties(core_factory, objs):
+    from unittest.mock import AsyncMock
+    from pyaarlo.light import ArloLight
+
+    core = core_factory()
+    core.be.notify = AsyncMock(return_value=True)
+
+    camera_device = {
+        "deviceId": "CAM-NORM-01",
+        "deviceName": "Normalized Cam",
+        "deviceType": "camera",
+        "modelId": "FLW2001",
+        "parentId": "CAM-NORM-01",
+        "uniqueId": "CAM-NORM-UID",
+        "state": "provisioned",
+        "properties": {
+            "privacyActive": False,
+            "sirenState": "off",
+            "speaker": {"volume": 75, "mute": False},
+            "spotlight": {"enabled": True, "intensity": 80},
+            "floodlight": {"on": True, "brightness1": 50},
+            "nightLight": {"enabled": True, "brightness": 120},
+        },
+    }
+    cam = ArloCamera("Normalized Cam", core, objs, camera_device)
+    cam._event_handler("cameras/" + cam.device_id, {"properties": camera_device["properties"]})
+    objs.cameras = [cam]
+    objs.base_stations = [cam]
+
+    # Power/privacy
+    assert cam.is_on is True
+    await cam.set_is_on(False)
+    assert core.be.notify.called
+
+    # Siren state
+    assert cam.siren_state == "off"
+    await cam.set_siren_state("on")
+    assert core.be.notify.called
+    await cam.set_siren_state("off")
+
+    # Volume
+    assert cam.volume == 75
+    await cam.set_volume(volume=90)
+    assert core.be.notify.called
+
+    # Spotlight
+    assert cam.spotlight_state == "on"
+    assert cam.spotlight_is_on is True
+    assert cam.spotlight_brightness == int(80 / 100 * 255)
+    await cam.spotlight_off()
+    await cam.spotlight_on()
+    await cam.set_spotlight(False)
+    await cam.set_spotlight_brightness(128)
+
+    # Floodlight
+    assert cam.floodlight_is_on is True
+    assert cam.floodlight_brightness == int(50 / 100 * 255)
+    await cam.floodlight_off()
+    await cam.floodlight_on()
+    await cam.set_floodlight(False)
+    await cam.set_floodlight_brightness(200)
+
+    # Nightlight
+    assert cam.nightlight_is_on is True
+    assert cam.nightlight_brightness == 120
+    await cam.nightlight_off()
+    await cam.nightlight_on()
+
+    # Doorbell
+    db = ArloDoorBell("Test DB", core, objs, DOOR_BELL_01)
+    db._silence = AsyncMock(return_value=True)
+    assert db.is_silenced is False
+    await db.set_is_silenced(True)
+    assert db._silence.called
+    await db.set_siren_state("on")
+    assert core.be.notify.called
+
+    # Base Station
+    base = ArloBaseStation("Test Base", core, objs, BASE_STATION_02)
+    assert base.siren_state == "off"
+    await base.set_siren_state("on")
+    assert core.be.notify.called
+
+    # Light
+    light_device = {
+        "deviceId": "LIGHT-01",
+        "deviceName": "Test Light",
+        "deviceType": "lights",
+        "modelId": "AL1101",
+        "parentId": "LIGHT-01",
+        "uniqueId": "LIGHT-UID",
+        "state": "provisioned",
+        "properties": {"lampState": "on", "brightness": 180},
+    }
+    light = ArloLight("Test Light", core, objs, light_device)
+    assert light.is_on is True
+    await light.set_is_on(False)
+    assert core.be.notify.called

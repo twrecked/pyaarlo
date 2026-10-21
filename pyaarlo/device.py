@@ -146,6 +146,18 @@ class ArloDevice(ArloObject):
         """Returns `True` if the device is on, `False` otherwise."""
         return True
 
+    @is_on.setter
+    def is_on(self, value: bool):
+        """Set device on/off state (sync wrapper)."""
+        self._core.tasks.run_now(self.set_is_on, value=value)
+
+    async def set_is_on(self, value: bool):
+        """Set device on/off state."""
+        if value:
+            await self.turn_on()
+        else:
+            await self.turn_off()
+
     async def turn_on(self):
         """Turn the device on."""
         pass

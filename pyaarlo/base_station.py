@@ -492,10 +492,14 @@ class ArloBaseStation(ArloDevice):
 
     @siren_state.setter
     def siren_state(self, state: str | bool):
+        self._core.tasks.run_now(self.set_siren_state, state=state)
+
+    async def set_siren_state(self, state: str | bool, duration=300, volume=8):
+        """Set base station siren state."""
         if state in ("on", True):
-            self._core.tasks.run_now(self.siren_on)
+            await self.siren_on(duration=duration, volume=volume)
         else:
-            self._core.tasks.run_now(self.siren_off)
+            await self.siren_off()
 
     async def siren_on(self, duration=300, volume=8):
         """Turn base siren on.
