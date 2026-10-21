@@ -87,18 +87,26 @@ class ArloTaskManager:
         self._log.vdebug(f"tasks: task-scheduled (ID: {task_id})")
         return task_id
 
-    def run_in(self, task_cb: Callable[..., Any], seconds: float, **kwargs: Any) -> str:
+    def run_in(self, task_cb: Callable[..., Any], seconds: float | int | str, **kwargs: Any) -> str:
         """Executes a task after a specified delay."""
+        try:
+            delay = float(seconds)
+        except (ValueError, TypeError):
+            delay = 0.0
         task_id = self._next_id()
-        self._tasks[task_id] = self._submit(self._execute_delayed_task(task_id, seconds, task_cb, kwargs))
-        self._log.vdebug(f"tasks: later-task-scheduled (ID: {task_id})")
+        self._tasks[task_id] = self._submit(self._execute_delayed_task(task_id, delay, task_cb, kwargs))
+        self._log.vdebug(f"tasks: later-task-scheduled (ID: {task_id}, delay: {delay}s)")
         return task_id
 
-    def run_every(self, task_cb: Callable[..., Any], seconds: float, **kwargs: Any) -> str:
+    def run_every(self, task_cb: Callable[..., Any], seconds: float | int | str, **kwargs: Any) -> str:
         """Executes a task repeatedly on a fixed interval."""
+        try:
+            interval = float(seconds)
+        except (ValueError, TypeError):
+            interval = 0.0
         task_id = self._next_id()
-        self._tasks[task_id] = self._submit(self._execute_periodic_task(task_id, seconds, task_cb, kwargs))
-        self._log.vdebug(f"tasks: periodic-task-scheduled (ID: {task_id})")
+        self._tasks[task_id] = self._submit(self._execute_periodic_task(task_id, interval, task_cb, kwargs))
+        self._log.vdebug(f"tasks: periodic-task-scheduled (ID: {task_id}, interval: {interval}s)")
         return task_id
 
     def cancel(self, to_delete: str | None) -> bool:

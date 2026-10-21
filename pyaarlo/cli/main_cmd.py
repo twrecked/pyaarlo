@@ -463,13 +463,19 @@ def config_set(cli_ctx: CLIContext, key: str, value: str) -> None:
         cfg_data.pop("tfa_source", None)
         click.echo(f"Set tfa='{normalized_tfa}'")
     else:
-        # Convert booleans if applicable
+        # Convert booleans or numbers if applicable
         if value.lower() in ("true", "yes", "1"):
             cfg_data[key] = True
         elif value.lower() in ("false", "no", "0"):
             cfg_data[key] = False
         else:
-            cfg_data[key] = value
+            try:
+                cfg_data[key] = int(value)
+            except ValueError:
+                try:
+                    cfg_data[key] = float(value)
+                except ValueError:
+                    cfg_data[key] = value
         click.echo(f"Set {key}={repr(cfg_data[key])}")
 
     save_config_file(cfg_data, target_path)

@@ -209,3 +209,61 @@ def test_arlo_logger_packet_sublogger(caplog):
     assert packet_logger.level == logging.DEBUG
 
 
+def test_cfg_numeric_and_boolean_coercion(log):
+    cfg = ArloCfg(
+        log=log,
+        recent_time="45",
+        max_days="180",
+        db_motion_time="15",
+        db_ding_time="5",
+        request_timeout="30",
+        stream_timeout="10",
+        refresh_devices_every="2",
+        refresh_modes_every="5",
+        reconnect_every="3",
+        snapshot_timeout="50",
+        tfa_delay="2",
+        tfa_retries="5",
+        tfa_timeout="4",
+        tfa_total_timeout="120",
+        dump="true",
+        no_media_upload="1",
+        refresh_devices="yes",
+        wait_for_initial_setup="false",
+        save_state="0",
+    )
+    assert cfg.recent_time == 45
+    assert cfg.max_days == 180
+    assert cfg.db_motion_time == 15
+    assert cfg.db_ding_time == 5
+    assert cfg.request_timeout == 30
+    assert cfg.stream_timeout == 10
+    assert cfg.refresh_devices_every == 2 * 60 * 60
+    assert cfg.refresh_modes_every == 5 * 60
+    assert cfg.reconnect_every == 3 * 60
+    assert cfg.snapshot_timeout == 50
+    assert cfg.tfa_delay == 2
+    assert cfg.tfa_retries == 5
+    assert cfg.tfa_timeout == 4
+    assert cfg.tfa_total_timeout == 120
+    assert cfg.dump is True
+    assert cfg.no_media_upload is True
+    assert cfg.refresh_devices is True
+    assert cfg.wait_for_initial_setup is False
+    assert cfg.save_state is False
+
+
+@pytest.mark.asyncio
+async def test_task_manager_string_delay_coercion(log):
+    import asyncio
+    from unittest.mock import MagicMock
+    from pyaarlo.core.task_manager import ArloTaskManager
+
+    tm = ArloTaskManager(log)
+    cb = MagicMock()
+    tm.run_in(cb, "0.01")
+    await asyncio.sleep(0.05)
+    assert cb.called
+    tm.stop()
+
+

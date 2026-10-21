@@ -159,9 +159,22 @@ class ArloCfg:
         if self.event_backend == "auto":
             self._kw["backend"] = "mqtt"
 
+    def _get_int(self, key: str, default: int) -> int:
+        val = self._kw.get(key, default)
+        try:
+            return int(val)
+        except (ValueError, TypeError):
+            return default
+
+    def _get_bool(self, key: str, default: bool) -> bool:
+        val = self._kw.get(key, default)
+        if isinstance(val, str):
+            return val.lower() in ("true", "yes", "1")
+        return bool(val)
+
     @property
     def mqtt_hostname_check(self) -> bool:
-        return bool(self._kw.get("mqtt_hostname_check", True))
+        return self._get_bool("mqtt_hostname_check", True)
 
     @property
     def mqtt_transport(self) -> Literal["tcp", "websockets"]:
@@ -169,11 +182,11 @@ class ArloCfg:
 
     @property
     def dump(self) -> bool:
-        return cast(bool, self._kw.get("dump", False))
+        return self._get_bool("dump", False)
 
     @property
     def max_days(self) -> int:
-        return cast(int, self._kw.get("max_days", 365))
+        return self._get_int("max_days", 365)
 
     @property
     def extra_device_states(self) -> list[str]:
@@ -188,23 +201,23 @@ class ArloCfg:
 
     @property
     def db_motion_time(self) -> int:
-        return cast(int, self._kw.get("db_motion_time", 30))
+        return self._get_int("db_motion_time", 30)
 
     @property
     def db_ding_time(self) -> int:
-        return cast(int, self._kw.get("db_ding_time", 10))
+        return self._get_int("db_ding_time", 10)
 
     @property
     def request_timeout(self) -> int:
-        return cast(int, self._kw.get("request_timeout", 60))
+        return self._get_int("request_timeout", 60)
 
     @property
     def stream_timeout(self) -> int:
-        return cast(int, self._kw.get("stream_timeout", 0))
+        return self._get_int("stream_timeout", 0)
 
     @property
     def recent_time(self) -> int:
-        return cast(int, self._kw.get("recent_time", 600))
+        return self._get_int("recent_time", 600)
 
     @property
     def last_format(self) -> str:
@@ -212,7 +225,7 @@ class ArloCfg:
 
     @property
     def no_media_upload(self) -> bool:
-        return cast(bool, self._kw.get("no_media_upload", False))
+        return self._get_bool("no_media_upload", False)
 
     @property
     def media_retry(self) -> list[int]:
@@ -264,27 +277,27 @@ class ArloCfg:
 
     @property
     def refresh_devices(self) -> bool:
-        return cast(bool, self._kw.get("refresh_devices", True))
+        return self._get_bool("refresh_devices", True)
 
     @property
     def refresh_devices_every(self) -> int:
-        return cast(int, self._kw.get("refresh_devices_every", 0)) * 60 * 60
+        return self._get_int("refresh_devices_every", 0) * 60 * 60
 
     @property
     def refresh_modes_every(self) -> int:
-        return cast(int, self._kw.get("refresh_modes_every", 0)) * 60
+        return self._get_int("refresh_modes_every", 0) * 60
 
     @property
     def reconnect_every(self) -> int:
-        return cast(int, self._kw.get("reconnect_every", 0)) * 60
+        return self._get_int("reconnect_every", 0) * 60
 
     @property
     def snapshot_timeout(self) -> int:
-        return cast(int, self._kw.get("snapshot_timeout", 60))
+        return self._get_int("snapshot_timeout", 60)
 
     @property
     def verbose(self) -> bool:
-        return cast(bool, self._kw.get("verbose_debug", False))
+        return self._get_bool("verbose_debug", False)
 
     @property
     def tfa(self) -> str:
@@ -312,19 +325,19 @@ class ArloCfg:
 
     @property
     def tfa_delay(self) -> int:
-        return cast(int, self._kw.get("tfa_delay", TFA_DELAY))
+        return self._get_int("tfa_delay", TFA_DELAY)
 
     @property
     def tfa_retries(self) -> int:
-        return cast(int, self._kw.get("tfa_retries", TFA_RETRIES))
+        return self._get_int("tfa_retries", TFA_RETRIES)
 
     @property
     def tfa_timeout(self) -> int:
-        return cast(int, self._kw.get("tfa_timeout", 3))
+        return self._get_int("tfa_timeout", 3)
 
     @property
     def tfa_total_timeout(self) -> int:
-        return cast(int, self._kw.get("tfa_total_timeout", 60))
+        return self._get_int("tfa_total_timeout", 60)
 
     @property
     def tfa_host(self) -> str:
@@ -363,11 +376,11 @@ class ArloCfg:
 
     @property
     def wait_for_initial_setup(self) -> bool:
-        return cast(bool, self._kw.get("wait_for_initial_setup", True))
+        return self._get_bool("wait_for_initial_setup", True)
 
     @property
     def save_state(self) -> bool:
-        return cast(bool, self._kw.get("save_state", True))
+        return self._get_bool("save_state", True)
 
     @property
     def state_file(self) -> str | None:
