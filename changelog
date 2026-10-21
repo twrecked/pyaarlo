@@ -1,3 +1,22 @@
+0.9.0-alpha.2
+  Device API & Property Normalization
+  - Action & Setter Symmetry: Standardized async setters, action commands, and
+    property getters/setters across ArloDevice, ArloCamera, ArloDoorBell,
+    ArloBaseStation, and ArloLight.
+  - Spotlight, Floodlight & Nightlight:
+    * Normalized spotlight action commands to spotlight_on(), spotlight_off(),
+      and set_spotlight().
+    * Added spotlight_is_on, spotlight_state, and spotlight_brightness properties.
+    * Added floodlight_is_on, floodlight_brightness, and set_floodlight().
+    * Added nightlight_is_on and nightlight_brightness properties with setters.
+  - Device Power & Siren Normalization:
+    * Added set_is_on() coroutine and wired @is_on.setter on Device, Camera, and Light.
+    * Added set_siren_state() coroutine and wired @siren_state.setter on Camera,
+      Doorbell, and BaseStation.
+    * Added set_is_silenced() coroutine and wired @is_silenced.setter on Doorbell.
+  - Speaker Control:
+    * Added speaker volume property and setter to ArloCamera.
+
 0.9.0-alpha.1
   Major Architecture (Breaking Changes)
   - Async-First Core: Transitioned the entire library to native asyncio (Python >= 3.10)

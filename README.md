@@ -7,7 +7,7 @@ An asynchronous Python library and command-line automation toolkit for Netgear/A
 
 ---
 
-> ### ⚠️ Alpha Release Notice (`v0.9.0-alpha.1`)
+> ### ⚠️ Alpha Release Notice (`v0.9.0-alpha.2`)
 >
 > **PyArlo v0.9 is a major rewrite transitioning the entire codebase from legacy synchronous threads to native Python `asyncio`.**
 >
