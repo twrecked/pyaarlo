@@ -217,7 +217,7 @@ class ArloCfg:
 
     @property
     def recent_time(self) -> int:
-        return self._get_int("recent_time", 600)
+        return self._get_int("recent_time", 120)
 
     @property
     def last_format(self) -> str:

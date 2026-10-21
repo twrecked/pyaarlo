@@ -34,6 +34,8 @@
     re-authentication so a fresh token is always obtained before expiration.
   - Removed reconnect_every: Removed obsolete `reconnect_every` setting and code paths in
     favor of purely dynamic pre-expiration token renewal.
+  - Reduced Recent Activity Default: Lowered default recent_time from 600s (10 minutes)
+    to 120s (2 minutes).
 
 0.9.0-alpha.1
   Major Architecture (Breaking Changes)
