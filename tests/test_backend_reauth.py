@@ -67,6 +67,8 @@ def session_and_backend():
     backend._login_lock = asyncio.Lock()
     backend._reconnect_job = None
     backend._mqtt_reconnect_attempts = 0
+    from pyaarlo.core.backend import _AuthDetails
+    backend._auth = _AuthDetails()
     backend._debug = MagicMock()
     return session, backend
 
@@ -212,7 +214,7 @@ async def test_start_schedules_reconnect_configured(session_and_backend):
 
     await backend.start()
 
-    mock_tasks.run_in.assert_called_once_with(backend._event_reconnect, 3600)
+    mock_tasks.run_in.assert_called_once_with(backend._scheduled_token_renewal, 3600)
     assert backend._reconnect_job is not None
 
 
@@ -233,9 +235,21 @@ async def test_start_schedules_reconnect_fallback_expires_in(session_and_backend
 
     # Expires in 7200s - 300s margin = 6900s
     args, _ = mock_tasks.run_in.call_args
-    assert args[0] == backend._event_reconnect
+    assert args[0] == backend._scheduled_token_renewal
     assert 6800 <= args[1] <= 6900
     assert backend._reconnect_job is not None
+
+
+@pytest.mark.asyncio
+async def test_scheduled_token_renewal_forces_reauth(session_and_backend):
+    _, backend = session_and_backend
+    backend._event_reconnect = AsyncMock()
+    backend._auth.force_reauth = False
+
+    await backend._scheduled_token_renewal()
+
+    assert backend._auth.force_reauth is True
+    backend._event_reconnect.assert_awaited_once()
 
 
 @pytest.mark.asyncio

@@ -29,6 +29,9 @@
     and defensive float conversion in ArloTaskManager.run_in/run_every.
   - CLI Configuration Forwarding: Updated create_pyarlo() in common.py to forward all
     configuration settings (such as recent_time) to PyArlo.create().
+  - Scheduled Token Renewal: Fixed an issue where scheduled renewal reconnects reused the
+    soon-to-expire token instead of requesting a fresh one. Scheduled renewal now forces
+    re-authentication so a fresh token is always obtained before expiration.
 
 0.9.0-alpha.1
   Major Architecture (Breaking Changes)

@@ -373,6 +373,11 @@ class ArloBackEnd:
     async def _event_reconnect(self):
         await self._event.stream.stop()
 
+    async def _scheduled_token_renewal(self):
+        self._debug("scheduled token renewal: forcing fresh login before expiry")
+        self._auth.force_reauth = True
+        await self._event_reconnect()
+
     async def _event_loop_stop(self):
         self._event.loop_exiting = True
 
@@ -916,6 +921,7 @@ class ArloBackEnd:
         if self._auth.state != _AuthState.SUCCESS:
             return False
 
+        self._auth.force_reauth = False
         # We are in a successful state so:
         #  - save the session for reloading
         #  - save the cookies for reloading
@@ -1080,17 +1086,22 @@ class ArloBackEnd:
         else:
             token_expires_in = getattr(self._req.details, "token_expires_in", None)
             if token_expires_in:
-                delta = int(token_expires_in - time.time())
+                try:
+                    delta = int(float(token_expires_in) - time.time())
+                except (ValueError, TypeError):
+                    delta = 0
                 if delta > 360:
                     reconnect_interval = delta - 300
+                elif delta > 60:
+                    reconnect_interval = delta - 60
                 else:
-                    reconnect_interval = max(60, delta - 60)
+                    reconnect_interval = 60
             else:
                 reconnect_interval = 90 * 60
 
         if reconnect_interval > 0:
             self._debug(f"automatically scheduling token renewal in {reconnect_interval}s")
-            self._reconnect_job = self._tasks.run_in(self._event_reconnect, reconnect_interval)
+            self._reconnect_job = self._tasks.run_in(self._scheduled_token_renewal, reconnect_interval)
 
     @property
     def is_connected(self):
