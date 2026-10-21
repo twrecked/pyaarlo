@@ -59,6 +59,7 @@ class ArloSession:
         self.details: ArloSessionDetails = ArloSessionDetails()
 
         self._lock = asyncio.Lock()
+        self._login_lock: asyncio.Lock | None = None
         self._save_enabled = cfg.save_session
         self._save_filename = cfg.session_file
         self._save_username = cfg.username
@@ -68,6 +69,9 @@ class ArloSession:
 
     def set_relogin_handler(self, handler: Callable[..., Any] | None) -> None:
         self._relogin_handler = handler
+
+    def set_login_lock(self, lock: asyncio.Lock | None) -> None:
+        self._login_lock = lock
 
 
     def _debug(self, msg: str):
@@ -309,6 +313,13 @@ class ArloSession:
         if timeout is None:
             timeout = self._cfg.request_timeout
         try:
+            if not authpost and self._is_logging_in and self._login_lock is not None:
+                self._debug("waiting for active login/token renewal to complete")
+                async with self._login_lock:
+                    pass
+                if "Authorization" in headers:
+                    headers["Authorization"] = str(self.details.token64 or "")
+
             if host is None:
                 host = self._cfg.host
             if authpost:

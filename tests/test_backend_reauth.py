@@ -206,12 +206,7 @@ async def test_start_schedules_reconnect_default(session_and_backend):
     mock_tasks = MagicMock()
     backend._tasks = mock_tasks
 
-    backend._event = MagicMock()
-    async def fake_event_loop():
-        backend._event.stream_connected = True
-    backend._event_loop = fake_event_loop
-
-    await backend.start()
+    backend._schedule_token_renewal()
 
     # When no token_expires_in is present, defaults to 90 minutes (5400s)
     mock_tasks.run_in.assert_called_once_with(backend._scheduled_token_renewal, 5400)
@@ -225,12 +220,7 @@ async def test_start_schedules_reconnect_fallback_expires_in(session_and_backend
     mock_tasks = MagicMock()
     backend._tasks = mock_tasks
 
-    backend._event = MagicMock()
-    async def fake_event_loop():
-        backend._event.stream_connected = True
-    backend._event_loop = fake_event_loop
-
-    await backend.start()
+    backend._schedule_token_renewal()
 
     # Expires in 7200s - 300s margin = 6900s
     args, _ = mock_tasks.run_in.call_args
@@ -266,3 +256,33 @@ async def test_stop_cancels_reconnect_job(session_and_backend):
 
     mock_tasks.cancel.assert_called_once_with("job-123")
     assert backend._reconnect_job is None
+
+
+@pytest.mark.asyncio
+async def test_request_tuple_waits_for_login_lock(session_and_backend):
+    session, _ = session_and_backend
+    lock = asyncio.Lock()
+    session.set_login_lock(lock)
+    session._is_logging_in = True
+
+    resp_200 = FakeResponse(200, json_data={"data": {"ok": True}, "meta": {"code": 200}})
+    session.details.connection = SequentialSession([resp_200])
+    session.details.async_connection = None
+
+    order = []
+
+    async def simulate_login():
+        async with lock:
+            await asyncio.sleep(0.05)
+            session._is_logging_in = False
+            session.details.token64 = "fresh_token_64"
+            order.append("login_done")
+
+    async def make_request():
+        order.append("request_start")
+        code, _ = await session.request_tuple("/test/path", headers={"Authorization": "old_token"})
+        order.append("request_end")
+        assert code == 200
+
+    await asyncio.gather(simulate_login(), make_request())
+    assert order == ["request_start", "login_done", "request_end"]

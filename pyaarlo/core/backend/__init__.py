@@ -147,6 +147,7 @@ class ArloBackEnd:
         self._reconnect_job: str | None = None
         self._mqtt_reconnect_attempts: int = 0
         self._req.set_relogin_handler(self._relogin)
+        self._req.set_login_lock(self._login_lock)
 
     def _debug(self, msg: str) -> None:
         self._log.debug(f"backend: {msg}")
@@ -790,9 +791,9 @@ class ArloBackEnd:
         """
         self._debug("auth: checking saved token")
 
-        # If a re-login was explicitly triggered after 401, the old token is invalid.
+        # If a re-login was explicitly triggered or renewal is due, the old token should not be reused.
         if self._auth.force_reauth:
-            self._debug("auth: force_reauth is set, token previously failed with 401")
+            self._debug("auth: force_reauth is set, requesting fresh token")
             return _AuthState.LOGIN
 
         # We haven't logged in at all yet.
@@ -889,8 +890,9 @@ class ArloBackEnd:
 
         return _AuthState.REVALIDATE_TOKEN
 
-    async def _login(self):
+    async def _login_locked(self) -> bool:
         """Perform all the steps to authenticate against the Arlo servers.
+        Assumes self._login_lock is held.
         """
 
         # Restart. We might be able to miss out the login stage and just try
@@ -921,6 +923,7 @@ class ArloBackEnd:
         if self._auth.state != _AuthState.SUCCESS:
             return False
 
+        self._last_login_time = time.monotonic()
         self._auth.force_reauth = False
         # We are in a successful state so:
         #  - save the session for reloading
@@ -929,16 +932,25 @@ class ArloBackEnd:
         await self._req.save_cookies()
         return True
 
+    async def _login(self) -> bool:
+        """Serialized wrapper around _login_locked to prevent concurrent auth attempts."""
+        async with self._login_lock:
+            self._req._is_logging_in = True
+            try:
+                return await self._login_locked()
+            finally:
+                self._req._is_logging_in = False
+
     async def _relogin(self) -> bool:
         async with self._login_lock:
             if time.monotonic() - self._last_login_time < 10:
+                self._debug("relogin skipped: already logged in within last 10s")
                 return True
             self._debug("re-logging in after 401 or token expiration")
             self._req._is_logging_in = True
             self._auth.force_reauth = True
             try:
-                if await self._login():
-                    self._last_login_time = time.monotonic()
+                if await self._login_locked():
                     await self._event_reconnect()
                     return True
                 return False
@@ -1069,9 +1081,6 @@ class ArloBackEnd:
             await asyncio.sleep(1)
             count += 1
         # XXX: check count and fail?
-
-        # start reconnect daemon based on token expiry
-        self._schedule_token_renewal()
 
         self._debug("stream up")
         return True

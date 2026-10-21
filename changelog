@@ -36,6 +36,11 @@
     favor of purely dynamic pre-expiration token renewal.
   - Reduced Recent Activity Default: Lowered default recent_time from 600s (10 minutes)
     to 120s (2 minutes).
+  - Login Serialization & Request Pause: Serialized all login and re-authentication attempts
+    with _login_lock to prevent race conditions during scheduled token renewal. Non-auth API
+    requests arriving during active authentication now wait for renewal completion rather
+    than sending requests with invalidating tokens.
+  - Startup Cleanup: Removed duplicate _schedule_token_renewal() call in backend.start().
 
 0.9.0-alpha.1
   Major Architecture (Breaking Changes)
