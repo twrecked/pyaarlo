@@ -231,17 +231,21 @@ class ArloCamera(ArloChildDevice):
             self.vdebug(f"ignoring snapshot for {self.name} ({date_str})")
 
     def _set_recent(self, timeo):
+        was_recent = self._recent
         self._recent = True
         self._core.tasks.cancel(self._recent_job)
         self._recent_job = self._core.tasks.run_in(self._clear_recent, timeo)
-        self.debug("turning recent ON for " + self._name)
-        self._do_callbacks(RECENT_ACTIVITY_KEY, True)
+        if not was_recent:
+            self.debug("turning recent ON for " + self._name)
+            self._do_callbacks(RECENT_ACTIVITY_KEY, True)
 
     def _clear_recent(self):
+        was_recent = self._recent
         self._recent = False
         self._recent_job = None
-        self.debug("turning recent OFF for " + self._name)
-        self._do_callbacks(RECENT_ACTIVITY_KEY, False)
+        if was_recent:
+            self.debug("turning recent OFF for " + self._name)
+            self._do_callbacks(RECENT_ACTIVITY_KEY, False)
 
     def _stop_snapshot(self):
         # Signal to anybody waiting.
@@ -514,7 +518,7 @@ class ArloCamera(ArloChildDevice):
 
         # Anything to trip recent activity?
         for key in properties:
-            if key in RECENT_ACTIVITY_KEYS:
+            if key in RECENT_ACTIVITY_KEYS and properties[key] in (True, "true", "True", 1):
                 self.debug("recent activity key")
                 self._set_recent(self._core.cfg.recent_time)
 

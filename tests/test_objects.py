@@ -285,3 +285,64 @@ async def test_camera_and_device_normalized_setters_and_properties(core_factory,
     assert light.is_on is True
     await light.set_is_on(False)
     assert core.be.notify.called
+
+
+@pytest.mark.asyncio
+async def test_camera_recent_activity_truthiness_and_deduplication(core_factory, objs):
+    from unittest.mock import MagicMock
+
+    core = core_factory()
+    camera_device = {
+        "deviceId": "CAM-RECENT-01",
+        "deviceName": "Recent Cam",
+        "deviceType": "camera",
+        "modelId": "VMC4040",
+        "parentId": "CAM-RECENT-01",
+        "uniqueId": "CAM-RECENT-UID",
+        "state": "provisioned",
+        "properties": {"activityState": "idle"},
+    }
+    cam = ArloCamera("Recent Cam", core, objs, camera_device)
+    callback = MagicMock()
+    cam.add_attr_callback("recentActivity", callback)
+
+    # 1. False motionDetected/audioDetected status broadcast should NOT trip recent activity
+    cam._event_handler("cameras/" + cam.device_id, {
+        "properties": {
+            "motionDetected": False,
+            "audioDetected": False,
+        }
+    })
+    assert cam.was_recently_active is False
+    assert callback.call_count == 0
+
+    # 2. True motionDetected trips recent activity ON exactly once
+    cam._event_handler("cameras/" + cam.device_id, {
+        "properties": {
+            "motionDetected": True,
+            "audioDetected": False,
+        }
+    })
+    assert cam.was_recently_active is True
+    assert callback.call_count == 1
+    callback.assert_called_with(cam, "recentActivity", True)
+
+    # 3. Subsequent triggers while already active must NOT fire duplicate callbacks
+    cam._event_handler("cameras/" + cam.device_id, {
+        "properties": {
+            "motionDetected": True,
+            "audioDetected": True,
+        }
+    })
+    assert cam.was_recently_active is True
+    assert callback.call_count == 1
+
+    # 4. Clear recent trips recent activity OFF exactly once
+    cam._clear_recent()
+    assert cam.was_recently_active is False
+    assert callback.call_count == 2
+    callback.assert_called_with(cam, "recentActivity", False)
+
+    # Calling clear again when already off should not fire again
+    cam._clear_recent()
+    assert callback.call_count == 2

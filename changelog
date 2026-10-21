@@ -17,6 +17,13 @@
   - Speaker Control:
     * Added speaker volume property and setter to ArloCamera.
 
+  Bug Fixes
+  - Recent Activity Filtering & Deduplication: Fixed a false-trigger bug where periodic
+    device/camera status broadcasts reporting "motionDetected": false and
+    "audioDetected": false inadvertently turned recentActivity ON. Truthiness of the
+    detection state is now strictly enforced, and repeated triggers while already active
+    extend the timeout without re-emitting duplicate callbacks.
+
 0.9.0-alpha.1
   Major Architecture (Breaking Changes)
   - Async-First Core: Transitioned the entire library to native asyncio (Python >= 3.10)
