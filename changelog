@@ -32,6 +32,8 @@
   - Scheduled Token Renewal: Fixed an issue where scheduled renewal reconnects reused the
     soon-to-expire token instead of requesting a fresh one. Scheduled renewal now forces
     re-authentication so a fresh token is always obtained before expiration.
+  - Removed reconnect_every: Removed obsolete `reconnect_every` setting and code paths in
+    favor of purely dynamic pre-expiration token renewal.
 
 0.9.0-alpha.1
   Major Architecture (Breaking Changes)

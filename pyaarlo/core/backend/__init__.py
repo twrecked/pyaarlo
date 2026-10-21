@@ -1081,23 +1081,20 @@ class ArloBackEnd:
             self._tasks.cancel(self._reconnect_job)
             self._reconnect_job = None
 
-        if self._cfg.reconnect_every != 0:
-            reconnect_interval = self._cfg.reconnect_every
-        else:
-            token_expires_in = getattr(self._req.details, "token_expires_in", None)
-            if token_expires_in:
-                try:
-                    delta = int(float(token_expires_in) - time.time())
-                except (ValueError, TypeError):
-                    delta = 0
-                if delta > 360:
-                    reconnect_interval = delta - 300
-                elif delta > 60:
-                    reconnect_interval = delta - 60
-                else:
-                    reconnect_interval = 60
+        token_expires_in = getattr(self._req.details, "token_expires_in", None)
+        if token_expires_in:
+            try:
+                delta = int(float(token_expires_in) - time.time())
+            except (ValueError, TypeError):
+                delta = 0
+            if delta > 360:
+                reconnect_interval = delta - 300
+            elif delta > 60:
+                reconnect_interval = delta - 60
             else:
-                reconnect_interval = 90 * 60
+                reconnect_interval = 60
+        else:
+            reconnect_interval = 90 * 60
 
         if reconnect_interval > 0:
             self._debug(f"automatically scheduling token renewal in {reconnect_interval}s")

@@ -220,7 +220,6 @@ def test_cfg_numeric_and_boolean_coercion(log):
         stream_timeout="10",
         refresh_devices_every="2",
         refresh_modes_every="5",
-        reconnect_every="3",
         snapshot_timeout="50",
         tfa_delay="2",
         tfa_retries="5",
@@ -240,7 +239,6 @@ def test_cfg_numeric_and_boolean_coercion(log):
     assert cfg.stream_timeout == 10
     assert cfg.refresh_devices_every == 2 * 60 * 60
     assert cfg.refresh_modes_every == 5 * 60
-    assert cfg.reconnect_every == 3 * 60
     assert cfg.snapshot_timeout == 50
     assert cfg.tfa_delay == 2
     assert cfg.tfa_retries == 5

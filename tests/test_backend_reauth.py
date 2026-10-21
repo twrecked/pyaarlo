@@ -57,7 +57,7 @@ class FakeLogger:
 @pytest.fixture
 def session_and_backend():
     log = FakeLogger()
-    cfg = ArloCfg(log=log, host="https://arlo.example", request_timeout=60, reconnect_every=90 * 60)
+    cfg = ArloCfg(log=log, host="https://arlo.example", request_timeout=60)
     session = ArloSession(cfg, log)
     backend = ArloBackEnd.__new__(ArloBackEnd)
     backend._cfg = cfg
@@ -201,9 +201,8 @@ def test_mqtt_on_disconnect_forces_disconnect_on_repeated_failures():
 
 
 @pytest.mark.asyncio
-async def test_start_schedules_reconnect_configured(session_and_backend):
+async def test_start_schedules_reconnect_default(session_and_backend):
     _, backend = session_and_backend
-    backend._cfg._kw["reconnect_every"] = 60  # 60 minutes = 3600 seconds
     mock_tasks = MagicMock()
     backend._tasks = mock_tasks
 
@@ -214,14 +213,14 @@ async def test_start_schedules_reconnect_configured(session_and_backend):
 
     await backend.start()
 
-    mock_tasks.run_in.assert_called_once_with(backend._scheduled_token_renewal, 3600)
+    # When no token_expires_in is present, defaults to 90 minutes (5400s)
+    mock_tasks.run_in.assert_called_once_with(backend._scheduled_token_renewal, 5400)
     assert backend._reconnect_job is not None
 
 
 @pytest.mark.asyncio
 async def test_start_schedules_reconnect_fallback_expires_in(session_and_backend):
     session, backend = session_and_backend
-    backend._cfg._kw["reconnect_every"] = 0
     session.details.token_expires_in = int(time.time()) + 7200
     mock_tasks = MagicMock()
     backend._tasks = mock_tasks

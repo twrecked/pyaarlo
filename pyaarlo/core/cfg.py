@@ -288,10 +288,6 @@ class ArloCfg:
         return self._get_int("refresh_modes_every", 0) * 60
 
     @property
-    def reconnect_every(self) -> int:
-        return self._get_int("reconnect_every", 0) * 60
-
-    @property
     def snapshot_timeout(self) -> int:
         return self._get_int("snapshot_timeout", 60)
 
