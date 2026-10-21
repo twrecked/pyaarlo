@@ -363,10 +363,10 @@ cat output-file.har | ./bin/pyaarlo-encrypt encrypt > output-file.har.enc
 `pyaarlo-encrypt` is a fancy wrapper around:
 
 ```bash
-curl -s -F 'plain_text_file=@-;filename=clear.txt' https://pyaarlo-tfa.appspot.com/encrypt
+curl -s -F 'plain_text_file=@-;filename=clear.txt' https://aarlo-dot-twrecked-tools.nn.r.appspot.com/encrypt
 ```
 
-You can also encrypt your output on this [webpage](https://pyaarlo-tfa.appspot.com/).
+You can also encrypt your output on this [webpage](https://aarlo-dot-twrecked-tools.nn.r.appspot.com/).
 
 
 <a name="limitations"></a>
@@ -464,7 +464,7 @@ there. Feel free to roll your own server or...
 
 ##### Using My Server
 
-I have a website running at https://pyaarlo-tfa.appspot.com that can provide
+I have a website running at https://aarlo-dot-twrecked-tools.nn.r.appspot.com that can provide
 this service. It's provided as-is, it's running as a Google app so it should be
 pretty reliable and the only information I have access to is your email address,
 access token for my website and whatever your last code was. (_Note:_ if you're
@@ -479,7 +479,7 @@ To use the REST API with my website do the following:
 
 * Register with my website. You only need to do this once and I'm sorry for the
   crappy interface. Go to [registration
-  page](https://pyaarlo-tfa.appspot.com/register) and enter your email address
+  page](https://aarlo-dot-twrecked-tools.nn.r.appspot.com/register) and enter your email address
   (or unique ID). The website will reply with a json document containing your
   _token_, keep this _token_ and use it in all REST API interactions.
 ```json
@@ -508,7 +508,7 @@ work, maybe somebody else will have better luck.)
 I pair this with `Make a web request` action to forward the SMS code into my
 server, I use the following recipe. Modify the email and token as necessary.
 ```
-URL: https://pyaarlo-tfa.appspot.com/add?email=test@test.com&token=4f529ea4dd20ca65e102e743e7f18914bcf8e596b909c02d&msg={{Text}}
+URL: https://aarlo-dot-twrecked-tools.nn.r.appspot.com/add?email=test@test.com&token=4f529ea4dd20ca65e102e743e7f18914bcf8e596b909c02d&msg={{Text}}
 Method: GET
 Content Type: text/plain
 ```

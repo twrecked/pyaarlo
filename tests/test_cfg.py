@@ -20,9 +20,9 @@ def test_scheme(log):
 
 def test_host_00(log):
     cfg = ArloCfg(log=log)
-    assert cfg.tfa_host == "pyaarlo-tfa.appspot.com"
-    assert cfg.tfa_host_with_scheme() == "https://pyaarlo-tfa.appspot.com"
-    assert cfg.tfa_host_with_scheme("roygbiv") == "https://pyaarlo-tfa.appspot.com"
+    assert cfg.tfa_host == "aarlo-dot-twrecked-tools.nn.r.appspot.com"
+    assert cfg.tfa_host_with_scheme() == "https://aarlo-dot-twrecked-tools.nn.r.appspot.com"
+    assert cfg.tfa_host_with_scheme("roygbiv") == "https://aarlo-dot-twrecked-tools.nn.r.appspot.com"
     assert cfg.tfa_port == 993
 
 def test_host_10(log):

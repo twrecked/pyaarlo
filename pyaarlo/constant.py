@@ -56,7 +56,7 @@ TFA_SMS_TYPE = "SMS"
 TFA_PUSH_TYPE = "PUSH"
 TFA_DELAY = 5
 TFA_RETRIES = 5
-TFA_DEFAULT_HOST = "https://pyaarlo-tfa.appspot.com"
+TFA_DEFAULT_HOST = "https://aarlo-dot-twrecked-tools.nn.r.appspot.com"
 
 PRELOAD_DAYS = 30
 
