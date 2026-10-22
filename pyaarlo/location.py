@@ -144,6 +144,7 @@ class ArloLocation(ArloObject):
             mode = self._resolve_active_mode(raw_props)
             if mode is not None:
                 self._save_and_do_callbacks(MODE_KEY, mode)
+                self._propagate_mode_to_bases(mode)
             mode_revision = props.get("revision", None)
             if mode_revision is not None:
                 self._save(MODE_REVISION_KEY, mode_revision)
@@ -157,6 +158,7 @@ class ArloLocation(ArloObject):
             mode = event.get("states", {}).get("activeMode", None)
             if mode is not None:
                 self._save_and_do_callbacks(MODE_KEY, mode)
+                self._propagate_mode_to_bases(mode)
 
     @property
     def available_modes(self):
@@ -194,10 +196,21 @@ class ArloLocation(ArloObject):
         """
         self._core.tasks.run_now(self.set_mode, id_or_name=id_or_name)
 
-    async def set_mode(self, id_or_name):
+    def _propagate_mode_to_bases(self, mode_id: str | None) -> None:
+        """Update MODE_KEY on all base stations associated with this location."""
+        if not mode_id:
+            return
+        for base in self._objs.base_stations:
+            for gid in self._device_ids:
+                if gid == base.device_id or gid.endswith("_" + base.device_id):
+                    base._save_and_do_callbacks(MODE_KEY, mode_id)
+                    break
+
+    async def set_mode(self, id_or_name, force: bool = False):
         """Set the location mode.
 
         :param id_or_name: mode to use, as returned by available_modes:
+        :param force: if True, send mode change even if location.mode already matches
         """
         # Convert to an ID.
         mode_id = self._name_to_id(id_or_name)
@@ -208,7 +221,7 @@ class ArloLocation(ArloObject):
             return
 
         # Need to change?
-        if self.mode.lower() == mode_id.lower():
+        if not force and self.mode.lower() == mode_id.lower():
             self.debug("no mode change needed")
             return
 
@@ -252,7 +265,7 @@ class ArloLocation(ArloObject):
             headers=self._extra_headers())
 
         if data is None:
-            self.error("failed to set mode.")
+            self._core.log.error("failed to set mode.")
             return
 
         mode_revision = data.get("revision")
@@ -260,18 +273,20 @@ class ArloLocation(ArloObject):
 
         self._save_and_do_callbacks(MODE_KEY, mode_id)
         self._save(MODE_REVISION_KEY, mode_revision)
+        self._propagate_mode_to_bases(mode_id)
 
     async def update_mode(self):
         """Check and update the base's current mode."""
         data = await self._core.be.get(LOCATION_ACTIVEMODE_PATH_FORMAT.format(self._id),
                                       headers=self._extra_headers())
         if data is None:
-            self.error("failed to read active mode.")
+            self._core.log.error("failed to read active mode.")
             return
         mode_id = self._resolve_active_mode(data.get("properties", {}))
         mode_revision = data.get("revision")
         self._save_and_do_callbacks(MODE_KEY, mode_id)
         self._save(MODE_REVISION_KEY, mode_revision)
+        self._propagate_mode_to_bases(mode_id)
 
     async def update_modes(self, _initial=False):
         """Get and update the available modes for the base."""

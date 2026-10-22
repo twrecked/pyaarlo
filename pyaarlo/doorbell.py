@@ -87,12 +87,12 @@ class ArloDoorBell(ArloChildDevice):
     @property
     def is_video_doorbell(self):
         supports = ArloCapabilities.check_doorbell_supports_video(self)
-        self.debug(f"supports video is {supports}")
+        self.vdebug(f"supports video is {supports}")
         return supports
 
     def has_capability(self, cap) -> bool:
         supports = ArloCapabilities.check_doorbell_supports(self, cap)
-        self.debug(f"supports {cap} is {supports}")
+        self.vdebug(f"supports {cap} is {supports}")
         return supports
 
     async def update_silent_mode(self):

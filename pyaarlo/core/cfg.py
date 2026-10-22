@@ -209,7 +209,7 @@ class ArloCfg:
 
     @property
     def request_timeout(self) -> int:
-        return self._get_int("request_timeout", 60)
+        return self._get_int("request_timeout", 15)
 
     @property
     def stream_timeout(self) -> int:

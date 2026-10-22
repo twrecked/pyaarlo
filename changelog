@@ -41,6 +41,15 @@
     requests arriving during active authentication now wait for renewal completion rather
     than sending requests with invalidating tokens.
   - Startup Cleanup: Removed duplicate _schedule_token_renewal() call in backend.start().
+  - Reduced Request Timeout: Lowered default request_timeout from 60s to 15s.
+  - In-Flight Request Draining: Added drain_in_flight() to ArloSession to gracefully drain
+    pending API requests before rotating tokens during login/re-auth.
+  - Location Mode Propagation (Issue #1162): In V3 modes, location mode updates (from user
+    commands, stream events, or update_mode) now immediately propagate to associated base
+    stations. Base station set_mode passes force=True to bypass "no mode change needed" when
+    desynced from location. Location update_mode() runs on base refresh.
+  - Quieter Debug Logging: Moved periodic device capability check logging (e.g. pingCapability,
+    sirenState) from debug to verbose packet debug (vdebug) to eliminate repetitive log noise.
 
 0.9.0-alpha.1
   Major Architecture (Breaking Changes)

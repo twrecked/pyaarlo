@@ -141,7 +141,7 @@ class PyArlo:
     * **storage_dir** - Where to store saved state.
     * **db_motion_time** - Time, in seconds, to show active for doorbell motion detected. Default 30 seconds.
     * **db_ding_time** - Time, in seconds, to show on for doorbell button press. Default 10 seconds.
-    * **request_timeout** - Time, in seconds, for requests sent to Arlo to succeed. Default 60 seconds.
+    * **request_timeout** - Time, in seconds, for requests sent to Arlo to succeed. Default 15 seconds.
     * **recent_time** - Time, in seconds, for the camera to indicate it has seen motion. Default 120 seconds.
     * **no_media_upload** - Force a media upload after camera activity.
       Normally not needed but some systems fail to push media uploads. Default 'False'. Deprecated, use `media_retry`.
@@ -424,6 +424,9 @@ class PyArlo:
         if not self._v3_modes or initial:
             for location in self._objs.locations:
                 await location.update_modes(initial)
+        elif self._v3_modes:
+            for location in self._objs.locations:
+                await location.update_mode()
 
     async def _refresh_modes(self):
         self.vdebug("refresh modes")

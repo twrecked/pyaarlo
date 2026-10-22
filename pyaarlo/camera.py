@@ -1601,5 +1601,5 @@ class ArloCamera(ArloChildDevice):
 
     def has_capability(self, cap) -> bool:
         supports = ArloCapabilities.check_camera_supports(self, cap)
-        self.debug(f"supports {cap} is {supports}")
+        self.vdebug(f"supports {cap} is {supports}")
         return supports

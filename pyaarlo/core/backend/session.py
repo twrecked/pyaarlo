@@ -66,12 +66,25 @@ class ArloSession:
         self._save_info: dict[str, dict[str, str]] | None = None
         self._relogin_handler: Callable[..., Any] | None = None
         self._is_logging_in: bool = False
+        self._in_flight_count: int = 0
+        self._drain_event: asyncio.Event = asyncio.Event()
+        self._drain_event.set()
 
     def set_relogin_handler(self, handler: Callable[..., Any] | None) -> None:
         self._relogin_handler = handler
 
     def set_login_lock(self, lock: asyncio.Lock | None) -> None:
         self._login_lock = lock
+
+    async def drain_in_flight(self, timeout: float = 3.0) -> None:
+        """Wait for currently in-flight non-auth requests to complete."""
+        if self._in_flight_count <= 0:
+            return
+        self._debug(f"draining {self._in_flight_count} in-flight request(s)")
+        try:
+            await asyncio.wait_for(self._drain_event.wait(), timeout=timeout)
+        except (asyncio.TimeoutError, TimeoutError):
+            self._debug(f"draining timed out, {self._in_flight_count} request(s) still in-flight")
 
 
     def _debug(self, msg: str):
@@ -292,7 +305,7 @@ class ArloSession:
         self.details.web_id = self.details.user_id + "_web"
         self.details.sub_id = "subscriptions/" + self.details.web_id
 
-    async def request_tuple(
+    async def _request_tuple_impl(
             self,
             path,
             method="GET",
@@ -312,14 +325,8 @@ class ArloSession:
             headers = {}
         if timeout is None:
             timeout = self._cfg.request_timeout
-        try:
-            if not authpost and self._is_logging_in and self._login_lock is not None:
-                self._debug("waiting for active login/token renewal to complete")
-                async with self._login_lock:
-                    pass
-                if "Authorization" in headers:
-                    headers["Authorization"] = str(self.details.token64 or "")
 
+        try:
             if host is None:
                 host = self._cfg.host
             if authpost:
@@ -500,6 +507,56 @@ class ArloSession:
                 self._log.warning("error in response=" + str(body))
 
         return 500, None
+
+    async def request_tuple(
+            self,
+            path,
+            method="GET",
+            params=None,
+            headers=None,
+            stream=False,
+            raw=False,
+            timeout=None,
+            host=None,
+            authpost=False,
+            cookies=None,
+            retry_401=True,
+    ) -> tuple[int, Any]:
+        if headers is None:
+            headers = {}
+
+        if not authpost and self._is_logging_in and self._login_lock is not None:
+            self._debug("waiting for active login/token renewal to complete")
+            async with self._login_lock:
+                pass
+            if "Authorization" in headers:
+                headers["Authorization"] = str(self.details.token64 or "")
+
+        is_tracked = not authpost
+        if is_tracked:
+            self._in_flight_count += 1
+            self._drain_event.clear()
+
+        try:
+            return await self._request_tuple_impl(
+                path=path,
+                method=method,
+                params=params,
+                headers=headers,
+                stream=stream,
+                raw=raw,
+                timeout=timeout,
+                host=host,
+                authpost=authpost,
+                cookies=cookies,
+                retry_401=retry_401,
+            )
+        finally:
+            if is_tracked:
+                self._in_flight_count -= 1
+                if self._in_flight_count <= 0:
+                    self._in_flight_count = 0
+                    self._drain_event.set()
 
     async def request(
             self,

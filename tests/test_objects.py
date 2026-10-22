@@ -346,3 +346,56 @@ async def test_camera_recent_activity_truthiness_and_deduplication(core_factory,
     # Calling clear again when already off should not fire again
     cam._clear_recent()
     assert callback.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_v3_location_mode_propagation_and_force_flag(core_factory, objs):
+    from unittest.mock import AsyncMock
+    from pyaarlo.location import ArloLocation
+    from pyaarlo.constant import MODE_KEY
+
+    core = core_factory()
+    core.cfg._kw["mode_api"] = "v3"
+    core.be.put = AsyncMock(return_value={"revision": 2})
+
+    loc_data = {
+        "locationId": "loc-uuid-1",
+        "locationName": "Home",
+        "gatewayDeviceIds": ["BASE-V3-01"],
+    }
+    location = ArloLocation(core, objs, loc_data, user=True)
+    location._save_and_do_callbacks(MODE_KEY, "armAway")
+
+    base_data = {
+        "deviceId": "BASE-V3-01",
+        "deviceName": "Main Base",
+        "deviceType": "basestation",
+        "modelId": "VMB4000",
+        "state": "provisioned",
+    }
+    base = ArloBaseStation("Main Base", core, objs, base_data)
+    base._save_and_do_callbacks(MODE_KEY, "armAway")
+
+    objs.locations = [location]
+    objs.base_stations = [base]
+
+    assert location.mode == "armAway"
+    assert base.mode == "armAway"
+
+    # 1. Location set_mode propagates mode to associated base station
+    await location.set_mode("disarmed")
+    assert core.be.put.called
+    assert location.mode == "disarmed"
+    assert base.mode == "disarmed"
+
+    # 2. Simulate base desync (e.g. missed stream event during outage)
+    base._save_and_do_callbacks(MODE_KEY, "armed_night")
+    assert base.mode == "armed_night"
+    assert location.mode == "disarmed"
+
+    # 3. Base set_mode delegates with force=True, bypassing "no mode change needed"
+    core.be.put.reset_mock()
+    await base.set_mode("disarmed")
+    assert core.be.put.called
+    assert location.mode == "disarmed"
+    assert base.mode == "disarmed"

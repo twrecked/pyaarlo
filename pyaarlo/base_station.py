@@ -263,8 +263,9 @@ class ArloBaseStation(ArloDevice):
             for location in self._objs.locations:
                 for gid in location._device_ids:
                     if gid == self.device_id or gid.endswith("_" + self.device_id):
-                        self.debug(f"V3: delegating mode={mode_name} to location {location.name}")
-                        await location.set_mode(mode_name)
+                        force = (self.mode != mode_name)
+                        self.debug(f"V3: delegating mode={mode_name} to location {location.name} (force={force})")
+                        await location.set_mode(mode_name, force=force)
                         return
             self.debug(f"V3: no location found for base {self.device_id}, ignoring mode change")
             return
@@ -583,7 +584,7 @@ class ArloBaseStation(ArloDevice):
 
     def has_capability(self, cap) -> bool:
         supports = ArloCapabilities.check_base_station_supports(self, cap)
-        self.debug(f"supports {cap} is {supports}")
+        self.vdebug(f"supports {cap} is {supports}")
         return supports
 
     async def build_ratls(self, public=False, force=False):

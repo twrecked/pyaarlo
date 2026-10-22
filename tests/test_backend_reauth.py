@@ -69,6 +69,9 @@ def session_and_backend():
     backend._mqtt_reconnect_attempts = 0
     from pyaarlo.core.backend import _AuthDetails
     backend._auth = _AuthDetails()
+    backend._requests = {}
+    backend._requests_empty_event = asyncio.Event()
+    backend._requests_empty_event.set()
     backend._debug = MagicMock()
     return session, backend
 
@@ -233,12 +236,14 @@ async def test_start_schedules_reconnect_fallback_expires_in(session_and_backend
 async def test_scheduled_token_renewal_forces_reauth(session_and_backend):
     _, backend = session_and_backend
     backend._event_reconnect = AsyncMock()
+    backend._login_locked = AsyncMock(return_value=True)
     backend._auth.force_reauth = False
 
     await backend._scheduled_token_renewal()
 
     assert backend._auth.force_reauth is True
     backend._event_reconnect.assert_awaited_once()
+    backend._login_locked.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -286,3 +291,62 @@ async def test_request_tuple_waits_for_login_lock(session_and_backend):
 
     await asyncio.gather(simulate_login(), make_request())
     assert order == ["request_start", "login_done", "request_end"]
+
+
+@pytest.mark.asyncio
+async def test_session_drain_in_flight(session_and_backend):
+    session, _ = session_and_backend
+    session.details.connection = None
+    session.details.async_connection = None
+
+    order = []
+
+    async def long_request():
+        order.append("req_start")
+        # simulate an in-flight non-auth request
+        session._in_flight_count += 1
+        session._drain_event.clear()
+        await asyncio.sleep(0.05)
+        session._in_flight_count -= 1
+        session._drain_event.set()
+        order.append("req_done")
+
+    async def do_drain():
+        await asyncio.sleep(0.01)
+        order.append("drain_start")
+        await session.drain_in_flight(timeout=1.0)
+        order.append("drain_done")
+
+    await asyncio.gather(long_request(), do_drain())
+    assert order == ["req_start", "drain_start", "req_done", "drain_done"]
+
+
+@pytest.mark.asyncio
+async def test_backend_drain_transactions(session_and_backend):
+    _, backend = session_and_backend
+    order = []
+
+    tid = backend._start_transaction("tid-123")
+    assert not backend._requests_empty_event.is_set()
+
+    async def fake_incoming_event():
+        await asyncio.sleep(0.05)
+        order.append("event_arrived")
+        backend._requests[tid]["response"] = {"ok": True}
+        backend._requests[tid]["event"].set()
+
+    async def do_wait():
+        order.append("wait_start")
+        resp = await backend._wait_for_transaction(tid, timeout=1.0)
+        order.append("wait_done")
+        assert resp == {"ok": True}
+
+    async def do_drain():
+        await asyncio.sleep(0.01)
+        order.append("drain_start")
+        await backend._drain_transactions(timeout=1.0)
+        order.append("drain_done")
+
+    await asyncio.gather(fake_incoming_event(), do_wait(), do_drain())
+    assert backend._requests_empty_event.is_set()
+    assert order == ["wait_start", "drain_start", "event_arrived", "wait_done", "drain_done"]

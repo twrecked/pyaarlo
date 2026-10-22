@@ -124,6 +124,7 @@ def test_inline_mode_and_deprecation(log):
     cfg_default = ArloCfg(log=log)
     assert cfg_default.inline_mode is False
     assert cfg_default.synchronous_mode is False
+    assert cfg_default.request_timeout == 15
 
     # New inline_mode kwarg
     cfg_inline = ArloCfg(log=log, inline_mode=True)

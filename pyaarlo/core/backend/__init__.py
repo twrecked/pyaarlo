@@ -140,6 +140,8 @@ class ArloBackEnd:
         # Remaining state variables.
         self._dump_file = self._cfg.dump_file
         self._requests: dict[str, Any] = {}
+        self._requests_empty_event: asyncio.Event = asyncio.Event()
+        self._requests_empty_event.set()
         self._callbacks: dict[str, list[Callable[..., Any]]] = {}
         self._resource_types = DEFAULT_RESOURCES
         self._login_lock: asyncio.Lock = asyncio.Lock()
@@ -374,10 +376,32 @@ class ArloBackEnd:
     async def _event_reconnect(self):
         await self._event.stream.stop()
 
+    async def _drain_transactions(self, timeout: float = 5.0) -> None:
+        """Wait for any pending stream transaction events to arrive before stopping stream."""
+        if not self._requests:
+            return
+        self._debug(f"draining {len(self._requests)} pending transaction(s) before login")
+        try:
+            await asyncio.wait_for(self._requests_empty_event.wait(), timeout=timeout)
+        except (asyncio.TimeoutError, TimeoutError):
+            self._debug(f"draining transactions timed out, {len(self._requests)} still pending")
+
     async def _scheduled_token_renewal(self):
-        self._debug("scheduled token renewal: forcing fresh login before expiry")
-        self._auth.force_reauth = True
-        await self._event_reconnect()
+        self._debug("scheduled token renewal: starting graceful session rotation")
+        async with self._login_lock:
+            self._req._is_logging_in = True
+            try:
+                # 1. Drain pending HTTP calls on the wire
+                await self._req.drain_in_flight(timeout=2.0)
+                # 2. Drain any expected transaction events on the stream
+                await self._drain_transactions(timeout=5.0)
+                # 3. Stop stream now that transactions are drained
+                await self._event_reconnect()
+                # 4. Force fresh re-auth and login right now under the lock
+                self._auth.force_reauth = True
+                await self._login_locked()
+            finally:
+                self._req._is_logging_in = False
 
     async def _event_loop_stop(self):
         self._event.loop_exiting = True
@@ -427,7 +451,11 @@ class ArloBackEnd:
             self._debug("exited event device")
 
             # clear down and signal out
+            for tid, req in list(self._requests.items()):
+                req["response"] = None
+                req["event"].set()
             self._requests = {}
+            self._requests_empty_event.set()
 
             # restart login...
             self._logged_in = False
@@ -935,7 +963,11 @@ class ArloBackEnd:
     async def _login(self) -> bool:
         """Serialized wrapper around _login_locked to prevent concurrent auth attempts."""
         async with self._login_lock:
+            if not self._auth.force_reauth and (time.monotonic() - self._last_login_time < 10):
+                self._debug("login skipped: already logged in within last 10s")
+                return True
             self._req._is_logging_in = True
+            await self._req.drain_in_flight(timeout=2.0)
             try:
                 return await self._login_locked()
             finally:
@@ -949,13 +981,14 @@ class ArloBackEnd:
             self._debug("re-logging in after 401 or token expiration")
             self._req._is_logging_in = True
             self._auth.force_reauth = True
+            await self._req.drain_in_flight(timeout=2.0)
+            await self._drain_transactions(timeout=5.0)
             try:
                 if await self._login_locked():
                     await self._event_reconnect()
                     return True
                 return False
             finally:
-                self._auth.force_reauth = False
                 self._req._is_logging_in = False
 
     def _session_connection(self) -> bool:
@@ -1030,6 +1063,7 @@ class ArloBackEnd:
             tid = self.gen_trans_id()
         self._vdebug("starting transaction-->{}".format(tid))
         self._requests[tid] = {"event": asyncio.Event(), "response": None}
+        self._requests_empty_event.clear()
         return tid
 
     async def _wait_for_transaction(self, tid, timeout):
@@ -1045,6 +1079,9 @@ class ArloBackEnd:
             self._debug("got a key error or timeout")
             self._requests.pop(tid, None)
             response = None
+        finally:
+            if not self._requests:
+                self._requests_empty_event.set()
         self._vdebug("finished transaction-->{}".format(tid))
         return response
 
@@ -1125,6 +1162,12 @@ class ArloBackEnd:
             await self._event.stream.stop()
         if self._event.loop_task:
             await self._event.loop_task
+
+        for tid, req in list(self._requests.items()):
+            req["response"] = None
+            req["event"].set()
+        self._requests = {}
+        self._requests_empty_event.set()
 
         if logout:
             await self.put(LOGOUT_PATH)
