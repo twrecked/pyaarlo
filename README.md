@@ -17,7 +17,7 @@ An asynchronous Python library and command-line automation toolkit for Netgear/A
 >
 > If you encounter issues, regressions, or unexpected behavior with your hardware, please [open a GitHub issue](https://github.com/twrecked/pyaarlo/issues). Please include your Python version, Arlo device models, and sanitized/encrypted debug logs generated with `--debug-report`.
 >
-> If you need the legacy synchronous documentation for PyArlo v0.8, it is archived in [README_v8.md](README_v8.md).
+> If you need the legacy synchronous documentation for PyArlo v0.8, it is archived in [docs/README_v8.md](docs/README_v8.md).
 
 ---
 
@@ -302,7 +302,8 @@ If troubleshooting unexpected Arlo web changes:
 
 - [CLI Reference Guide](docs/cli.md) — Complete manual for `pyaarlo`, `pyaarlo-monitor`, and `pyaarlo-utils`.
 - [Python API Reference](docs/api.md) — Asynchronous API documentation, classes, and lifecycle options.
-- [Legacy v0.8 Documentation](README_v8.md) — Preserved synchronous v0.8 documentation.
+- [Legacy v0.8 Documentation](docs/README_v8.md) — Preserved synchronous v0.8 documentation.
+- [v0.9.0-alpha.1 Release Notes](docs/RELEASE_NOTES_v0.9.0-alpha.1.md) — Detailed overview of the v0.9 native asyncio rewrite.
 
 ---
 

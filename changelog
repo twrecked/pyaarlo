@@ -50,6 +50,7 @@
     desynced from location. Location update_mode() runs on base refresh.
   - Quieter Debug Logging: Moved periodic device capability check logging (e.g. pingCapability,
     sirenState) from debug to verbose packet debug (vdebug) to eliminate repetitive log noise.
+  - Documentation Cleanup: Moved legacy README_v8.md and release notes into docs/ directory.
 
 0.9.0-alpha.1
   Major Architecture (Breaking Changes)
