@@ -1,3 +1,23 @@
+0.9.0-alpha.3
+  Backend & Session Architecture
+  - Transaction Management in ArloSession: Co-located stream transaction tracking
+    and draining inside ArloSession alongside in-flight HTTP request tracking.
+    Added start_transaction(), wait_for_transaction(), signal_transaction_completed(),
+    cancel_transactions(), drain_transactions(), and unified drain() to ArloSession.
+  - ArloBackEnd Decoupling: Removed low-level transaction dictionary and event
+    handling from ArloBackEnd, streamlining the backend to act purely as the
+    subsystem coordinator with zero unnecessary shims.
+
+  Bug Fixes & CLI Enhancements
+  - Directory Auto-Creation for Session & Cookies: Added defensive parent directory
+    creation when saving session state and cookie jar files, preventing FileNotFoundError
+    on fresh installations where the cache directory does not yet exist. Added graceful
+    error handling to cookie persistence.
+  - CLI Inline Mode Stream Support: One-shot CLI device commands (`light turn-on`,
+    `light turn-off`, `light brightness`, `location set-mode`) now automatically
+    start the background event stream when `--inline` is provided, allowing live
+    transaction wait and confirmation.
+
 0.9.0-alpha.2
   Device API & Property Normalization
   - Action & Setter Symmetry: Standardized async setters, action commands, and
