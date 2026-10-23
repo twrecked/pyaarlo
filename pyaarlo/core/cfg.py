@@ -82,6 +82,24 @@ class ArloCfg:
         else:
             self._storage_dir = cast(str, self._kw.get("storage_dir", "/tmp/.aarlo"))
 
+        # Check for discouraged host and broker overrides
+        if "host" in self._kw:
+            self._log.warning(
+                f"Custom 'host' configured ({self.host}). Overriding the default host is discouraged and can cause API request failures."
+            )
+        if "auth_host" in self._kw:
+            self._log.warning(
+                f"Custom 'auth_host' configured ({self.auth_host}). Overriding the default auth_host is discouraged and can cause authentication failures."
+            )
+        if "mqtt_host" in self._kw:
+            self._log.warning(
+                f"Custom 'mqtt_host' configured ({self.mqtt_host}). Hardcoding the MQTT host disables dynamic broker discovery and may break event streaming."
+            )
+        if "mqtt_port" in self._kw:
+            self._log.warning(
+                f"Custom 'mqtt_port' configured ({self.mqtt_port}). Hardcoding the MQTT port is discouraged."
+            )
+
         self._debug("loaded")
 
 

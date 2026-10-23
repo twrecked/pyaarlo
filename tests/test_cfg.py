@@ -266,3 +266,36 @@ async def test_task_manager_string_delay_coercion(log):
     tm.stop()
 
 
+
+
+def test_discouraged_host_overrides_warn():
+    from unittest.mock import MagicMock
+    mock_log = MagicMock(spec=ArloLogger)
+
+    # Default without overrides shouldn't warn
+    ArloCfg(log=mock_log)
+    assert not mock_log.warning.called
+
+    # Host override warning
+    mock_log.warning.reset_mock()
+    ArloCfg(log=mock_log, host="https://custom.arlo.com")
+    assert mock_log.warning.called
+    assert "Custom 'host' configured" in mock_log.warning.call_args[0][0]
+
+    # Auth host override warning
+    mock_log.warning.reset_mock()
+    ArloCfg(log=mock_log, auth_host="https://custom-auth.arlo.com")
+    assert mock_log.warning.called
+    assert "Custom 'auth_host' configured" in mock_log.warning.call_args[0][0]
+
+    # MQTT host override warning
+    mock_log.warning.reset_mock()
+    ArloCfg(log=mock_log, mqtt_host="custom-mqtt.arlo.com")
+    assert mock_log.warning.called
+    assert "Custom 'mqtt_host' configured" in mock_log.warning.call_args[0][0]
+
+    # MQTT port override warning
+    mock_log.warning.reset_mock()
+    ArloCfg(log=mock_log, mqtt_port=8883)
+    assert mock_log.warning.called
+    assert "Custom 'mqtt_port' configured" in mock_log.warning.call_args[0][0]

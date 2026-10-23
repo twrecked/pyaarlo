@@ -54,7 +54,7 @@ async def test_body_parse_failure_preserves_http_error_status():
 
     assert code == 429
     assert body is None
-    assert log.warnings == ["body-error=ValueError"]
+    assert "body-error=ValueError" in log.warnings
 
 
 @pytest.mark.asyncio

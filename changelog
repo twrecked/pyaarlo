@@ -9,6 +9,9 @@
     subsystem coordinator with zero unnecessary shims.
 
   Bug Fixes & CLI Enhancements
+  - Discouraged Configuration Warnings: Added runtime warnings when overriding
+    fragile network settings (`host`, `auth_host`, `mqtt_host`, `mqtt_port`) to
+    prevent accidental misconfigurations from breaking cloud connectivity.
   - Directory Auto-Creation for Session & Cookies: Added defensive parent directory
     creation when saving session state and cookie jar files, preventing FileNotFoundError
     on fresh installations where the cache directory does not yet exist. Added graceful
