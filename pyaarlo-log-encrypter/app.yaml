@@ -1,0 +1,13 @@
+runtime: python312
+service: aarlo
+instance_class: F1
+automatic_scaling:
+  min_instances: 0
+  max_instances: 2
+
+handlers:
+- url: /static
+  static_dir: static
+
+- url: /.*
+  script: auto

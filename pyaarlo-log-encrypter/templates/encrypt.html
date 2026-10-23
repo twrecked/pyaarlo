@@ -1,0 +1,25 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<h2>Pyaarlo Output Encryption</h2>
+
+<br>
+<form action="/encrypt" method="post" enctype="multipart/form-data">
+	<label for="plain_text_file">Choose a file to encrypt:</label>
+	<br>
+	<input style="margin-top: 8px;" type="file" id="plain_text_file" name="plain_text_file">
+	<input type="submit" value="Submit">
+</form>
+
+<br>
+<form action="/encrypt" method="post">
+	<label for="plain_text">Or paste some logs encrypt:</label>
+	<br>
+	<textarea style="margin-top: 8px;" name="plain_text" id="plain_text" rows="10" cols="80"
+			  placeholder="Paste some Home Assistant/Pyaarlo logs here."></textarea>
+	<br>
+	<input type="submit" value="Submit">
+</form>
+
+{% endblock %}
+

@@ -1,0 +1,23 @@
+/* General Website Style rules */
+body {
+    font-family: 'Roboto', sans-serif;
+    margin-left: 5%;
+    margin-right: 5%;
+}
+
+pre {
+    font-family: 'Roboto Mono', monospace;
+    background-color: #F8F8F8;
+    margin: 2% 1%;
+}
+
+pre[class*="language-"] {
+    position: relative;
+    padding: 1.75rem 0 1.75rem 1rem;
+}
+
+button {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+}
