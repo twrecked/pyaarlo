@@ -506,10 +506,11 @@ def light_turn_on(cli_ctx: CLIContext, targets: tuple[str, ...], brightness: int
 
     async def _turn_on() -> int:
         use_cache = not cli_ctx.ignore_cache
+        inline = bool(cli_ctx.config.get("inline_mode", False))
         arlo = await create_pyarlo(
             cli_ctx.config,
-            wait_for_setup=False,
-            start_background=False,
+            wait_for_setup=inline,
+            start_background=inline,
             refresh_devices=not use_cache,
         )
         try:
@@ -548,10 +549,11 @@ def light_turn_off(cli_ctx: CLIContext, targets: tuple[str, ...]) -> None:
 
     async def _turn_off() -> int:
         use_cache = not cli_ctx.ignore_cache
+        inline = bool(cli_ctx.config.get("inline_mode", False))
         arlo = await create_pyarlo(
             cli_ctx.config,
-            wait_for_setup=False,
-            start_background=False,
+            wait_for_setup=inline,
+            start_background=inline,
             refresh_devices=not use_cache,
         )
         try:
@@ -590,10 +592,11 @@ def light_brightness(cli_ctx: CLIContext, level: int, targets: tuple[str, ...]) 
 
     async def _set_brightness() -> int:
         use_cache = not cli_ctx.ignore_cache
+        inline = bool(cli_ctx.config.get("inline_mode", False))
         arlo = await create_pyarlo(
             cli_ctx.config,
-            wait_for_setup=False,
-            start_background=False,
+            wait_for_setup=inline,
+            start_background=inline,
             refresh_devices=not use_cache,
         )
         try:
@@ -667,10 +670,11 @@ def location_set_mode(cli_ctx: CLIContext, mode: str, loc_target: str | None) ->
     """Set the armed/disarmed mode for a location."""
     async def _set_mode() -> int:
         use_cache = not cli_ctx.ignore_cache
+        inline = bool(cli_ctx.config.get("inline_mode", False))
         arlo = await create_pyarlo(
             cli_ctx.config,
-            wait_for_setup=False,
-            start_background=False,
+            wait_for_setup=inline,
+            start_background=inline,
             refresh_devices=not use_cache,
         )
         try:

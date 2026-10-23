@@ -69,9 +69,6 @@ def session_and_backend():
     backend._mqtt_reconnect_attempts = 0
     from pyaarlo.core.backend import _AuthDetails
     backend._auth = _AuthDetails()
-    backend._requests = {}
-    backend._requests_empty_event = asyncio.Event()
-    backend._requests_empty_event.set()
     backend._debug = MagicMock()
     return session, backend
 
@@ -322,31 +319,106 @@ async def test_session_drain_in_flight(session_and_backend):
 
 
 @pytest.mark.asyncio
-async def test_backend_drain_transactions(session_and_backend):
-    _, backend = session_and_backend
+async def test_session_drain_transactions(session_and_backend):
+    session, _ = session_and_backend
     order = []
 
-    tid = backend._start_transaction("tid-123")
-    assert not backend._requests_empty_event.is_set()
+    tid = session.start_transaction("tid-123")
+    assert not session._requests_empty_event.is_set()
 
     async def fake_incoming_event():
         await asyncio.sleep(0.05)
         order.append("event_arrived")
-        backend._requests[tid]["response"] = {"ok": True}
-        backend._requests[tid]["event"].set()
+        matched = session.signal_transaction_completed({"transId": tid, "data": {"ok": True}})
+        assert matched is True
 
     async def do_wait():
         order.append("wait_start")
-        resp = await backend._wait_for_transaction(tid, timeout=1.0)
+        resp = await session.wait_for_transaction(tid, timeout=1.0)
         order.append("wait_done")
-        assert resp == {"ok": True}
+        assert resp == {"transId": tid, "data": {"ok": True}}
 
     async def do_drain():
         await asyncio.sleep(0.01)
         order.append("drain_start")
-        await backend._drain_transactions(timeout=1.0)
+        await session.drain_transactions(timeout=1.0)
         order.append("drain_done")
 
     await asyncio.gather(fake_incoming_event(), do_wait(), do_drain())
-    assert backend._requests_empty_event.is_set()
+    assert session._requests_empty_event.is_set()
     assert order == ["wait_start", "drain_start", "event_arrived", "wait_done", "drain_done"]
+
+
+@pytest.mark.asyncio
+async def test_session_cancel_transactions(session_and_backend):
+    session, _ = session_and_backend
+    tid = session.start_transaction("tid-cancel")
+    assert not session._requests_empty_event.is_set()
+
+    wait_task = asyncio.create_task(session.wait_for_transaction(tid, timeout=1.0))
+    await asyncio.sleep(0.01)
+
+    session.cancel_transactions()
+    res = await wait_task
+    assert res is None
+    assert session._requests_empty_event.is_set()
+
+
+@pytest.mark.asyncio
+async def test_session_signal_transaction_resource_matching(session_and_backend):
+    session, _ = session_and_backend
+    # Regex pattern transaction
+    pattern = "^cameras/.*:DEVICE123$"
+    tid = session.start_transaction(pattern)
+    assert not session._requests_empty_event.is_set()
+
+    wait_task = asyncio.create_task(session.wait_for_transaction(pattern, timeout=1.0))
+    await asyncio.sleep(0.01)
+
+    event_payload = {
+        "resource": "cameras/12345",
+        "from": "DEVICE123",
+        "properties": {"activityState": "idle"},
+    }
+    matched = session.signal_transaction_completed(event_payload)
+    assert matched is True
+
+    res = await wait_task
+    assert res == event_payload
+    assert session._requests_empty_event.is_set()
+
+
+@pytest.mark.asyncio
+async def test_session_drain_combined(session_and_backend):
+    session, _ = session_and_backend
+    # When empty, drain completes immediately
+    await session.drain(in_flight_timeout=0.1, transactions_timeout=0.1)
+    assert session._requests_empty_event.is_set()
+    assert session._drain_event.is_set()
+
+
+@pytest.mark.asyncio
+async def test_session_save_and_cookies_create_parent_directory(tmp_path):
+    from pyaarlo.core.cfg import ArloCfg
+    from pyaarlo.core.logger import ArloLogger
+    from pyaarlo.core.backend.session import ArloSession
+    from http.cookiejar import LWPCookieJar
+    from unittest.mock import MagicMock
+
+    log = MagicMock(spec=ArloLogger)
+    nested_dir = tmp_path / "subdir" / "cache"
+    cfg = ArloCfg(log=log, host="https://arlo.example")
+
+    session = ArloSession(cfg, log)
+    session._save_filename = str(nested_dir / "test_user.session")
+    session.details.device_id = "test-device"
+    session.details.cookies = LWPCookieJar(str(nested_dir / "test_user.cookies"))
+
+    assert not nested_dir.exists()
+
+    await session.save()
+    await session.save_cookies()
+
+    assert nested_dir.exists()
+    assert (nested_dir / "test_user.session").exists()
+    assert (nested_dir / "test_user.cookies").exists()

@@ -21,7 +21,6 @@ class BasestationEventDispatcherTests(unittest.TestCase):
         self.backend = ArloBackEnd.__new__(ArloBackEnd)
         self.backend._resource_types = DEFAULT_RESOURCES
         self.backend._callbacks = {}
-        self.backend._requests = {}
 
         self.arlo = MagicMock()
         self.backend._arlo = self.arlo

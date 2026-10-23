@@ -1,7 +1,9 @@
 import asyncio
 import inspect
+import os
 import pickle
 import pprint
+import re
 import uuid
 import traceback
 
@@ -11,6 +13,7 @@ from typing import Any, Callable
 from ...constant import (
     ORIGIN_HOST,
     REFERER_HOST,
+    TRANSID_PREFIX,
 )
 from ...utils import (
     time_to_arlotime,
@@ -69,6 +72,9 @@ class ArloSession:
         self._in_flight_count: int = 0
         self._drain_event: asyncio.Event = asyncio.Event()
         self._drain_event.set()
+        self._requests: dict[str, Any] = {}
+        self._requests_empty_event: asyncio.Event = asyncio.Event()
+        self._requests_empty_event.set()
 
     def set_relogin_handler(self, handler: Callable[..., Any] | None) -> None:
         self._relogin_handler = handler
@@ -85,6 +91,109 @@ class ArloSession:
             await asyncio.wait_for(self._drain_event.wait(), timeout=timeout)
         except (asyncio.TimeoutError, TimeoutError):
             self._debug(f"draining timed out, {self._in_flight_count} request(s) still in-flight")
+
+    def start_transaction(self, tid: str | None = None) -> str:
+        """Start tracking a new transaction awaiting an event stream reply."""
+        if tid is None:
+            tid = f"{TRANSID_PREFIX}!{uuid.uuid4()}"
+        self._vdebug(f"starting transaction-->{tid}")
+        self._requests[tid] = {"event": asyncio.Event(), "response": None}
+        self._requests_empty_event.clear()
+        return tid
+
+    async def wait_for_transaction(self, tid: str, timeout: float | None = None) -> Any:
+        """Wait for a tracked transaction to receive its event stream reply."""
+        if timeout is None:
+            timeout = self._cfg.request_timeout
+
+        self._vdebug(f"finishing transaction-->{tid}")
+        response = None
+        try:
+            req = self._requests.get(tid)
+            if req is not None:
+                await asyncio.wait_for(req["event"].wait(), timeout)
+                response = self._requests.pop(tid, {}).get("response")
+            else:
+                self._debug(f"transaction {tid} not found")
+        except (asyncio.TimeoutError, TimeoutError):
+            self._debug(f"transaction {tid} timed out")
+            self._requests.pop(tid, None)
+            response = None
+        finally:
+            if not self._requests:
+                self._requests_empty_event.set()
+        self._vdebug(f"finished transaction-->{tid}")
+        return response
+
+    def signal_transaction_completed(self, response: dict[str, Any]) -> bool:
+        """Match an incoming stream event packet to waiting transactions.
+
+        Sets the response and signals the waiting event.
+        Returns True if matched, False otherwise.
+        """
+        tid = response.get("transId", None)
+        resource = response.get("resource", None)
+        device_id = response.get("from", None)
+        matched = False
+
+        # Transaction ID: usually returned by notify requests
+        if tid and tid in self._requests:
+            req = self._requests[tid]
+            req["response"] = response
+            req["event"].set()
+            matched = True
+
+        # Resource: usually returned after POST requests
+        if resource:
+            if resource in self._requests:
+                self._vdebug(f"{resource} found by text!")
+                req = self._requests[resource]
+                req["response"] = response
+                req["event"].set()
+                matched = True
+            else:
+                if device_id:
+                    bounded_resource = f"{resource}:{device_id}"
+                    self._vdebug(f"{bounded_resource} bounded device!")
+                else:
+                    bounded_resource = resource
+
+                for request_pattern, req in list(self._requests.items()):
+                    if re.match(request_pattern, bounded_resource):
+                        self._vdebug(
+                            f"{bounded_resource} found by regex {request_pattern}!"
+                        )
+                        req["response"] = response
+                        req["event"].set()
+                        matched = True
+
+        return matched
+
+    async def drain_transactions(self, timeout: float = 5.0) -> None:
+        """Wait for any pending stream transaction events to arrive."""
+        if not self._requests:
+            return
+        self._debug(f"draining {len(self._requests)} pending transaction(s)")
+        try:
+            await asyncio.wait_for(self._requests_empty_event.wait(), timeout=timeout)
+        except (asyncio.TimeoutError, TimeoutError):
+            self._debug(f"draining transactions timed out, {len(self._requests)} still pending")
+
+    def cancel_transactions(self) -> None:
+        """Cancel and unblock any waiting transactions (e.g. on stream stop or disconnect)."""
+        if not self._requests:
+            return
+        self._debug(f"cancelling {len(self._requests)} pending transaction(s)")
+        for tid, req in list(self._requests.items()):
+            req["response"] = None
+            req["event"].set()
+        self._requests.clear()
+        self._requests_empty_event.set()
+
+    async def drain(self, in_flight_timeout: float = 2.0, transactions_timeout: float = 5.0) -> None:
+        """Drain in-flight HTTP requests and pending stream transactions."""
+        await self.drain_in_flight(timeout=in_flight_timeout)
+        await self.drain_transactions(timeout=transactions_timeout)
 
 
     def _debug(self, msg: str):
@@ -140,6 +249,8 @@ class ArloSession:
     async def save(self):
         try:
             def _do_save():
+                if self._save_filename:
+                    os.makedirs(os.path.dirname(self._save_filename), exist_ok=True)
                 with open(self._save_filename, "wb") as dump:
                     save_info = {
                         "version": "2",
@@ -168,7 +279,15 @@ class ArloSession:
                         for cookie in jar:
                             self.details.cookies.set_cookie(cookie)
             self._debug(f"saving-cookies={self.details.cookies}")
-            await asyncio.to_thread(self.details.cookies.save, ignore_discard=True)
+            try:
+                def _do_save_cookies():
+                    if self.details.cookies is not None and self.details.cookies.filename:
+                        os.makedirs(os.path.dirname(self.details.cookies.filename), exist_ok=True)
+                        self.details.cookies.save(ignore_discard=True)
+
+                await asyncio.to_thread(_do_save_cookies)
+            except Exception as e:
+                self._debug(f"cookies file not written {str(e)}")
 
     async def load_cookies(self):
         self.details.cookies = LWPCookieJar(self._cfg.cookies_file)

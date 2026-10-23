@@ -1,7 +1,6 @@
 import asyncio
 import inspect
 import pprint
-import re
 import time
 import uuid
 import cloudscraper
@@ -139,9 +138,6 @@ class ArloBackEnd:
 
         # Remaining state variables.
         self._dump_file = self._cfg.dump_file
-        self._requests: dict[str, Any] = {}
-        self._requests_empty_event: asyncio.Event = asyncio.Event()
-        self._requests_empty_event.set()
         self._callbacks: dict[str, list[Callable[..., Any]]] = {}
         self._resource_types = DEFAULT_RESOURCES
         self._login_lock: asyncio.Lock = asyncio.Lock()
@@ -296,53 +292,6 @@ class ArloBackEnd:
             for cb in cbs:
                 self._tasks.run_now(cb, resource=resource, event=response)
 
-    def _event_notify_waiting(self, response):
-        """Check if this event satifies a waiting post() call.
-
-        We match a respone to a request and copy the response to it. When done
-        signal the post to continue.
-        """
-
-        tid = response.get("transId", None)
-        resource = response.get("resource", None)
-        device_id = response.get("from", None)
-
-        # Transaction ID
-        # Simple. We have a transaction ID, look for that. These are
-        # usually returned by notify requests.
-        if tid and tid in self._requests:
-            req = self._requests[tid]
-            req["response"] = response
-            req["event"].set()
-
-        # Resource
-        # These are usually returned after POST requests. We trap these
-        # to make async calls sync.
-        if resource:
-            # Historical. We are looking for a straight matching resource.
-            if resource in self._requests:
-                self._vdebug("{} found by text!".format(resource))
-                req = self._requests[resource]
-                req["response"] = response
-                req["event"].set()
-
-            else:
-                # Complex. We are looking for a resource and-or
-                # deviceid matching a regex.
-                if device_id:
-                    bounded_resource = "{}:{}".format(resource, device_id)
-                    self._vdebug("{} bounded device!".format(bounded_resource))
-                else:
-                    bounded_resource = resource
-
-                for request_pattern, req in self._requests.items():
-                    if re.match(request_pattern, bounded_resource):
-                        self._vdebug(
-                            "{} found by regex {}!".format(bounded_resource, request_pattern)
-                        )
-                        req["response"] = response
-                        req["event"].set()
-
     async def _event_response_handler(self, response):
 
         # Debugging.
@@ -360,9 +309,9 @@ class ArloBackEnd:
 
         # Run the dispatcher to set internal state and run callbacks.
         self._event_run_callbacks(response)
-        
-        # Notify any waiting post() calls.
-        self._event_notify_waiting(response)
+
+        # Notify any waiting post/notify transactions.
+        self._req.signal_transaction_completed(response)
 
     async def _event_connected_handler(self):
         self._event.stream_connected = True
@@ -376,28 +325,16 @@ class ArloBackEnd:
     async def _event_reconnect(self):
         await self._event.stream.stop()
 
-    async def _drain_transactions(self, timeout: float = 5.0) -> None:
-        """Wait for any pending stream transaction events to arrive before stopping stream."""
-        if not self._requests:
-            return
-        self._debug(f"draining {len(self._requests)} pending transaction(s) before login")
-        try:
-            await asyncio.wait_for(self._requests_empty_event.wait(), timeout=timeout)
-        except (asyncio.TimeoutError, TimeoutError):
-            self._debug(f"draining transactions timed out, {len(self._requests)} still pending")
-
     async def _scheduled_token_renewal(self):
         self._debug("scheduled token renewal: starting graceful session rotation")
         async with self._login_lock:
             self._req._is_logging_in = True
             try:
-                # 1. Drain pending HTTP calls on the wire
-                await self._req.drain_in_flight(timeout=2.0)
-                # 2. Drain any expected transaction events on the stream
-                await self._drain_transactions(timeout=5.0)
-                # 3. Stop stream now that transactions are drained
+                # 1. Drain pending HTTP calls on the wire and expected transactions
+                await self._req.drain(in_flight_timeout=2.0, transactions_timeout=5.0)
+                # 2. Stop stream now that transactions are drained
                 await self._event_reconnect()
-                # 4. Force fresh re-auth and login right now under the lock
+                # 3. Force fresh re-auth and login right now under the lock
                 self._auth.force_reauth = True
                 await self._login_locked()
             finally:
@@ -451,11 +388,7 @@ class ArloBackEnd:
             self._debug("exited event device")
 
             # clear down and signal out
-            for tid, req in list(self._requests.items()):
-                req["response"] = None
-                req["event"].set()
-            self._requests = {}
-            self._requests_empty_event.set()
+            self._req.cancel_transactions()
 
             # restart login...
             self._logged_in = False
@@ -981,8 +914,7 @@ class ArloBackEnd:
             self._debug("re-logging in after 401 or token expiration")
             self._req._is_logging_in = True
             self._auth.force_reauth = True
-            await self._req.drain_in_flight(timeout=2.0)
-            await self._drain_transactions(timeout=5.0)
+            await self._req.drain(in_flight_timeout=2.0, transactions_timeout=5.0)
             try:
                 if await self._login_locked():
                     await self._event_reconnect()
@@ -1057,33 +989,6 @@ class ArloBackEnd:
             return None
         else:
             return trans_id
-
-    def _start_transaction(self, tid=None):
-        if tid is None:
-            tid = self.gen_trans_id()
-        self._vdebug("starting transaction-->{}".format(tid))
-        self._requests[tid] = {"event": asyncio.Event(), "response": None}
-        self._requests_empty_event.clear()
-        return tid
-
-    async def _wait_for_transaction(self, tid, timeout):
-        if timeout is None:
-            timeout = self._cfg.request_timeout
-
-        self._vdebug("finishing transaction-->{}".format(tid))
-        try:
-            req = self._requests[tid]
-            await asyncio.wait_for(req["event"].wait(), timeout)
-            response = self._requests.pop(tid)["response"]
-        except (KeyError, asyncio.TimeoutError):
-            self._debug("got a key error or timeout")
-            self._requests.pop(tid, None)
-            response = None
-        finally:
-            if not self._requests:
-                self._requests_empty_event.set()
-        self._vdebug("finished transaction-->{}".format(tid))
-        return response
 
     def gen_trans_id(self, trans_type=TRANSID_PREFIX):
         return trans_type + "!" + str(uuid.uuid4())
@@ -1163,11 +1068,7 @@ class ArloBackEnd:
         if self._event.loop_task:
             await self._event.loop_task
 
-        for tid, req in list(self._requests.items()):
-            req["response"] = None
-            req["event"].set()
-        self._requests = {}
-        self._requests_empty_event.set()
+        self._req.cancel_transactions()
 
         if logout:
             await self.put(LOGOUT_PATH)
@@ -1203,9 +1104,9 @@ class ArloBackEnd:
 
         if wait_for == "event":
             self._vdebug("notify+event running")
-            tid = self._start_transaction()
+            tid = self._req.start_transaction()
             await self._notify(device_id, xcloud_id, body=body, trans_id=tid)
-            return await self._wait_for_transaction(tid, timeout)
+            return await self._req.wait_for_transaction(tid, timeout)
         elif wait_for == "response":
             self._vdebug("notify+response running")
             return await self._notify(device_id, xcloud_id, body=body)
@@ -1275,9 +1176,9 @@ class ArloBackEnd:
             self._vdebug("post+resource running")
             if tid is None:
                 tid = list(params.keys())[0]
-            tid = self._start_transaction(tid)
+            tid = self._req.start_transaction(tid)
             await self._req.request(path, "POST", params, headers, False, raw, timeout)
-            return await self._wait_for_transaction(tid, timeout)
+            return await self._req.wait_for_transaction(tid, timeout)
         if wait_for == "response":
             self._vdebug("post+response running")
             return await self._req.request(path, "POST", params, headers, False, raw, timeout)
