@@ -18,6 +18,12 @@
     start the background event stream when `--inline` is provided, allowing live
     transaction wait and confirmation.
 
+  Log Encryption Service
+  - Co-Located Web Service: Moved the Google App Engine log encrypter service into
+    the repository under `pyaarlo-log-encrypter/`, enabling standalone local execution
+    and App Engine deployment (`service: aarlo`) alongside pyaarlo, and allowing
+    deprecation of the standalone `pyaarlo-tfa-helper` repository.
+
 0.9.0-alpha.2
   Device API & Property Normalization
   - Action & Setter Symmetry: Standardized async setters, action commands, and

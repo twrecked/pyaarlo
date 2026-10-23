@@ -25,6 +25,10 @@ In Arlo's architecture, asynchronous device notifications and resource-state cha
 - One-shot CLI device commands (`pyaarlo light turn-on`, `pyaarlo light turn-off`, `pyaarlo light brightness`, and `pyaarlo location set-mode`) now automatically spin up the background event stream when `--inline` is provided.
 - Commands remain fast and lightweight by default, but with `--inline` they wait for live confirmation from hardware over the MQTT event stream before returning.
 
+### 4. Co-Located Log Encryption Service (`pyaarlo-log-encrypter`)
+- Moved the Google App Engine log encryption service (`https://aarlo-dot-twrecked-tools.nn.r.appspot.com`) directly into the repository under `pyaarlo-log-encrypter/` (mirroring the structure of `momentary-device-editor` in `hass-momentary`).
+- Includes a clean `app.yaml`, standalone local execution support without external GCP dependencies, web UI templates, and deployment documentation, paving the way to deprecate the separate `pyaarlo-tfa-helper` repository.
+
 ---
 
 ## 📦 Upgrading to v0.9.0-alpha.3
