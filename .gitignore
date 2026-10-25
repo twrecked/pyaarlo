@@ -78,7 +78,8 @@ bugs/
 *.orig
 *.save
 *.mine
-AGENTS*.md
+AGENTS.local.md
+!AGENTS.issues.md
 test.out
 output*
 test.py
