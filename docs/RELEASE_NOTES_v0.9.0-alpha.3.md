@@ -17,23 +17,18 @@ In Arlo's architecture, asynchronous device notifications and resource-state cha
 - **Symmetric Draining:** Added `session.drain_transactions(timeout=5.0)` and unified `await session.drain(in_flight_timeout=2.0, transactions_timeout=5.0)` to gracefully finish active transactions during token rotation and re-login.
 - **Clean Backend Decoupling:** `ArloBackEnd` no longer manages low-level transaction dicts or regex matching, delegating incoming event correlation cleanly to `session.signal_transaction_completed()`.
 
-### 2. Push 2FA Rate-Limit Protection (Ported from #222 by @faresd)
-- **Early Exit on Lockout:** When Arlo returns `"Too many requests"`, polling `/api/finishAuth` now terminates immediately on attempt #1 rather than burning 10 retries, preventing repeated requests from extending Arlo's 24-hour lockout window.
-- **Early Exit on Expiration:** Aborts immediately if the push prompt expires on Arlo's servers (`"Maximum permitted time for authentication exceeded"`).
-- **Clear Guidance:** Logs an actionable error message advising the user that the account is rate-limited and to wait 24 hours before retrying.
-
-### 3. Discouraged Configuration Warnings
+### 2. Discouraged Configuration Warnings
 - Added explicit runtime warnings when fragile connection settings (`host`, `auth_host`, `mqtt_host`, `mqtt_port`) are overridden in configuration or `aarlo.yaml`. Hardcoding old or invalid hosts is a frequent cause of connection and authentication failures, and hardcoding `mqtt_host` breaks modern dynamic MQTT broker discovery.
 
-### 4. Defensive Filesystem & Directory Auto-Creation
+### 3. Defensive Filesystem & Directory Auto-Creation
 - **Missing Cache Path Resilience:** Resolved an issue where saving cookies or session state on a clean system or container failed with `FileNotFoundError: [Errno 2]` if `~/.cache/pyaarlo/` had not yet been created.
 - `session.save()` and `session.save_cookies()` now ensure all parent directories exist prior to writing, with defensive exception handling so filesystem hiccups never crash authentication.
 
-### 5. CLI Live Stream Support for Inline Commands
+### 4. CLI Live Stream Support for Inline Commands
 - One-shot CLI device commands (`pyaarlo light turn-on`, `pyaarlo light turn-off`, `pyaarlo light brightness`, and `pyaarlo location set-mode`) now automatically spin up the background event stream when `--inline` is provided.
 - Commands remain fast and lightweight by default, but with `--inline` they wait for live confirmation from hardware over the MQTT event stream before returning.
 
-### 6. Co-Located Log Encryption Service (`pyaarlo-log-encrypter`)
+### 5. Co-Located Log Encryption Service (`pyaarlo-log-encrypter`)
 - Moved the Google App Engine log encryption service (`https://aarlo-dot-twrecked-tools.nn.r.appspot.com`) directly into the repository under `pyaarlo-log-encrypter/` (mirroring the structure of `momentary-device-editor` in `hass-momentary`).
 - Includes a clean `app.yaml`, standalone local execution support without external GCP dependencies, web UI templates, and deployment documentation, paving the way to deprecate the separate `pyaarlo-tfa-helper` repository.
 
