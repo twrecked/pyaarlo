@@ -9,6 +9,9 @@
     subsystem coordinator with zero unnecessary shims.
 
   Bug Fixes & CLI Enhancements
+  - Push 2FA Rate-Limit Protection: Halt finishAuth polling immediately on "Too many
+    requests" or expired prompts to prevent prolonging Arlo's 24-hour lockout window
+    (ported from #222 by @faresd).
   - Discouraged Configuration Warnings: Added runtime warnings when overriding
     fragile network settings (`host`, `auth_host`, `mqtt_host`, `mqtt_port`) to
     prevent accidental misconfigurations from breaking cloud connectivity.

@@ -350,3 +350,139 @@ async def test_auth_get_connection_requests(tmp_path):
 
 
 
+
+
+def test_tfa_finish_is_final_helper():
+    assert ArloBackEnd._tfa_finish_is_final("Too many requests") is True
+    assert ArloBackEnd._tfa_finish_is_final({"meta": {"message": "Too many requests"}}) is True
+    assert ArloBackEnd._tfa_finish_is_final("Maximum permitted time for authentication exceeded") is True
+    assert ArloBackEnd._tfa_finish_is_final("Authentication is not finished yet") is False
+    assert ArloBackEnd._tfa_finish_is_final(None) is False
+
+
+@pytest.mark.asyncio
+async def test_auth_push_too_many_requests_aborts_immediately(tmp_path):
+    from pyaarlo.core.backend import _AuthState
+    from unittest.mock import AsyncMock
+
+    log = ArloLogger()
+    cfg = ArloCfg(
+        log=log,
+        username="test@example.com",
+        password="test-password",
+        tfa_source="push",
+        tfa_retries=10,
+        tfa_delay=0.01,
+        http_backend="requests",
+        storage_dir=str(tmp_path),
+    )
+    tasks = ArloTaskManager(log)
+    backend = ArloBackEnd(cfg, log, tasks)
+
+    finish_calls = 0
+
+    async def mock_auth_post(path, params=None, headers=None, raw=False, timeout=None, cookies=None):
+        nonlocal finish_calls
+        if "/api/auth" in path:
+            return 200, {"token": "t", "userId": "u", "authCompleted": False}
+        if "/api/startAuth" in path:
+            return 200, {"factorAuthCode": "fac1"}
+        if "/api/finishAuth" in path:
+            finish_calls += 1
+            return 400, "Too many requests"
+        return 400, "not found"
+
+    backend._auth_post = mock_auth_post
+    backend._auth_options = AsyncMock(return_value=None)
+    backend._auth_find_factor_id = AsyncMock(return_value="fid-phone")
+
+    result = await backend._auth_new_auth()
+
+    assert result == _AuthState.FAILED
+    assert finish_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_auth_push_expired_request_aborts_immediately(tmp_path):
+    from pyaarlo.core.backend import _AuthState
+    from unittest.mock import AsyncMock
+
+    log = ArloLogger()
+    cfg = ArloCfg(
+        log=log,
+        username="test@example.com",
+        password="test-password",
+        tfa_source="push",
+        tfa_retries=10,
+        tfa_delay=0.01,
+        http_backend="requests",
+        storage_dir=str(tmp_path),
+    )
+    tasks = ArloTaskManager(log)
+    backend = ArloBackEnd(cfg, log, tasks)
+
+    finish_calls = 0
+
+    async def mock_auth_post(path, params=None, headers=None, raw=False, timeout=None, cookies=None):
+        nonlocal finish_calls
+        if "/api/auth" in path:
+            return 200, {"token": "t", "userId": "u", "authCompleted": False}
+        if "/api/startAuth" in path:
+            return 200, {"factorAuthCode": "fac1"}
+        if "/api/finishAuth" in path:
+            finish_calls += 1
+            return 400, "Maximum permitted time for authentication exceeded"
+        return 400, "not found"
+
+    backend._auth_post = mock_auth_post
+    backend._auth_options = AsyncMock(return_value=None)
+    backend._auth_find_factor_id = AsyncMock(return_value="fid-phone")
+
+    result = await backend._auth_new_auth()
+
+    assert result == _AuthState.FAILED
+    assert finish_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_auth_push_pending_polls_until_approved(tmp_path):
+    from pyaarlo.core.backend import _AuthState
+    from unittest.mock import AsyncMock
+
+    log = ArloLogger()
+    cfg = ArloCfg(
+        log=log,
+        username="test@example.com",
+        password="test-password",
+        tfa_source="push",
+        tfa_retries=10,
+        tfa_delay=0.01,
+        http_backend="requests",
+        storage_dir=str(tmp_path),
+    )
+    tasks = ArloTaskManager(log)
+    backend = ArloBackEnd(cfg, log, tasks)
+
+    finish_calls = 0
+
+    async def mock_auth_post(path, params=None, headers=None, raw=False, timeout=None, cookies=None):
+        nonlocal finish_calls
+        if "/api/auth" in path:
+            return 200, {"token": "t", "userId": "u", "authCompleted": False}
+        if "/api/startAuth" in path:
+            return 200, {"factorAuthCode": "fac1"}
+        if "/api/finishAuth" in path:
+            finish_calls += 1
+            if finish_calls < 3:
+                return 400, "Authentication is not finished yet"
+            return 200, {"token": "approved_token", "userId": "u1", "expiresIn": 3600, "browserAuthCode": "bac1"}
+        return 400, "not found"
+
+    backend._auth_post = mock_auth_post
+    backend._auth_options = AsyncMock(return_value=None)
+    backend._auth_find_factor_id = AsyncMock(return_value="fid-phone")
+
+    result = await backend._auth_new_auth()
+
+    assert result == _AuthState.VALIDATE_TOKEN
+    assert finish_calls == 3

@@ -507,6 +507,29 @@ class ArloBackEnd:
 
         return _AuthState.TRUST_BROWSER
 
+    @staticmethod
+    def _tfa_finish_is_final(body: Any) -> bool:
+        """Is this finishAuth answer one that more polling cannot change?
+
+        While a push approval is pending Arlo answers 'Authentication is not
+        finished yet' (error 9233) and polling should continue. 'Too many
+        requests' means Arlo is rate limiting the account: it keeps refusing
+        every check, even after the user approves, and each further request
+        extends the lock (about 24 hours). 'Maximum permitted time for
+        authentication exceeded' (error 9238) means the request expired.
+        """
+        message = str(body or "").lower()
+        return "too many requests" in message or "maximum permitted time" in message
+
+    @staticmethod
+    def _tfa_finish_error(code: int, body: Any) -> str:
+        if "too many requests" in str(body or "").lower():
+            return (
+                f"login failed: finish failed: {code} - {body}: Arlo is rate limiting sign-ins for this account; "
+                "stop retrying and wait (about 24 hours) before logging in again, every attempt extends the wait"
+            )
+        return f"login failed: finish failed: {code} - {body}"
+
     async def _auth_new_auth(self) -> _AuthState:
         """We have to authenticate again.
 
@@ -585,6 +608,10 @@ class ArloBackEnd:
                 self._auth.browser_code = body.get("browserAuthCode", None)
                 self._req.update(body)
                 return _AuthState.VALIDATE_TOKEN
+
+            if self._tfa_finish_is_final(body):
+                self._log.error(self._tfa_finish_error(code, body))
+                return _AuthState.FAILED
 
             # We have a code and we only have one attempt, so fail.
             if otp:
