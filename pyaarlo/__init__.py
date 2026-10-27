@@ -42,7 +42,7 @@ from .types import ArloTypes
 from .utils import time_to_arlotime
 
 
-__version__ = "0.9.0-alpha.4"
+__version__ = "0.9.0-alpha.5"
 
 
 class FeedMetadataError(Exception):
