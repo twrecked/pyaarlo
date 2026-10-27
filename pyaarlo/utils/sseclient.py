@@ -65,20 +65,31 @@ class AsyncSSEClient:
         if hasattr(self, "resp") and self.resp is not None:
             resp = self.resp
             self.resp = None
-            quit_now = getattr(resp, "quit_now", None)
-            if quit_now is not None:
-                try:
-                    quit_now.set()
-                except Exception:
-                    pass
-            elif hasattr(resp, "close"):
-                try:
-                    if asyncio.iscoroutinefunction(resp.close):
-                        await resp.close()
-                    else:
+
+            if getattr(self, "_is_async_session", False):
+                # For curl_cffi streaming: unblock internal queue and signal quit flag.
+                # Do NOT call resp.close() here as it prematurely destroys curl._curl
+                # before AsyncSession removes the handle from the curl_multi pool.
+                if hasattr(resp, "queue") and resp.queue is not None:
+                    try:
+                        from curl_cffi.requests.models import STREAM_END
+                        resp.queue.put_nowait(STREAM_END)
+                    except Exception:
+                        pass
+
+                quit_now = getattr(resp, "quit_now", None)
+                if quit_now is not None:
+                    try:
+                        quit_now.set()
+                    except Exception:
+                        pass
+            else:
+                # For sync sessions (requests / cloudscraper)
+                if hasattr(resp, "close"):
+                    try:
                         resp.close()
-                except Exception:
-                    pass
+                    except Exception:
+                        pass
 
     async def stop(self):
         self.debug("stop called")
@@ -156,10 +167,13 @@ class AsyncSSEClient:
             except (
                 StopAsyncIteration,
                 EOFError,
+                asyncio.CancelledError,
             ) as e:
                 if not self.running:
                     self.debug("stopping #1")
                     raise StopAsyncIteration
+                if isinstance(e, asyncio.CancelledError):
+                    raise
 
                 self.debug("error={}".format(type(e).__name__))
                 await self._close_resp()

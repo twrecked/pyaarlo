@@ -1093,7 +1093,15 @@ class ArloBackEnd:
         if self._event.stream is not None:
             await self._event.stream.stop()
         if self._event.loop_task:
-            await self._event.loop_task
+            try:
+                await asyncio.wait_for(self._event.loop_task, timeout=2.0)
+            except (asyncio.TimeoutError, TimeoutError, asyncio.CancelledError):
+                self._debug("event loop did not stop in time, cancelling")
+                self._event.loop_task.cancel()
+                try:
+                    await self._event.loop_task
+                except asyncio.CancelledError:
+                    pass
 
         self._req.cancel_transactions()
 
