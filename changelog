@@ -1,5 +1,16 @@
 0.9.0-alpha.4
-  Bug Fixes & Authentication
+  Bug Fixes & SSE Event Stream
+  - SSE Stream Header Normalization: Popped `host` and `Content-Type` headers from SSE
+    subscription requests instead of setting them to `None`. In `curl_cffi`, passing
+    `"host": None` suppressed the `Host` header to `libcurl`, causing Arlo Cloud to
+    reject connection attempts with HTTP 400 Bad Request (#1177).
+  - SSE Async Generator Streaming: Switched `curl_cffi` response chunk iteration to
+    `aiter_content()` for async sessions. `iter_content()` returned a synchronous
+    generator which crashed with `AttributeError` when awaited (#1177).
+  - Defensive Stream Cleanup: Added stream task cancellation and error handling to
+    prevent `curl_cffi` multi-handle corruption during reconnects (#1177).
+
+  Authentication
   - Push 2FA Rate-Limit Protection: Halt finishAuth polling immediately on "Too many
     requests" or expired prompts to prevent prolonging Arlo's 24-hour lockout window
     (ported from #222 by @faresd).

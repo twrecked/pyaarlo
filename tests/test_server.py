@@ -90,3 +90,44 @@ async def test_sse_event_reception(tmp_path):
         await server.stop()
         # Give some time for background tasks to cleanup
         await asyncio.sleep(0.5)
+
+
+@pytest.mark.asyncio
+async def test_async_sse_client_curl_cffi():
+    """Test AsyncSSEClient with curl_cffi.requests.AsyncSession against mock server."""
+    import json
+    from curl_cffi.requests import AsyncSession
+    from pyaarlo.utils.sseclient import AsyncSSEClient
+    from pyaarlo.core.logger import ArloLogger
+
+    server = ArloMockServer(port=8083)
+    await server.start()
+
+    session = AsyncSession()
+    client = AsyncSSEClient(
+        ArloLogger(),
+        "http://localhost:8083/hmsweb/client/subscribe",
+        session=session,
+        headers={"host": "localhost:8083", "Content-Type": "application/json"}
+    )
+    try:
+        events = []
+        async def read_events():
+            async for ev in client:
+                events.append(ev)
+                if len(events) >= 2:
+                    break
+
+        read_task = asyncio.create_task(read_events())
+
+        await asyncio.sleep(0.05)
+        await server.push_event({"action": "is", "properties": {"motion": True}})
+
+        await asyncio.wait_for(read_task, timeout=2.0)
+        assert len(events) == 2
+        assert json.loads(events[0].data)["status"] == "connected"
+        assert json.loads(events[1].data)["properties"]["motion"] is True
+    finally:
+        await client.stop()
+        await session.close()
+        await server.stop()

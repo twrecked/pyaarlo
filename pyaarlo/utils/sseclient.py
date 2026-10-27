@@ -52,26 +52,45 @@ class AsyncSSEClient:
         # The 'Accept' header is not required, but explicit > implicit
         self.requests_kwargs["headers"]["Accept"] = "text/event-stream"
 
-        # Remove these.
-        self.requests_kwargs["headers"]["Content-Type"] = None
-        self.requests_kwargs["headers"]["host"] = None
+        # Remove these if present so client can generate valid Host / content headers.
+        self.requests_kwargs["headers"].pop("Content-Type", None)
+        self.requests_kwargs["headers"].pop("content-type", None)
+        self.requests_kwargs["headers"].pop("host", None)
+        self.requests_kwargs["headers"].pop("Host", None)
 
         # Keep data here as it streams in
         self.buf = u""
 
+    async def _close_resp(self):
+        if hasattr(self, "resp") and self.resp is not None:
+            resp = self.resp
+            self.resp = None
+            quit_now = getattr(resp, "quit_now", None)
+            if quit_now is not None:
+                try:
+                    quit_now.set()
+                except Exception:
+                    pass
+            elif hasattr(resp, "close"):
+                try:
+                    if asyncio.iscoroutinefunction(resp.close):
+                        await resp.close()
+                    else:
+                        resp.close()
+                except Exception:
+                    pass
+
     async def stop(self):
         self.debug("stop called")
         self.running = False
-        if hasattr(self, "resp") and self.resp:
-            if getattr(self, "_is_async_session", False) and hasattr(self.resp, "close") and asyncio.iscoroutinefunction(self.resp.close):
-                await self.resp.close()
-            elif hasattr(self.resp, "close"):
-                await asyncio.to_thread(self.resp.close)
+        await self._close_resp()
 
     async def disconnect(self):
         await self.stop()
 
     async def _connect(self):
+        await self._close_resp()
+
         if self.last_id:
             self.requests_kwargs["headers"]["Last-Event-ID"] = self.last_id
 
@@ -82,17 +101,24 @@ class AsyncSSEClient:
         if is_async:
             self._is_async_session = True
             self.resp = await self.session.get(self.url, stream=True, **self.requests_kwargs)
-            self.resp_iterator = self.resp.iter_content(chunk_size=self.chunk_size)
+            if self.resp.status_code != 200:
+                code = self.resp.status_code
+                self.log.error(f"sseclient: connect failed {code}")
+                await self._close_resp()
+                raise ConnectionError(f"sseclient: connect failed {code}")
+            self.resp_iterator = self.resp.aiter_content()
         else:
             self._is_async_session = False
             sess = self.session if self.session is not None else requests
             def _do_get():
                 return sess.get(self.url, stream=True, **self.requests_kwargs)
             self.resp = await asyncio.to_thread(_do_get)
+            if self.resp.status_code != 200:
+                code = self.resp.status_code
+                self.log.error(f"sseclient: connect failed {code}")
+                await self._close_resp()
+                raise ConnectionError(f"sseclient: connect failed {code}")
             self._sync_iterator = self.resp.iter_content(chunk_size=self.chunk_size)
-
-        if self.resp.status_code != 200:
-            self.log.error(f"sseclient: connect failed {self.resp.status_code}")
 
     def _event_complete(self):
         return re.search(end_of_field, self.buf) is not None
@@ -101,13 +127,18 @@ class AsyncSSEClient:
         return self
 
     async def __anext__(self):
-        if not hasattr(self, "resp"):
-            await self._connect()
-
-        encoding = getattr(self.resp, "encoding", None) or "utf-8"
-        decoder = codecs.getincrementaldecoder(encoding)(errors="replace")
         while not self._event_complete():
+            if not self.running:
+                self.debug("stopping #0")
+                raise StopAsyncIteration
+
             try:
+                if not hasattr(self, "resp") or self.resp is None:
+                    await self._connect()
+
+                encoding = getattr(self.resp, "encoding", None) or "utf-8"
+                decoder = codecs.getincrementaldecoder(encoding)(errors="replace")
+
                 if self._is_async_session:
                     next_chunk = await self.resp_iterator.__anext__()
                 else:
@@ -131,8 +162,14 @@ class AsyncSSEClient:
                     raise StopAsyncIteration
 
                 self.debug("error={}".format(type(e).__name__))
+                await self._close_resp()
                 await asyncio.sleep(self.retry / 1000.0)
-                await self._connect()
+                if not self.running:
+                    raise StopAsyncIteration
+                try:
+                    await self._connect()
+                except Exception:
+                    pass
 
                 # The SSE spec only supports resuming from a whole message, so
                 # if we have half a message we should throw it out.
@@ -143,8 +180,8 @@ class AsyncSSEClient:
                 self.debug("exception={}".format(type(e).__name__))
                 if not self.running:
                     raise StopAsyncIteration
+                await self._close_resp()
                 await asyncio.sleep(self.retry / 1000.0)
-                await self._connect()
                 continue
 
         if not self.running:
@@ -206,9 +243,11 @@ class SSEClient:
         # The 'Accept' header is not required, but explicit > implicit
         self.requests_kwargs["headers"]["Accept"] = "text/event-stream"
 
-        # Remove these.
-        self.requests_kwargs["headers"]["Content-Type"] = None
-        self.requests_kwargs["headers"]["host"] = None
+        # Remove these if present so client can generate valid Host / content headers.
+        self.requests_kwargs["headers"].pop("Content-Type", None)
+        self.requests_kwargs["headers"].pop("content-type", None)
+        self.requests_kwargs["headers"].pop("host", None)
+        self.requests_kwargs["headers"].pop("Host", None)
 
         # Keep data here as it streams in
         self.buf = u""
