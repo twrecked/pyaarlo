@@ -303,6 +303,7 @@ If troubleshooting unexpected Arlo web changes:
 - [CLI Reference Guide](docs/cli.md) — Complete manual for `pyaarlo`, `pyaarlo-monitor`, and `pyaarlo-utils`.
 - [Python API Reference](docs/api.md) — Asynchronous API documentation, classes, and lifecycle options.
 - [Legacy v0.8 Documentation](docs/README_v8.md) — Preserved synchronous v0.8 documentation.
+- [v0.9.0-alpha.6 Release Notes](docs/RELEASE_NOTES_v0.9.0-alpha.6.md) — CLI packaging standardization and removal of legacy bin/ scripts.
 - [v0.9.0-alpha.5 Release Notes](docs/RELEASE_NOTES_v0.9.0-alpha.5.md) — Fix SSE stream connectivity and async streaming with curl_cffi.
 - [v0.9.0-alpha.4 Release Notes](docs/RELEASE_NOTES_v0.9.0-alpha.4.md) — Push 2FA rate-limit protection and troubleshooting knowledge base.
 - [v0.9.0-alpha.3 Release Notes](docs/RELEASE_NOTES_v0.9.0-alpha.3.md) — Session transaction tracking, directory auto-creation, and CLI inline live stream support.

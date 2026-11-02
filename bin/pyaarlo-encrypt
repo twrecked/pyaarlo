@@ -1,6 +1,0 @@
-#!/bin/bash
-#
-
-#curl -s -F 'plain_text_file=@-;filename=clear.txt' http://127.0.0.1:8080/encrypt
-curl -s -F 'plain_text_file=@-;filename=clear.txt' https://aarlo-dot-twrecked-tools.nn.r.appspot.com/encrypt
-

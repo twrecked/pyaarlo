@@ -1,3 +1,10 @@
+0.9.0-alpha.6
+  Packaging & Maintenance
+  - CLI Consolidation: Removed legacy `bin/` directory scripts in favor of standard
+    `setuptools` `console_scripts` entry points (`pyaarlo`, `pyaarlo-monitor`, and
+    `pyaarlo-utils`), fully supporting editable development installs (`pip install -e .`).
+  - Documentation: Added release notes for v0.9.0-alpha.6.
+
 0.9.0-alpha.5
   Bug Fixes & SSE Event Stream
   - SSE Stream Header Normalization: Popped `host` and `Content-Type` headers from SSE
