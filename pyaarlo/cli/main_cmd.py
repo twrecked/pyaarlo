@@ -31,6 +31,12 @@ from .config import (
 )
 from .targets import parse_targets, resolve_devices, resolve_location
 from .. import PyArlo
+from ..media import (
+    extract_base_dir_from_format,
+    format_bytes,
+    prune_media_files,
+    scan_prunable_media,
+)
 
 
 @click.group()
@@ -1010,6 +1016,98 @@ def media_download(
             await arlo.stop(logout=False)
 
     run_async_cli(cli_ctx, _run())
+
+
+@media.command("prune")
+@click.option("--dir", "media_dir", default=None, help="Directory to prune (defaults to save_media_to directory or ./media)")
+@click.option("--days", type=int, default=30, help="Retention period in days; files older than this will be pruned (default: 30)")
+@click.option("--list", "show_list", is_flag=True, default=False, help="List all candidate files that meet the retention threshold")
+@click.option("--dry-run", is_flag=True, default=False, help="Show files and total space that would be deleted without deleting anything")
+@click.option("-y", "--yes", is_flag=True, default=False, help="Confirm deletion without prompting")
+@click.option("-c", "--camera", "camera", default=None, help="Filter by camera name or device ID substring in file paths")
+@click.option("--keep-empty-dirs", is_flag=True, default=False, help="Do not remove empty directories after deleting files")
+@click.pass_obj
+def media_prune(
+    cli_ctx: CLIContext,
+    media_dir: str | None,
+    days: int,
+    show_list: bool,
+    dry_run: bool,
+    yes: bool,
+    camera: str | None,
+    keep_empty_dirs: bool,
+) -> None:
+    """Prune locally downloaded recordings older than a specified number of days."""
+    if days < 0:
+        click.echo("Error: --days must be greater than or equal to 0.", err=True)
+        sys.exit(1)
+
+    target_dir = media_dir
+    if not target_dir:
+        save_fmt = cli_ctx.config.get("save_media_to", "")
+        if save_fmt:
+            target_dir = extract_base_dir_from_format(save_fmt)
+        else:
+            target_dir = "./media"
+
+    resolved_path = Path(target_dir).expanduser().resolve()
+    if not resolved_path.is_dir():
+        click.echo(f"Media directory not found: {resolved_path}", err=True)
+        sys.exit(1)
+
+    click.echo(f"Scanning {resolved_path} for files older than {days} day(s)...")
+    candidates = scan_prunable_media(
+        resolved_path,
+        retention_days=days,
+        camera_filter=camera,
+    )
+
+    if not candidates:
+        click.echo(f"No recordings older than {days} day(s) found in {resolved_path}.")
+        return
+
+    total_count = len(candidates)
+    total_bytes = sum(c.size for c in candidates)
+    formatted_total = format_bytes(total_bytes)
+
+    if dry_run or show_list:
+        display_limit = total_count if show_list else min(total_count, 50)
+        for c in candidates[:display_limit]:
+            try:
+                rel = c.path.relative_to(resolved_path)
+            except ValueError:
+                rel = c.path
+            dt_str = datetime.datetime.fromtimestamp(c.mtime).strftime("%Y-%m-%d %H:%M")
+            click.echo(f"  [PRUNE] {rel} ({c.formatted_size}, {int(c.age_days)}d old, {dt_str})")
+
+        if not show_list and total_count > display_limit:
+            click.echo(f"  ... and {total_count - display_limit} more file(s). (Pass --list to see all files)")
+
+    click.echo("")
+    click.echo("Prune Summary:")
+    click.echo(f"  Target Directory: {resolved_path}")
+    click.echo(f"  Retention Cutoff: {days} day(s)")
+    click.echo(f"  Candidate Files : {total_count:,}")
+    click.echo(f"  Reclaimable     : {formatted_total}")
+
+    if dry_run:
+        click.echo("Dry run: No files were deleted.")
+        return
+
+    if not yes:
+        if not click.confirm(f"Delete {total_count:,} file(s) ({formatted_total})?", default=False):
+            click.echo("Aborted.")
+            return
+
+    click.echo("Pruning files...")
+    deleted, freed, dirs = prune_media_files(
+        candidates,
+        remove_empty_dirs=not keep_empty_dirs,
+        root_dir=resolved_path,
+    )
+    click.echo(f"Deleted {deleted:,} file(s) (freed {format_bytes(freed)}).")
+    if not keep_empty_dirs:
+        click.echo(f"Removed {dirs:,} empty directory(ies).")
 
 
 # -------------------------------------------------------------------------

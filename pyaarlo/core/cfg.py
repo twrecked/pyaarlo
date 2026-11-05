@@ -10,6 +10,7 @@ from urllib.parse import urlparse, ParseResult
 from ..constant import (
     DEFAULT_AUTH_HOST,
     DEFAULT_HOST,
+    DEFAULT_MEDIA_RETENTION_DAYS,
     DEFAULT_MQTT_PORT,
     ECDH_CURVES,
     MQTT_HOST,
@@ -461,6 +462,10 @@ class ArloCfg:
     @property
     def save_media_to(self) -> str:
         return cast(str, self._kw.get("save_media_to", ""))
+
+    @property
+    def media_retention_days(self) -> int:
+        return cast(int, self._kw.get("media_retention_days", DEFAULT_MEDIA_RETENTION_DAYS))
 
     @property
     def no_unicode_squash(self) -> bool:

@@ -75,6 +75,10 @@ MODE_UPDATE_INTERVAL = 2
 PING_CAPABILITY = "pingCapability"
 RESOURCE_CAPABILITY = "resourceCapability"
 
+# Media retention
+DEFAULT_MEDIA_RETENTION_DAYS = 0
+MEDIA_EXTENSIONS = {".mp4", ".m4v", ".mov", ".avi", ".mkv", ".jpg", ".jpeg", ".png", ".tmp"}
+
 # update keys
 ACTIVITY_STATE_KEY = "activityState"
 AIR_QUALITY_KEY = "airQuality"

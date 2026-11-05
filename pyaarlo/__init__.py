@@ -34,7 +34,7 @@ from .device import ArloDevice
 from .doorbell import ArloDoorBell
 from .light import ArloLight
 from .location import ArloLocation
-from .media import ArloMediaLibrary
+from .media import ArloMediaLibrary, MediaFileInfo, extract_base_dir_from_format, format_bytes, prune_media_files, scan_prunable_media
 from .object import ArloObject
 from .objects import ArloObjects
 from .sensor import ArloSensor
@@ -112,6 +112,7 @@ class PyArlo:
     * **start_background** - Start background event stream and housekeeping tasks. Default `True`.
     * **refresh_devices** - Query Arlo for fresh device definitions on connect. Default `True`. Set to `False` to reuse local cache.
     * **save_media_to** - Save media to a local directory.
+    * **media_retention_days** - Number of days to retain downloaded recordings (0 = keep indefinitely).
 
     **Debug `kwargs` parameters:**
 

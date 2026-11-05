@@ -6,8 +6,13 @@ from datetime import datetime, timedelta
 from string import Template
 from slugify import slugify
 
+from dataclasses import dataclass
+from pathlib import Path
+import time
+
 from .constant import (
     LIBRARY_PATH,
+    MEDIA_EXTENSIONS,
     VIDEO_CONTENT_TYPES
 )
 from .core import ArloCore
@@ -16,17 +21,201 @@ from .utils import (arlotime_strftime, arlotime_to_datetime, http_get_async,
 http_stream)
 
 
+@dataclass
+class MediaFileInfo:
+    path: Path
+    size: int
+    mtime: float
+    age_days: float
+
+    @property
+    def formatted_size(self) -> str:
+        return format_bytes(self.size)
+
+
+def format_bytes(num_bytes: int) -> str:
+    """Format bytes as human-readable string (e.g. "12.4 MB")."""
+    size = float(num_bytes)
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if size < 1024.0 or unit == "TB":
+            if unit == "B":
+                return f"{int(size)} B"
+            return f"{size:.1f} {unit}"
+        size /= 1024.0
+    return f"{num_bytes} B"
+
+
+def extract_base_dir_from_format(save_format: str) -> str:
+    """Extract root base directory from a save_media_to template format string."""
+    if not save_format:
+        return ""
+    idx = save_format.find("$")
+    if idx != -1:
+        prefix = save_format[:idx]
+        base_dir = os.path.dirname(prefix) if prefix else "."
+    else:
+        base_dir = os.path.dirname(save_format)
+    return base_dir if base_dir else "."
+
+
+def scan_prunable_media(
+    root_dir: str | Path,
+    retention_days: int,
+    extensions: set[str] | None = None,
+    camera_filter: str | None = None,
+    now: float | None = None,
+) -> list[MediaFileInfo]:
+    """Scan root_dir for media files older than retention_days.
+
+    :param root_dir: Directory to scan.
+    :param retention_days: Keep files newer than this many days.
+    :param extensions: Set of file extensions to include (default: MEDIA_EXTENSIONS).
+    :param camera_filter: Optional substring to match in path (e.g. camera name or serial).
+    :param now: Optional timestamp representing "now" (defaults to time.time()).
+    :return: List of MediaFileInfo objects older than retention_days.
+    """
+    root_path = Path(root_dir).resolve()
+    if not root_path.is_dir():
+        return []
+
+    exts = {e.lower() for e in (extensions or MEDIA_EXTENSIONS)}
+    current_time = time.time() if now is None else now
+    cutoff_ts = current_time - (retention_days * 86400.0)
+
+    prunable: list[MediaFileInfo] = []
+    cam_filter_lower = camera_filter.lower() if camera_filter else None
+
+    for dirpath, _, filenames in os.walk(root_path):
+        for fname in filenames:
+            file_path = Path(dirpath) / fname
+            if file_path.suffix.lower() not in exts:
+                continue
+
+            if cam_filter_lower and cam_filter_lower not in str(file_path).lower():
+                continue
+
+            try:
+                stat = file_path.stat()
+                mtime = stat.st_mtime
+                if mtime < cutoff_ts:
+                    age_days = max(0.0, (current_time - mtime) / 86400.0)
+                    prunable.append(
+                        MediaFileInfo(
+                            path=file_path,
+                            size=stat.st_size,
+                            mtime=mtime,
+                            age_days=age_days,
+                        )
+                    )
+            except OSError:
+                continue
+
+    prunable.sort(key=lambda x: x.mtime)
+    return prunable
+
+
+def prune_media_files(
+    candidates: list[MediaFileInfo],
+    remove_empty_dirs: bool = True,
+    root_dir: str | Path | None = None,
+) -> tuple[int, int, int]:
+    """Prune candidate media files and optionally remove empty parent directories.
+
+    :param candidates: List of MediaFileInfo candidate files to delete.
+    :param remove_empty_dirs: If True, remove directories that become empty.
+    :param root_dir: Root directory boundary. Deletion of empty dirs stops before root_dir.
+    :return: Tuple of (files_deleted_count, bytes_freed_total, dirs_removed_count).
+    """
+    files_deleted = 0
+    bytes_freed = 0
+    dirs_removed = 0
+
+    root_resolved = Path(root_dir).resolve() if root_dir else None
+    touched_dirs: set[Path] = set()
+
+    for item in candidates:
+        try:
+            if root_resolved and root_resolved not in item.path.resolve().parents:
+                continue
+            item.path.unlink()
+            files_deleted += 1
+            bytes_freed += item.size
+            if remove_empty_dirs:
+                touched_dirs.add(item.path.parent)
+        except OSError:
+            continue
+
+    if remove_empty_dirs and touched_dirs:
+        sorted_dirs = sorted(
+            touched_dirs,
+            key=lambda p: len(p.resolve().parts),
+            reverse=True,
+        )
+        for d in sorted_dirs:
+            curr = d
+            while curr != root_resolved and curr != curr.parent:
+                try:
+                    if not any(curr.iterdir()):
+                        curr.rmdir()
+                        dirs_removed += 1
+                        curr = curr.parent
+                    else:
+                        break
+                except OSError:
+                    break
+
+    return files_deleted, bytes_freed, dirs_removed
+
+
 class ArloMediaDownloader:
-    def __init__(self, core: ArloCore, save_format):
+    def __init__(self, core: ArloCore, save_format: str, retention_days: int = 0):
         self._core = core
         self._save_format = save_format
+        self._retention_days = retention_days
         self._queue: asyncio.Queue[Any] = asyncio.Queue()
         self._downloading = False
-        self._task = None
+        self._task: asyncio.Task[Any] | None = None
+        self._prune_task_id: str | None = None
 
     def start(self):
         if self._save_format:
             self._task = asyncio.create_task(self._run())
+            if self._retention_days > 0:
+                self._start_retention_tasks()
+
+    def _start_retention_tasks(self):
+        tasks = getattr(self._core, "tasks", None)
+        if tasks is not None:
+            if hasattr(tasks, "run_in"):
+                tasks.run_in(self._retention_cleanup, 30)
+            if hasattr(tasks, "run_every"):
+                self._prune_task_id = tasks.run_every(self._retention_cleanup, 86400)
+
+    async def _retention_cleanup(self):
+        if self._retention_days <= 0 or not self._save_format:
+            return
+        base_dir = extract_base_dir_from_format(self._save_format)
+        if not base_dir or not os.path.isdir(base_dir):
+            return
+        self.debug(f"starting media retention cleanup (retention={self._retention_days} days, dir={base_dir})")
+        loop = asyncio.get_running_loop()
+
+        def _do_prune():
+            candidates = scan_prunable_media(base_dir, self._retention_days)
+            if not candidates:
+                return 0, 0, 0
+            return prune_media_files(candidates, remove_empty_dirs=True, root_dir=base_dir)
+
+        try:
+            deleted, freed, dirs = await loop.run_in_executor(None, _do_prune)
+            if deleted > 0:
+                self.debug(
+                    f"retention cleanup: deleted {deleted} file(s), freed {format_bytes(freed)}, removed {dirs} dir(s)"
+                )
+            else:
+                self.vdebug("retention cleanup: no expired files found")
+        except Exception as e:
+            self._core.log.error(f"retention cleanup error: {e}")
 
     # noinspection PyPep8Naming
     def _output_name(self, media):
@@ -93,6 +282,12 @@ class ArloMediaDownloader:
                 save_file_tmp = f"{save_file}.tmp"
                 await media.download_video(save_file_tmp)
                 await loop.run_in_executor(None, os.rename, save_file_tmp, save_file)
+                try:
+                    when = arlotime_to_datetime(media.created_at)
+                    ts = when.timestamp()
+                    await loop.run_in_executor(None, lambda: os.utime(save_file, (ts, ts)))
+                except OSError:
+                    pass
                 return 1
             else:
                 self.vdebug(
@@ -130,6 +325,10 @@ class ArloMediaDownloader:
     def stop(self):
         if self._task:
             self._task.cancel()
+        tasks = getattr(self._core, "tasks", None)
+        if self._prune_task_id and tasks is not None and hasattr(tasks, "cancel"):
+            tasks.cancel(self._prune_task_id)
+            self._prune_task_id = None
 
     @property
     def processing(self):
@@ -159,7 +358,8 @@ class ArloMediaLibrary:
         self._video_keys: list[str] = []
         self._snapshots: dict[str, Any] = {}
 
-        self._downloader = ArloMediaDownloader(core, self._core.cfg.save_media_to)
+        retention = getattr(self._core.cfg, "media_retention_days", 0)
+        self._downloader = ArloMediaDownloader(core, self._core.cfg.save_media_to, retention)
         self._downloader.start()
 
     def __repr__(self):
