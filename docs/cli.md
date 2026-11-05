@@ -186,6 +186,19 @@ pyaarlo media download --limit 5 -o ./media
 pyaarlo media download -c "Front Door Bell" --thumbnails --limit 3
 ```
 
+# Prune recordings older than 30 days (simulation / dry run)
+pyaarlo media prune --dir ./media --days 30 --dry-run
+
+# List all candidate files to be pruned
+pyaarlo media prune --dir ./media --days 30 --list
+
+# Prune recordings older than 30 days and confirm deletion automatically
+pyaarlo media prune --dir ./media --days 30 -y
+
+# Prune recordings for a specific camera only
+pyaarlo media prune --dir ./media --days 14 -c "Front Door" -y
+```
+
 ### `pyaarlo local-media`
 Accesses and downloads recordings directly from SmartHub / Base Station local USB/microSD storage via mTLS (RATLS).
 

@@ -11,7 +11,7 @@ def readme():
 setup(
 
     name='pyaarlo',
-    version='0.9.0-alpha.6',
+    version='0.9.0-alpha.7',
     packages=find_packages(exclude=['tests', 'tests.*']),
 
     python_requires='>=3.10',

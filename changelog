@@ -1,3 +1,16 @@
+0.9.0-alpha.7
+  Media Retention & Disk Pruning
+  - Media Retention Support: Added `media_retention_days` configuration option to `ArloCfg`.
+    When configured, `ArloMediaDownloader` automatically runs an initial cleanup pass 30 seconds
+    after startup and periodically every 24 hours in a background threadpool executor.
+  - Offline Media Pruner CLI: Added `pyaarlo media prune` command to safely scan and prune expired
+    downloaded media files, display candidate files with sizes/ages, calculate reclaimable space,
+    and remove empty parent directory structures without requiring cloud authentication or 2FA.
+  - Recording Timestamp Alignment: Updated `ArloMediaDownloader` to set local file modification
+    times (`os.utime`) to match the actual video creation timestamp (`created_at`), ensuring reliable
+    age calculations regardless of when files were downloaded.
+  - Documentation: Added release notes for v0.9.0-alpha.7.
+
 0.9.0-alpha.6
   Packaging & Maintenance
   - CLI Consolidation: Removed legacy `bin/` directory scripts in favor of standard
