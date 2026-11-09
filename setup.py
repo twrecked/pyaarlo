@@ -26,6 +26,7 @@ setup(
         'cryptography',
         'python-slugify',
         'platformdirs>=3.0',
+        'aiohttp>=3.9.0',
     ],
 
     author='Steve Herrell',

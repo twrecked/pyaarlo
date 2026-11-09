@@ -7,3 +7,4 @@ curl_cffi>=0.5.10
 paho-mqtt
 cryptography
 python-slugify
+aiohttp>=3.9.0
