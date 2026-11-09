@@ -7,7 +7,7 @@ An asynchronous Python library and command-line automation toolkit for Netgear/A
 
 ---
 
-> ### ⚠️ Alpha Release Notice (`v0.9.0-alpha.7`)
+> ### ⚠️ Alpha Release Notice (`v0.9.0-alpha.8`)
 >
 > **PyArlo v0.9 is a major rewrite transitioning the entire codebase from legacy synchronous threads to native Python `asyncio`.**
 >
@@ -303,7 +303,7 @@ If troubleshooting unexpected Arlo web changes:
 - [CLI Reference Guide](docs/cli.md) — Complete manual for `pyaarlo`, `pyaarlo-monitor`, and `pyaarlo-utils`.
 - [Python API Reference](docs/api.md) — Asynchronous API documentation, classes, and lifecycle options.
 - [Legacy v0.8 Documentation](docs/README_v8.md) — Preserved synchronous v0.8 documentation.
-- [v0.9.0-alpha.7 Release Notes](docs/RELEASE_NOTES_v0.9.0-alpha.7.md) — Media retention policies, disk space management, and offline media pruning CLI.\n- [v0.9.0-alpha.6 Release Notes](docs/RELEASE_NOTES_v0.9.0-alpha.6.md) — CLI packaging standardization and removal of legacy bin/ scripts.
+- [v0.9.0-alpha.8 Release Notes](docs/RELEASE_NOTES_v0.9.0-alpha.8.md) — Media retention policies, disk space management, and offline media pruning CLI.\n- [v0.9.0-alpha.6 Release Notes](docs/RELEASE_NOTES_v0.9.0-alpha.6.md) — CLI packaging standardization and removal of legacy bin/ scripts.
 - [v0.9.0-alpha.5 Release Notes](docs/RELEASE_NOTES_v0.9.0-alpha.5.md) — Fix SSE stream connectivity and async streaming with curl_cffi.
 - [v0.9.0-alpha.4 Release Notes](docs/RELEASE_NOTES_v0.9.0-alpha.4.md) — Push 2FA rate-limit protection and troubleshooting knowledge base.
 - [v0.9.0-alpha.3 Release Notes](docs/RELEASE_NOTES_v0.9.0-alpha.3.md) — Session transaction tracking, directory auto-creation, and CLI inline live stream support.
@@ -316,5 +316,6 @@ If troubleshooting unexpected Arlo web changes:
 ## Credits
 
 Special thanks to:
+* [Edwin Anne](https://github.com/edwin-anne) for reverse-engineering the SIP/WebRTC signaling protocol and contributing the foundational SDP repairs and SIP client (PR #210).
 * [Pyarlo](https://github.com/tchellomello/python-arlo) and [Arlo](https://github.com/jeffreydwalter/arlo) for the original foundational reverse-engineering work.
 * [JetBrains](https://www.jetbrains.com/?from=hass-aarlo) for their past support providing open source development licenses throughout most of the v0.8 releases.

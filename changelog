@@ -1,3 +1,20 @@
+0.9.0-alpha.8
+  Native SIP/WebRTC Signaling Support
+  - SIP/WebRTC Signaling: Added native async SIP-over-WebSocket signaling client (`ArloSip`)
+    to negotiate live WebRTC video streams with Arlo's official signaling proxy (`wss://<domain>:7443`).
+  - SDP Repair Helpers: Added pure `filter_offer_candidates` to strip incompatible IPv6 and `.local`
+    mDNS candidates, and `clean_answer` to inject missing `a=mid` and direction attributes and strip
+    `a=end-of-candidates` for browser compatibility.
+  - Cloud Capabilities: Added dynamic retrieval and caching (24h TTL) of Arlo capability documents
+    from `/resources/capabilities/<model>/<model>_<version>.json` with model fallback detection.
+  - Camera API Extensions: Added `get_sip_info()`, `start_sip_stream(offer_sdp)`, `stop_sip_stream()`,
+    `async_update_capabilities()`, and properties `supports_sip_streaming`, `supports_sip_push_to_talk`,
+    and `has_full_duplex_push_to_talk` on `ArloCamera`.
+  - CLI Commands: Added `pyaarlo camera sip-info`, `pyaarlo camera start-sip-stream`, and
+    `pyaarlo capabilities`.
+  - Author Attribution: Implemented based on research, protocol design, and foundational PR #210 by Edwin Anne (@edwin-anne).
+  - Documentation: Added release notes for v0.9.0-alpha.8.
+
 0.9.0-alpha.7
   Media Retention & Disk Pruning
   - Media Retention Support: Added `media_retention_days` configuration option to `ArloCfg`.
