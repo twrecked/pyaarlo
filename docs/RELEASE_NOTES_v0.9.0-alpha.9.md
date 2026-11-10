@@ -25,3 +25,15 @@ During initial discovery (`_refresh_capabilities()`), PyArlo automatically prime
 * Displays all calculated device capabilities (Motion Detection, Audio Detection, Siren, Spotlight, Floodlight, Battery, SIP Streaming, SIP Push-To-Talk, Full Duplex Talk, and ambient sensors).
 * Added `--built-in` / `--static` option to display the legacy static fallback value alongside the calculated value (e.g. `SIP Streaming: True [built-in: False]`).
 * Resolves targets across all device classes (`all_devices`), allowing cameras, doorbells, lights, sensors, and base stations to be inspected by friendly name.
+
+### 5. Home Assistant Integration Support (`--hass`)
+For environments where Home Assistant is installed alongside `hass-aarlo`, the CLI now supports an explicit `--hass` flag:
+```bash
+# In standard Home Assistant container/OS environments (defaults to /config):
+pyaarlo --hass light "Porch" on
+
+# Or with an explicit Home Assistant configuration directory path:
+pyaarlo --hass /home/homeassistant/.homeassistant camera "Driveway" snapshot
+```
+* **Direct Config Extraction**: Reads `username`, `password`, and 2FA parameters directly from Home Assistant's `.storage/core.config.entries` JSON.
+* **Shared Session & Capabilities Cache**: Points `storage_dir` and `cache_dir` directly to `<hass_dir>/.aarlo`, sharing the active login tokens, cookies, and cached capability documents without requiring a new 2FA login challenge.

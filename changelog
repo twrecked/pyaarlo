@@ -10,6 +10,9 @@
   - CLI Diagnostics: Expanded `pyaarlo capabilities` to inspect all calculated device features,
     added `--built-in`/`--static` flag to show static fallback comparisons, and enabled friendly
     name resolution across all device types (cameras, doorbells, lights, sensors, base stations).
+  - Home Assistant Integration Support: Added `--hass` CLI option to directly extract configuration
+    from Home Assistant's `.storage/core.config.entries` and reuse active cloud tokens, cookies,
+    and capability caches stored in `.aarlo`.
   - Documentation: Added release notes for v0.9.0-alpha.9.
 
 0.9.0-alpha.8

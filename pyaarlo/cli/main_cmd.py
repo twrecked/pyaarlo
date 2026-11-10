@@ -45,6 +45,7 @@ from ..media import (
 def cli(
     ctx: click.Context,
     config_path: str | None,
+    hass_dir: str | None,
     verbose: int,
     username: str | None,
     password: str | None,
@@ -57,6 +58,7 @@ def cli(
     setup_logging(verbose)
     ctx.obj = CLIContext(
         config_path=config_path,
+        hass_dir=hass_dir,
         ignore_cache=ignore_cache,
         verbose=verbose,
         username=username,
@@ -148,12 +150,12 @@ def cache_fill(cli_ctx: CLIContext) -> None:
     """Populate or update local cache from Arlo."""
     async def _fill() -> int:
         click.echo("Querying Arlo for fresh device and location catalog...")
+        cache_path = cli_ctx.cache_path if cli_ctx.hass_dir else get_default_cache_path()
         arlo = await create_pyarlo(cli_ctx.config, wait_for_setup=True)
         try:
-            cache_data = fill_cache(arlo)
+            cache_data = fill_cache(arlo, cache_path)
             dev_count = len(cache_data.get("devices", []))
             loc_count = len(cache_data.get("locations", []))
-            cache_path = get_default_cache_path()
             click.echo(f"Cache updated: {dev_count} devices, {loc_count} locations saved to {cache_path}")
             return 0
         finally:
@@ -166,7 +168,7 @@ def cache_fill(cli_ctx: CLIContext) -> None:
 @click.pass_obj
 def cache_clear(cli_ctx: CLIContext) -> None:
     """Remove local cache file."""
-    path = get_default_cache_path()
+    path = cli_ctx.cache_path if cli_ctx.hass_dir else get_default_cache_path()
     if clear_cache(path):
         click.echo(f"Cache cleared: {path}")
     else:
@@ -179,7 +181,7 @@ def cache_clear(cli_ctx: CLIContext) -> None:
 @click.pass_obj
 def cache_show(cli_ctx: CLIContext) -> None:
     """Display information about current cache."""
-    cache_path = get_default_cache_path()
+    cache_path = cli_ctx.cache_path if cli_ctx.hass_dir else get_default_cache_path()
     cached = load_cache(cache_path)
     if not cached:
         click.echo(f"No cache found at {cache_path}")

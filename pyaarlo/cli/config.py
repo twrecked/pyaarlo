@@ -105,11 +105,93 @@ def read_env_config() -> dict[str, Any]:
     return env_cfg
 
 
+def read_hass_config(hass_path: Path | str | None = None) -> dict[str, Any]:
+    """Read configuration and storage paths from a Home Assistant installation.
+
+    Locates and parses `<hass_path>/.storage/core.config.entries` for an entry
+    with domain 'aarlo'. Extracts credentials, TFA settings, and automatically
+    points `storage_dir` and `cache_dir` to `<hass_base_dir>/.aarlo`.
+    """
+    if hass_path is None:
+        return {}
+
+    target = Path(hass_path).resolve()
+    if target.is_file():
+        entries_file = target
+        base_dir = target.parent.parent if target.parent.name == ".storage" else target.parent
+    else:
+        base_dir = target
+        candidates = [
+            base_dir / ".storage" / "core.config_entries",
+            base_dir / ".storage" / "core.config.entries",
+            base_dir / "core.config_entries",
+            base_dir / "core.config.entries",
+        ]
+        entries_file = None
+        for cand in candidates:
+            if cand.is_file():
+                entries_file = cand
+                break
+
+        if entries_file is None:
+            raise FileNotFoundError(
+                f"Home Assistant config entries file ('core.config_entries') not found under {base_dir} or {base_dir / '.storage'} (from {hass_path})"
+            )
+
+    try:
+        with open(entries_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception as e:
+        raise ValueError(f"Could not parse JSON from {entries_file}: {e}") from e
+
+    entries = data.get("data", {}).get("entries", [])
+    if not isinstance(entries, list):
+        raise ValueError(f"Invalid format in {entries_file}: 'data.entries' is not a list")
+
+    aarlo_entry = None
+    for entry in entries:
+        if isinstance(entry, dict) and entry.get("domain") == "aarlo":
+            aarlo_entry = entry
+            break
+
+    if not aarlo_entry:
+        raise ValueError(f"No 'aarlo' integration entry found in {entries_file}")
+
+    entry_data = aarlo_entry.get("data", {})
+    entry_options = aarlo_entry.get("options", {})
+
+    cfg: dict[str, Any] = {}
+    for key in (
+        "username",
+        "password",
+        "tfa",
+        "tfa_type",
+        "tfa_source",
+        "tfa_host",
+        "tfa_username",
+        "tfa_password",
+    ):
+        val = entry_data.get(key)
+        if val is not None and val != "":
+            cfg[key] = val
+
+    storage_dir = entry_options.get("storage_dir") or entry_data.get("storage_dir")
+    if not storage_dir:
+        storage_dir = str(base_dir / ".aarlo")
+    else:
+        storage_dir = str(Path(storage_dir).resolve())
+
+    cfg["storage_dir"] = storage_dir
+    cfg["cache_dir"] = storage_dir
+
+    return cfg
+
 def load_config(
     cli_overrides: dict[str, Any] | None = None,
     config_path: Path | str | None = None,
+    hass_path: Path | str | None = None,
 ) -> dict[str, Any]:
-    """Load configuration resolving precedence: CLI overrides > Env Vars > JSON file > Defaults."""
+    """Load configuration resolving precedence: CLI overrides > Env Vars > HASS config (if set) > JSON file > Defaults."""
     # 1. Defaults
     config: dict[str, Any] = {
         "storage_dir": str(get_cache_dir()),
@@ -122,7 +204,16 @@ def load_config(
     file_cfg = read_config_file(config_path)
     config.update({k: v for k, v in file_cfg.items() if v is not None})
 
-    # 3. Environment variables
+    # 3. Home Assistant config entry (if --hass specified)
+    if hass_path:
+        try:
+            hass_cfg = read_hass_config(hass_path)
+            config.update({k: v for k, v in hass_cfg.items() if v is not None})
+        except (FileNotFoundError, ValueError) as err:
+            import click
+            raise click.ClickException(str(err)) from err
+
+    # 4. Environment variables
     env_cfg = read_env_config()
     config.update({k: v for k, v in env_cfg.items() if v is not None})
 

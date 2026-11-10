@@ -358,3 +358,45 @@ def test_pyaarlo_capabilities_command():
             assert "SIP Streaming: True [built-in: False]" in res.output
             assert "SIP Push-To-Talk: True [built-in: False]" in res.output
             assert "Full Duplex Talk: True [built-in: False]" in res.output
+
+
+def test_pyaarlo_hass_option(tmp_path):
+    import json
+    from unittest.mock import AsyncMock, MagicMock
+
+    storage_dir = tmp_path / ".storage"
+    storage_dir.mkdir(parents=True)
+    entries_file = storage_dir / "core.config.entries"
+
+    sample_entries = {
+        "version": 1,
+        "key": "core.config.entries",
+        "data": {
+            "entries": [
+                {
+                    "domain": "aarlo",
+                    "data": {
+                        "username": "ha_user@example.com",
+                        "password": "ha_password",
+                        "tfa": "push"
+                    },
+                    "options": {}
+                }
+            ]
+        }
+    }
+    with open(entries_file, "w") as f:
+        json.dump(sample_entries, f)
+
+    runner = CliRunner()
+    mock_arlo = MagicMock()
+    mock_arlo._core = MagicMock()
+    mock_arlo.stop = AsyncMock()
+    mock_arlo.is_connected = True
+    mock_arlo.all_devices = []
+
+    with patch("pyaarlo.cli.main_cmd.create_pyarlo", return_value=mock_arlo) as mock_create:
+        res = runner.invoke(pyaarlo_cli, ["--hass", str(tmp_path), "cache", "clear"])
+        assert res.exit_code == 0
+        # Check that cache path cleared is in tmp_path/.aarlo
+        assert str(tmp_path / ".aarlo") in res.output
