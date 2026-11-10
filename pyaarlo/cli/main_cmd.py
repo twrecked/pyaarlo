@@ -789,6 +789,93 @@ def camera_stream(cli_ctx: CLIContext, target: str, start_ffmpeg: bool) -> None:
 
     run_async_cli(cli_ctx, _stream())
 
+@camera.command("sip-info")
+@click.argument("target")
+@click.pass_obj
+def camera_sip_info(cli_ctx: CLIContext, target: str) -> None:
+    """Display SIP signaling info and ICE servers for a camera."""
+    async def _sip_info() -> int:
+        arlo = await create_pyarlo(cli_ctx.config, wait_for_setup=True)
+        try:
+            matched, _ = resolve_devices(arlo.cameras, [target])
+            if not matched:
+                click.echo(f"Error: Camera '{target}' not found.", err=True)
+                return 1
+
+            cam = matched[0]
+            click.echo(f"[{cam.name}] Fetching SIP info & ICE servers...")
+            try:
+                info = await cam.get_sip_info()
+                click.echo(f"[{cam.name}] Model: {cam.model_id}, Interface Version: {cam.interface_version}")
+                click.echo(f"[{cam.name}] SIP Streaming Supported: {cam.supports_sip_streaming}")
+                click.echo(f"[{cam.name}] SIP Push-To-Talk Supported: {cam.supports_sip_push_to_talk}")
+                click.echo(f"[{cam.name}] Full Duplex Talk Supported: {cam.has_full_duplex_push_to_talk}")
+                ice_servers = info.get("ice_servers", [])
+                click.echo(f"[{cam.name}] ICE servers returned: {len(ice_servers)}")
+                for server in ice_servers:
+                    click.echo(f"  urls: {server.get('urls')}")
+                    if server.get("username"):
+                        click.echo(f"  username: {server.get('username')}")
+                return 0
+            except Exception as e:
+                click.echo(f"Error fetching SIP info: {e}", err=True)
+                return 1
+        finally:
+            await arlo.stop(logout=False)
+
+    run_async_cli(cli_ctx, _sip_info())
+
+
+@camera.command("start-sip-stream")
+@click.argument("target")
+@click.option("--offer-file", type=click.Path(exists=True, dir_okay=False), required=True, help="Path to offer SDP file")
+@click.option("--answer-file", type=click.Path(dir_okay=False), default=None, help="Optional path to save answer SDP file")
+@click.pass_obj
+def camera_start_sip_stream(cli_ctx: CLIContext, target: str, offer_file: str, answer_file: str | None) -> None:
+    """Negotiate a live WebRTC stream via SIP signaling."""
+    async def _start_sip() -> int:
+        arlo = await create_pyarlo(cli_ctx.config, wait_for_setup=True)
+        try:
+            matched, _ = resolve_devices(arlo.cameras, [target])
+            if not matched:
+                click.echo(f"Error: Camera '{target}' not found.", err=True)
+                return 1
+
+            cam = matched[0]
+            with open(offer_file, "r") as f:
+                offer_sdp = f.read()
+
+            click.echo(f"[{cam.name}] Getting SIP info...")
+            await cam.get_sip_info()
+            click.echo(f"[{cam.name}] Starting SIP stream negotiation...")
+            answer_sdp = await cam.start_sip_stream(offer_sdp)
+            click.echo(f"[{cam.name}] SIP stream established!")
+            if answer_file:
+                with open(answer_file, "w") as f:
+                    f.write(answer_sdp)
+                click.echo(f"[{cam.name}] Answer SDP written to {answer_file}")
+            else:
+                click.echo(f"[{cam.name}] Answer SDP:\n{answer_sdp}")
+
+            click.echo(f"[{cam.name}] Stream is active. Press Ctrl+C to stop.")
+            try:
+                while True:
+                    await asyncio.sleep(1)
+            except (asyncio.CancelledError, KeyboardInterrupt):
+                pass
+            finally:
+                click.echo(f"\n[{cam.name}] Stopping SIP stream...")
+                await cam.stop_sip_stream()
+                click.echo(f"[{cam.name}] Stream stopped.")
+            return 0
+        except Exception as e:
+            click.echo(f"Error during SIP stream: {e}", err=True)
+            return 1
+        finally:
+            await arlo.stop(logout=False)
+
+    run_async_cli(cli_ctx, _start_sip())
+
 
 # -------------------------------------------------------------------------
 # Media
@@ -1471,6 +1558,53 @@ def list_cmd(cli_ctx: CLIContext, item: str, compact: bool) -> None:
 
     run_async_cli(cli_ctx, _list())
 
+
+@cli.command("capabilities")
+@click.argument("target_or_model")
+@click.argument("version", required=False, default=None)
+@click.pass_obj
+def capabilities_cmd(cli_ctx: CLIContext, target_or_model: str, version: str | None) -> None:
+    """Inspect device capability document from Arlo by camera name or model+version."""
+    async def _capabilities() -> int:
+        arlo = await create_pyarlo(cli_ctx.config, wait_for_setup=True)
+        try:
+            import json
+            from ..capabilities import (
+                get_capabilities,
+                supports_sip_streaming,
+                supports_sip_push_to_talk,
+                has_full_duplex_push_to_talk,
+            )
+            model = target_or_model
+            doc_version = version
+            if doc_version is None:
+                matched, _ = resolve_devices(arlo.cameras, [target_or_model])
+                if matched:
+                    cam = matched[0]
+                    model = cam.model_id or target_or_model
+                    doc_version = str(cam.interface_version or "i001")
+                    click.echo(f"Resolved camera '{cam.name}': model={model}, version={doc_version}")
+                else:
+                    doc_version = "i001"
+
+            click.echo(f"Fetching capabilities for model={model}, version={doc_version}...")
+            doc = await get_capabilities(arlo._core, model, doc_version)
+            if not doc:
+                click.echo("No capability document returned from cloud.")
+            else:
+                click.echo(json.dumps(doc, indent=2))
+            sip_stream = supports_sip_streaming(arlo._core, model, doc_version)
+            sip_ptt = supports_sip_push_to_talk(arlo._core, model, doc_version)
+            sip_fd = has_full_duplex_push_to_talk(arlo._core, model, doc_version)
+            click.echo(f"\nCalculated capabilities:")
+            click.echo(f"  SIP Streaming: {sip_stream}")
+            click.echo(f"  SIP Push-To-Talk: {sip_ptt}")
+            click.echo(f"  Full Duplex Talk: {sip_fd}")
+            return 0
+        finally:
+            await arlo.stop(logout=False)
+
+    run_async_cli(cli_ctx, _capabilities())
 
 def main() -> None:
     cli()

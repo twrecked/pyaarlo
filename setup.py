@@ -11,7 +11,7 @@ def readme():
 setup(
 
     name='pyaarlo',
-    version='0.9.0-alpha.7',
+    version='0.9.0-alpha.8',
     packages=find_packages(exclude=['tests', 'tests.*']),
 
     python_requires='>=3.10',
@@ -26,6 +26,7 @@ setup(
         'cryptography',
         'python-slugify',
         'platformdirs>=3.0',
+        'aiohttp>=3.9.0',
     ],
 
     author='Steve Herrell',

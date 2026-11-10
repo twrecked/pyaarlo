@@ -49,6 +49,8 @@ from .constant import (
     RECORD_START_PATH,
     RECORD_STOP_PATH,
     RECORDING_STOPPED_KEY,
+    SIP_PUSH_TO_TALK_KEY,
+    SIP_STREAMING_KEY,
     SIREN_STATE_KEY,
     SNAPSHOT_KEY,
     SPOTLIGHT_BRIGHTNESS_KEY,
@@ -62,6 +64,7 @@ from .child_device import ArloChildDevice
 from .objects import ArloObjects
 from .utils import the_epoch, http_get_img_async, http_get_async
 from .capabilities import ArloCapabilities
+from .sip import ArloSip, ArloSipError
 
 
 class ArloCamera(ArloChildDevice):
@@ -77,6 +80,7 @@ class ArloCamera(ArloChildDevice):
         self._stream_state_event = asyncio.Event()
         self._snapshot_time = the_epoch()
         self._stream_url = None
+        self._sip: ArloSip | None = None
         # what user has requested locally
         self._user_requests: set[str] = set()
         # what is keeping the stream open for us
@@ -923,8 +927,38 @@ class ArloCamera(ArloChildDevice):
         """Returns `True` if camera is streaming a video, `False` otherwise.
 
         Stream has to be started locally.
+        Covers both RTSPS and SIP/WebRTC paths.
         """
-        return self.has_user_request("streaming") or self.has_remote_user("streaming")
+        return (
+            self.has_user_request("streaming")
+            or self.has_remote_user("streaming")
+            or self.has_user_request("sip")
+            or self.has_remote_user("sip")
+        )
+
+    @property
+    def supports_sip_streaming(self) -> bool:
+        """Returns `True` if this camera supports live SIP/WebRTC streaming."""
+        return self.has_capability(SIP_STREAMING_KEY)
+
+    @property
+    def supports_sip_push_to_talk(self) -> bool:
+        """Returns `True` if this camera signals push-to-talk over SIP."""
+        return self.has_capability(SIP_PUSH_TO_TALK_KEY)
+
+    @property
+    def has_full_duplex_push_to_talk(self) -> bool:
+        """Returns `True` if this camera supports simultaneous talk/listen push-to-talk."""
+        from .capabilities import has_full_duplex_push_to_talk
+        return has_full_duplex_push_to_talk(self._core, self.model_id, self.interface_version)
+
+    @property
+    def stream_protocols(self) -> set[str]:
+        """Returns the set of streaming protocols this camera is known to support."""
+        protocols = {"rtsps"}
+        if self.supports_sip_streaming:
+            protocols.add("sip")
+        return protocols
 
     def has_user_request(self, activity):
         return activity in self._user_requests
@@ -1017,6 +1051,69 @@ class ArloCamera(ArloChildDevice):
 
     async def stop_recording_stream(self):
         await self._stop_stream("recording")
+
+    async def async_update_capabilities(self) -> dict[str, Any]:
+        """Fetch and refresh the cloud capability document for this camera."""
+        from .capabilities import get_capabilities
+        return await get_capabilities(self._core, self.model_id, self.interface_version)
+
+    async def get_sip_info(self) -> dict[str, Any]:
+        """Opens SIP/WebRTC signaling for this camera and returns its ICE servers.
+
+        This call is REST-only - it deliberately does not open the signaling
+        websocket yet.
+        :return: `{"ice_servers": [...]}`, shaped for an RTCConfiguration.
+        """
+        # Pre-fetch capabilities to ensure cloud document is cached
+        try:
+            from .capabilities import get_capabilities
+            await get_capabilities(self._core, self.model_id, self.interface_version)
+        except Exception as e:
+            self.debug(f"could not pre-fetch capabilities: {e}")
+
+        if self._sip is None:
+            self._sip = ArloSip(
+                self._core,
+                self,
+                timeout=self._core.cfg.sip_timeout,
+                keepalive_interval=self._core.cfg.sip_keepalive,
+                sip_user_agent=self._core.cfg.sip_user_agent,
+                ws_port=self._core.cfg.sip_ws_port,
+            )
+        await self._sip.fetch_info()
+        return {"ice_servers": self._sip.ice_servers}
+
+    async def start_sip_stream(self, offer_sdp: str) -> str:
+        """Negotiates a SIP/WebRTC call and returns Arlo's answer SDP.
+
+        :param offer_sdp: A complete WebRTC offer SDP from your own peer connection.
+        :return: Arlo's answer SDP, repaired and ready for peer connection.
+        """
+        if self._sip is None:
+            raise ArloSipError("call get_sip_info() first")
+
+        await self._sip.ensure_connected()
+        answer_sdp = await self._sip.start(offer_sdp)
+
+        async with self._stream_lock:
+            self._local_users.add("sip")
+            self._user_requests.add("sip")
+            self._dump_activities("_start_sip_stream")
+            self._stream_state_event.set()
+
+        return answer_sdp
+
+    async def stop_sip_stream(self) -> None:
+        """Ends the SIP/WebRTC call opened by `start_sip_stream()`, if any."""
+        if self._sip is not None:
+            await self._sip.close()
+            self._sip = None
+
+        async with self._stream_lock:
+            self._local_users.discard("sip")
+            self._user_requests.discard("sip")
+            self._dump_activities("_stop_sip_stream")
+            self._stream_state_event.set()
 
     async def wait_for_user_stream(self, timeout=15):
         self.debug("waiting for stream")

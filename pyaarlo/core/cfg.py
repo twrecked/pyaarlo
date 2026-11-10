@@ -494,3 +494,19 @@ class ArloCfg:
     def send_source(self) -> bool:
         return cast(bool, self._kw.get("send_source", False))
 
+
+    @property
+    def sip_timeout(self) -> int:
+        return self._get_int("sip_timeout", 5)
+
+    @property
+    def sip_keepalive(self) -> int:
+        return self._get_int("sip_keepalive", 30)
+
+    @property
+    def sip_user_agent(self) -> str:
+        return cast(str, self._kw.get("sip_user_agent", "SIP.js/0.21.1"))
+
+    @property
+    def sip_ws_port(self) -> int:
+        return self._get_int("sip_ws_port", 7443)

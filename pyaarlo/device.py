@@ -82,6 +82,11 @@ class ArloDevice(ArloObject):
         return self._attrs.get("modelId", None)
 
     @property
+    def interface_version(self) -> int:
+        """Returns the device interface version."""
+        return self._attrs.get("interfaceVersion", 0)
+
+    @property
     def hw_version(self):
         """Returns the hardware version."""
         return self._attrs.get("properties", {}).get("hwVersion", None)
