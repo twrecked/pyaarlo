@@ -1562,8 +1562,16 @@ def list_cmd(cli_ctx: CLIContext, item: str, compact: bool) -> None:
 @cli.command("capabilities")
 @click.argument("target_or_model")
 @click.argument("version", required=False, default=None)
+@click.option(
+    "--built-in",
+    "--static",
+    "built_in",
+    is_flag=True,
+    default=False,
+    help="Show built-in/static fallback values alongside calculated values.",
+)
 @click.pass_obj
-def capabilities_cmd(cli_ctx: CLIContext, target_or_model: str, version: str | None) -> None:
+def capabilities_cmd(cli_ctx: CLIContext, target_or_model: str, version: str | None, built_in: bool) -> None:
     """Inspect device capability document from Arlo by camera name or model+version."""
     async def _capabilities() -> int:
         arlo = await create_pyarlo(cli_ctx.config, wait_for_setup=True)
@@ -1571,21 +1579,46 @@ def capabilities_cmd(cli_ctx: CLIContext, target_or_model: str, version: str | N
             import json
             from ..capabilities import (
                 get_capabilities,
-                supports_sip_streaming,
-                supports_sip_push_to_talk,
-                has_full_duplex_push_to_talk,
+                eval_doc_motion_detection,
+                eval_doc_audio_detection,
+                eval_doc_siren,
+                eval_doc_spotlight,
+                eval_doc_floodlight,
+                eval_doc_battery,
+                eval_doc_sip_streaming,
+                eval_doc_sip_push_to_talk,
+                eval_doc_full_duplex_talk,
+                eval_doc_temperature,
+                eval_doc_humidity,
+                eval_doc_air_quality,
+                eval_doc_nightlight,
+                static_camera_supports,
             )
-            model = target_or_model
-            doc_version = version
-            if doc_version is None:
-                matched, _ = resolve_devices(arlo.cameras, [target_or_model])
-                if matched:
-                    cam = matched[0]
-                    model = cam.model_id or target_or_model
-                    doc_version = str(cam.interface_version or "i001")
-                    click.echo(f"Resolved camera '{cam.name}': model={model}, version={doc_version}")
-                else:
-                    doc_version = "i001"
+            from ..constant import (
+                MOTION_DETECTED_KEY,
+                AUDIO_DETECTED_KEY,
+                SIREN_STATE_KEY,
+                SPOTLIGHT_KEY,
+                FLOODLIGHT_KEY,
+                BATTERY_KEY,
+                SIP_STREAMING_KEY,
+                SIP_PUSH_TO_TALK_KEY,
+                TEMPERATURE_KEY,
+                HUMIDITY_KEY,
+                AIR_QUALITY_KEY,
+                NIGHTLIGHT_KEY,
+            )
+            matched, _ = resolve_devices(arlo.all_devices, [target_or_model])
+            if matched:
+                dev = matched[0]
+                model = dev.model_id or target_or_model
+                doc_version = version or str(dev.interface_version or "i001")
+                device_type = getattr(dev, "device_type", "camera")
+                click.echo(f"Resolved device '{dev.name}': model={model}, version={doc_version}")
+            else:
+                model = target_or_model
+                doc_version = version or "i001"
+                device_type = "camera"
 
             click.echo(f"Fetching capabilities for model={model}, version={doc_version}...")
             doc = await get_capabilities(arlo._core, model, doc_version)
@@ -1593,13 +1626,31 @@ def capabilities_cmd(cli_ctx: CLIContext, target_or_model: str, version: str | N
                 click.echo("No capability document returned from cloud.")
             else:
                 click.echo(json.dumps(doc, indent=2))
-            sip_stream = supports_sip_streaming(arlo._core, model, doc_version)
-            sip_ptt = supports_sip_push_to_talk(arlo._core, model, doc_version)
-            sip_fd = has_full_duplex_push_to_talk(arlo._core, model, doc_version)
+
             click.echo(f"\nCalculated capabilities:")
-            click.echo(f"  SIP Streaming: {sip_stream}")
-            click.echo(f"  SIP Push-To-Talk: {sip_ptt}")
-            click.echo(f"  Full Duplex Talk: {sip_fd}")
+            items = [
+                ("Motion Detection", eval_doc_motion_detection(doc) if doc else static_camera_supports(model, MOTION_DETECTED_KEY, device_type), static_camera_supports(model, MOTION_DETECTED_KEY, device_type)),
+                ("Audio Detection", eval_doc_audio_detection(doc) if doc else static_camera_supports(model, AUDIO_DETECTED_KEY, device_type), static_camera_supports(model, AUDIO_DETECTED_KEY, device_type)),
+                ("Siren", eval_doc_siren(doc) if doc else static_camera_supports(model, SIREN_STATE_KEY, device_type), static_camera_supports(model, SIREN_STATE_KEY, device_type)),
+                ("Spotlight", eval_doc_spotlight(doc) if doc else static_camera_supports(model, SPOTLIGHT_KEY, device_type), static_camera_supports(model, SPOTLIGHT_KEY, device_type)),
+                ("Floodlight", eval_doc_floodlight(doc) if doc else static_camera_supports(model, FLOODLIGHT_KEY, device_type), static_camera_supports(model, FLOODLIGHT_KEY, device_type)),
+                ("Battery", eval_doc_battery(doc) if doc else static_camera_supports(model, BATTERY_KEY, device_type), static_camera_supports(model, BATTERY_KEY, device_type)),
+                ("SIP Streaming", eval_doc_sip_streaming(doc) if doc else static_camera_supports(model, SIP_STREAMING_KEY, device_type), static_camera_supports(model, SIP_STREAMING_KEY, device_type)),
+                ("SIP Push-To-Talk", eval_doc_sip_push_to_talk(doc) if doc else static_camera_supports(model, SIP_PUSH_TO_TALK_KEY, device_type), static_camera_supports(model, SIP_PUSH_TO_TALK_KEY, device_type)),
+                ("Full Duplex Talk", eval_doc_full_duplex_talk(doc) if doc else False, False),
+            ]
+            if (doc and eval_doc_temperature(doc)) or static_camera_supports(model, TEMPERATURE_KEY, device_type):
+                items.append(("Temperature", eval_doc_temperature(doc) if doc else static_camera_supports(model, TEMPERATURE_KEY, device_type), static_camera_supports(model, TEMPERATURE_KEY, device_type)))
+            if (doc and eval_doc_humidity(doc)) or static_camera_supports(model, HUMIDITY_KEY, device_type):
+                items.append(("Humidity", eval_doc_humidity(doc) if doc else static_camera_supports(model, HUMIDITY_KEY, device_type), static_camera_supports(model, HUMIDITY_KEY, device_type)))
+            if (doc and eval_doc_air_quality(doc)) or static_camera_supports(model, AIR_QUALITY_KEY, device_type):
+                items.append(("Air Quality", eval_doc_air_quality(doc) if doc else static_camera_supports(model, AIR_QUALITY_KEY, device_type), static_camera_supports(model, AIR_QUALITY_KEY, device_type)))
+            if (doc and eval_doc_nightlight(doc)) or static_camera_supports(model, NIGHTLIGHT_KEY, device_type):
+                items.append(("Nightlight", eval_doc_nightlight(doc) if doc else static_camera_supports(model, NIGHTLIGHT_KEY, device_type), static_camera_supports(model, NIGHTLIGHT_KEY, device_type)))
+
+            for label, calc_val, static_val in items:
+                suffix = f" [built-in: {static_val}]" if built_in else ""
+                click.echo(f"  {label}: {calc_val}{suffix}")
             return 0
         finally:
             await arlo.stop(logout=False)

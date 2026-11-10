@@ -42,7 +42,7 @@ from .types import ArloTypes
 from .utils import time_to_arlotime
 
 
-__version__ = "0.9.0-alpha.8"
+__version__ = "0.9.0-alpha.9"
 
 
 class FeedMetadataError(Exception):
@@ -491,8 +491,23 @@ class PyArlo:
         self._core.tasks.run_now(self._refresh_bases, initial=False)
         self._core.tasks.run_now(self._refresh_ambient_sensors)
 
+    async def _refresh_capabilities(self):
+        """Pre-fetch capabilities for all unique model/interfaceVersion pairs."""
+        seen: set[tuple[str, Any]] = set()
+        for dev in getattr(self, "_devices", []):
+            mid = dev.get("modelId")
+            iver = dev.get("interfaceVersion")
+            if mid and iver is not None and (mid, iver) not in seen:
+                seen.add((mid, iver))
+                try:
+                    from .capabilities import get_capabilities
+                    await get_capabilities(self._core, mid, iver)
+                except Exception as e:
+                    self.vdebug(f"prefetch capabilities failed for {mid}/{iver}: {e}")
+
     async def _initial_refresh(self, wait: bool):
         self.debug(f"initial refresh, wait={wait}")
+        await self._refresh_capabilities()
         await self._refresh_bases(initial=True)
         await self._refresh_modes()
         await self._refresh_ambient_sensors()

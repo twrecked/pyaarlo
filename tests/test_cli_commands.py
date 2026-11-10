@@ -304,3 +304,57 @@ def test_pyaarlo_config_create_and_update_wizard(tmp_path):
     assert saved_up["tfa_password"] == "imappass"
 
 
+
+
+def test_pyaarlo_capabilities_help():
+    runner = CliRunner()
+    result = runner.invoke(pyaarlo_cli, ["capabilities", "--help"])
+    assert result.exit_code == 0
+    assert "--built-in" in result.output
+    assert "--static" in result.output
+
+
+def test_pyaarlo_capabilities_command():
+    from unittest.mock import AsyncMock, MagicMock
+    runner = CliRunner()
+    mock_dev = MagicMock()
+    mock_dev.name = "Front"
+    mock_dev.device_id = "cam_front"
+    mock_dev.serial_number = "sn_front"
+    mock_dev.model_id = "VMC4040"
+    mock_dev.interface_version = "i001"
+    mock_dev.device_type = "camera"
+
+    mock_arlo = MagicMock()
+    mock_arlo._core = MagicMock()
+    mock_arlo.stop = AsyncMock()
+    mock_arlo.all_devices = [mock_dev]
+
+    doc = {
+        "Capabilities": {
+            "Automation3.0": {
+                "AutomationTriggers": {"motionStart": {}},
+                "AutomationActions": {"sirenOn": {}},
+            },
+            "PowerSource": {
+                "Battery": {"batteryTech": ["Rechargeable"]},
+            },
+            "Streaming": {
+                "SIPStreaming": True,
+            },
+            "PushToTalk": {
+                "signal": ["sip"],
+                "fullDuplex": True,
+            },
+        }
+    }
+
+    with patch("pyaarlo.cli.main_cmd.create_pyarlo", return_value=mock_arlo):
+        with patch("pyaarlo.capabilities.get_capabilities", return_value=doc):
+            res = runner.invoke(pyaarlo_cli, ["capabilities", "Front", "--built-in"])
+            assert res.exit_code == 0
+            assert "Calculated capabilities:" in res.output
+            assert "Motion Detection: True [built-in: True]" in res.output
+            assert "SIP Streaming: True [built-in: False]" in res.output
+            assert "SIP Push-To-Talk: True [built-in: False]" in res.output
+            assert "Full Duplex Talk: True [built-in: False]" in res.output

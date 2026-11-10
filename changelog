@@ -1,3 +1,17 @@
+0.9.0-alpha.9
+  Dynamic Device Capabilities & Diagnostics
+  - Dynamic Capability Resolution: Replaced static model checks in `ArloCapabilities` with
+    dynamic inspection of cloud capability documents for motion detection, audio detection,
+    sirens, spotlights, floodlights, batteries, and ambient sensors.
+  - Graceful Fallback: Maintained legacy static rules as fallbacks for offline operation or
+    unsupported models.
+  - Startup Pre-fetching: Primed the capability document cache eagerly during initial discovery
+    for all detected hardware models.
+  - CLI Diagnostics: Expanded `pyaarlo capabilities` to inspect all calculated device features,
+    added `--built-in`/`--static` flag to show static fallback comparisons, and enabled friendly
+    name resolution across all device types (cameras, doorbells, lights, sensors, base stations).
+  - Documentation: Added release notes for v0.9.0-alpha.9.
+
 0.9.0-alpha.8
   Native SIP/WebRTC Signaling Support
   - SIP/WebRTC Signaling: Added native async SIP-over-WebSocket signaling client (`ArloSip`)
