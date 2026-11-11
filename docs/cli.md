@@ -91,6 +91,18 @@ pyaarlo login --tfa email:imap --tfa-host imap.gmail.com --tfa-user user@gmail.c
 pyaarlo login --tfa sms
 ```
 
+### `pyaarlo tfa-factors`
+Lists the 2FA factors - email addresses, phone numbers and phones running the Arlo app - configured on the account, with their ids.
+
+```bash
+pyaarlo tfa-factors
+
+# Always use one exact factor, for example the second of two phones
+pyaarlo login --push --factor-id 87654321-4321-4321-4321-ba0987654321
+# or
+export ARLO_TFA_FACTOR_ID="87654321-4321-4321-4321-ba0987654321"
+```
+
 ### `pyaarlo cache`
 Manages the local device and location cache stored under your OS cache directory (`~/.cache/pyaarlo/cache.json`).
 
