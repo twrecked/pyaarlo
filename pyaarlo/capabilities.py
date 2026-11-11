@@ -221,9 +221,12 @@ def eval_doc_siren(doc: dict[str, Any]) -> bool:
 
 
 def eval_doc_spotlight(doc: dict[str, Any]) -> bool:
-    """Returns True if the capability document declares a spotlight."""
+    """Returns True if the capability document declares a physical spotlight."""
     caps = doc.get("Capabilities", {})
-    return "Spotlight" in caps
+    sp = caps.get("Spotlight")
+    if not isinstance(sp, dict) or sp.get("proxy", False) is True:
+        return False
+    return True
 
 
 def eval_doc_floodlight(doc: dict[str, Any]) -> bool:
@@ -232,7 +235,10 @@ def eval_doc_floodlight(doc: dict[str, Any]) -> bool:
     res_types = caps.get("ResourceTypes", [])
     if isinstance(res_types, list) and "Light" in res_types:
         return True
-    return "Floodlight" in caps
+    fl = caps.get("Floodlight")
+    if not isinstance(fl, dict) or fl.get("proxy", False) is True:
+        return False
+    return True
 
 
 def eval_doc_battery(doc: dict[str, Any]) -> bool:

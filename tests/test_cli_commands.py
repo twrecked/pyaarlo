@@ -468,3 +468,53 @@ def test_pyaarlo_login_factor_id_option():
     result = runner.invoke(pyaarlo_cli, ["login", "--help"])
     assert result.exit_code == 0
     assert "--factor-id" in result.output
+
+
+def test_pyaarlo_light_cli():
+    from unittest.mock import AsyncMock, MagicMock
+    runner = CliRunner()
+
+    # 1. Help text
+    res = runner.invoke(pyaarlo_cli, ["light", "--help"])
+    assert res.exit_code == 0
+    assert "turn-on" in res.output
+    assert "turn-off" in res.output
+    assert "brightness" in res.output
+
+    # 2. Mock Arlo & light
+    mock_arlo = MagicMock()
+    mock_light = MagicMock()
+    mock_light.name = "Front Spotlight"
+    mock_light.parent_name = "Front"
+    mock_light.device_id = "LIGHT-01"
+    mock_light.turn_on = AsyncMock()
+    mock_light.turn_off = AsyncMock()
+    mock_light.set_brightness = AsyncMock()
+
+    mock_arlo.lights = [mock_light]
+    mock_arlo.stop = AsyncMock()
+
+    with patch("pyaarlo.cli.main_cmd.create_pyarlo", return_value=mock_arlo):
+        # Turn on by parent name "Front" with brightness
+        res_on = runner.invoke(pyaarlo_cli, ["light", "on", "Front", "-b", "200"])
+        assert res_on.exit_code == 0
+        assert "Turned ON" in res_on.output
+        mock_light.turn_on.assert_called_once_with(brightness=200)
+
+        # Set brightness
+        res_bright = runner.invoke(pyaarlo_cli, ["light", "brightness", "150", "Front"])
+        assert res_bright.exit_code == 0
+        assert "Brightness set to 150" in res_bright.output
+        mock_light.set_brightness.assert_called_once_with(150)
+
+        # Turn off by light name "Front Spotlight"
+        res_off = runner.invoke(pyaarlo_cli, ["light", "off", "Front Spotlight"])
+        assert res_off.exit_code == 0
+        assert "Turned OFF" in res_off.output
+        mock_light.turn_off.assert_called_once()
+
+        # Turn on all
+        mock_light.turn_on.reset_mock()
+        res_all = runner.invoke(pyaarlo_cli, ["light", "on", "all"])
+        assert res_all.exit_code == 0
+        mock_light.turn_on.assert_called_once()

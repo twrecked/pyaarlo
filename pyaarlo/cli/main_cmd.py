@@ -538,15 +538,10 @@ def light() -> None:
     pass
 
 
-@light.command("turn-on")
-@click.argument("targets", nargs=-1, required=True)
-@click.option("-b", "--brightness", type=int, default=None, help="Brightness level (0-255)")
-@click.pass_obj
-def light_turn_on(cli_ctx: CLIContext, targets: tuple[str, ...], brightness: int | None) -> None:
-    """Turn on one or more lights by name or ID."""
+def _exec_light_turn_on(cli_ctx: CLIContext, targets: tuple[str, ...], brightness: int | None) -> None:
     target_names = parse_targets(targets)
     if not target_names:
-        click.echo("Error: Please specify at least one light name or ID.", err=True)
+        click.echo("Error: Please specify at least one light name, ID, or 'all'.", err=True)
         sys.exit(1)
 
     async def _turn_on() -> int:
@@ -559,11 +554,15 @@ def light_turn_on(cli_ctx: CLIContext, targets: tuple[str, ...], brightness: int
             refresh_devices=not use_cache,
         )
         try:
-            matched, missing = resolve_devices(arlo.lights, target_names)
-            if missing and use_cache:
-                await arlo._refresh_devices(force=True)
-                arlo._build_objects()
+            if "all" in [t.lower() for t in target_names]:
+                matched = list(arlo.lights)
+                missing: list[str] = []
+            else:
                 matched, missing = resolve_devices(arlo.lights, target_names)
+                if missing and use_cache:
+                    await arlo._refresh_devices(force=True)
+                    arlo._build_objects()
+                    matched, missing = resolve_devices(arlo.lights, target_names)
 
             exit_code = 0
             for name in missing:
@@ -582,14 +581,10 @@ def light_turn_on(cli_ctx: CLIContext, targets: tuple[str, ...], brightness: int
     run_async_cli(cli_ctx, _turn_on())
 
 
-@light.command("turn-off")
-@click.argument("targets", nargs=-1, required=True)
-@click.pass_obj
-def light_turn_off(cli_ctx: CLIContext, targets: tuple[str, ...]) -> None:
-    """Turn off one or more lights by name or ID."""
+def _exec_light_turn_off(cli_ctx: CLIContext, targets: tuple[str, ...]) -> None:
     target_names = parse_targets(targets)
     if not target_names:
-        click.echo("Error: Please specify at least one light name or ID.", err=True)
+        click.echo("Error: Please specify at least one light name, ID, or 'all'.", err=True)
         sys.exit(1)
 
     async def _turn_off() -> int:
@@ -602,11 +597,15 @@ def light_turn_off(cli_ctx: CLIContext, targets: tuple[str, ...]) -> None:
             refresh_devices=not use_cache,
         )
         try:
-            matched, missing = resolve_devices(arlo.lights, target_names)
-            if missing and use_cache:
-                await arlo._refresh_devices(force=True)
-                arlo._build_objects()
+            if "all" in [t.lower() for t in target_names]:
+                matched = list(arlo.lights)
+                missing: list[str] = []
+            else:
                 matched, missing = resolve_devices(arlo.lights, target_names)
+                if missing and use_cache:
+                    await arlo._refresh_devices(force=True)
+                    arlo._build_objects()
+                    matched, missing = resolve_devices(arlo.lights, target_names)
 
             exit_code = 0
             for name in missing:
@@ -622,6 +621,40 @@ def light_turn_off(cli_ctx: CLIContext, targets: tuple[str, ...]) -> None:
             await arlo.stop(logout=False)
 
     run_async_cli(cli_ctx, _turn_off())
+
+
+@light.command("turn-on")
+@click.argument("targets", nargs=-1, required=True)
+@click.option("-b", "--brightness", type=int, default=None, help="Brightness level (0-255)")
+@click.pass_obj
+def light_turn_on(cli_ctx: CLIContext, targets: tuple[str, ...], brightness: int | None) -> None:
+    """Turn on one or more lights by name or ID (or 'all')."""
+    _exec_light_turn_on(cli_ctx, targets, brightness)
+
+
+@light.command("turn-off")
+@click.argument("targets", nargs=-1, required=True)
+@click.pass_obj
+def light_turn_off(cli_ctx: CLIContext, targets: tuple[str, ...]) -> None:
+    """Turn off one or more lights by name or ID (or 'all')."""
+    _exec_light_turn_off(cli_ctx, targets)
+
+
+@light.command("on")
+@click.argument("targets", nargs=-1, required=True)
+@click.option("-b", "--brightness", type=int, default=None, help="Brightness level (0-255)")
+@click.pass_obj
+def light_on_alias(cli_ctx: CLIContext, targets: tuple[str, ...], brightness: int | None) -> None:
+    """Turn on one or more lights (alias for turn-on)."""
+    _exec_light_turn_on(cli_ctx, targets, brightness)
+
+
+@light.command("off")
+@click.argument("targets", nargs=-1, required=True)
+@click.pass_obj
+def light_off_alias(cli_ctx: CLIContext, targets: tuple[str, ...]) -> None:
+    """Turn off one or more lights (alias for turn-off)."""
+    _exec_light_turn_off(cli_ctx, targets)
 
 
 @light.command("brightness")
@@ -645,11 +678,15 @@ def light_brightness(cli_ctx: CLIContext, level: int, targets: tuple[str, ...]) 
             refresh_devices=not use_cache,
         )
         try:
-            matched, missing = resolve_devices(arlo.lights, target_names)
-            if missing and use_cache:
-                await arlo._refresh_devices(force=True)
-                arlo._build_objects()
+            if "all" in [t.lower() for t in target_names]:
+                matched = list(arlo.lights)
+                missing: list[str] = []
+            else:
                 matched, missing = resolve_devices(arlo.lights, target_names)
+                if missing and use_cache:
+                    await arlo._refresh_devices(force=True)
+                    arlo._build_objects()
+                    matched, missing = resolve_devices(arlo.lights, target_names)
 
             exit_code = 0
             for name in missing:

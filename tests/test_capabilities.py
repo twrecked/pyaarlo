@@ -206,6 +206,16 @@ class TestCapabilities(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(eval_doc_battery(doc_ac_only))
         self.assertFalse(eval_doc_spotlight(doc_ac_only))
 
+        # Gateway with proxy spotlight/floodlight
+        doc_proxy = {
+            "Capabilities": {
+                "Spotlight": {"proxy": True},
+                "Floodlight": {"proxy": True},
+            }
+        }
+        self.assertFalse(eval_doc_spotlight(doc_proxy))
+        self.assertFalse(eval_doc_floodlight(doc_proxy))
+
     async def test_dynamic_camera_supports_with_cache(self):
         doc = {
             "Capabilities": {

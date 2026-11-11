@@ -40,7 +40,7 @@ from .object import ArloObject
 from .objects import ArloObjects
 from .sensor import ArloSensor
 from .siren import ArloSiren
-from .capabilities import ArloTypes, is_resource
+from .capabilities import ArloTypes, is_resource, supports_spotlight, supports_floodlight
 from .utils import time_to_arlotime
 
 
@@ -331,9 +331,9 @@ class PyArlo:
                 self._objs.base_stations.append(ArloBaseStation(device_name, self._core, self._objs, device))
 
             # Camera
-            if is_resource(self._core, model_id, interface_version, "camera", device_type=device_type):
-                if not any(c.device_id == dev_id for c in self._objs.cameras):
-                    self._objs.cameras.append(ArloCamera(device_name, self._core, self._objs, device))
+            is_camera = is_resource(self._core, model_id, interface_version, "camera", device_type=device_type)
+            if is_camera and not any(c.device_id == dev_id for c in self._objs.cameras):
+                self._objs.cameras.append(ArloCamera(device_name, self._core, self._objs, device))
 
             # Doorbell
             if is_resource(self._core, model_id, interface_version, "doorbell", device_type=device_type):
@@ -341,9 +341,19 @@ class PyArlo:
                     self._objs.doorbells.append(ArloDoorBell(device_name, self._core, self._objs, device))
 
             # Light
-            if is_resource(self._core, model_id, interface_version, "light", device_type=device_type):
-                if not any(l.device_id == dev_id for l in self._objs.lights):
-                    self._objs.lights.append(ArloLight(device_name, self._core, self._objs, device))
+            has_light = is_resource(self._core, model_id, interface_version, "light", device_type=device_type)
+            has_spotlight = is_camera and supports_spotlight(self._core, model_id, interface_version, device_type=device_type)
+            has_floodlight = (is_camera or has_light) and supports_floodlight(self._core, model_id, interface_version, device_type=device_type)
+
+            if (has_light or has_spotlight or has_floodlight) and not any(l.device_id == dev_id for l in self._objs.lights):
+                if has_light and not (has_spotlight or has_floodlight):
+                    self._objs.lights.append(ArloLight(device_name, self._core, self._objs, device, parent_name=device_name))
+                elif has_floodlight:
+                    l_name = device_name if "floodlight" in device_name.lower() or "light" in device_name.lower() else f"{device_name} Floodlight"
+                    self._objs.lights.append(ArloLight(l_name, self._core, self._objs, device, parent_name=device_name, light_type="floodlight"))
+                elif has_spotlight:
+                    l_name = device_name if "spotlight" in device_name.lower() or "light" in device_name.lower() else f"{device_name} Spotlight"
+                    self._objs.lights.append(ArloLight(l_name, self._core, self._objs, device, parent_name=device_name, light_type="spotlight"))
 
             # Sensor
             if is_resource(self._core, model_id, interface_version, "sensor", device_type=device_type):
@@ -762,10 +772,10 @@ class PyArlo:
         return next((l for l in self._objs.lights if l.device_id == device_id), None)
 
     def lookup_light_by_name(self, name) -> Union[ArloLight, None]:
-        """Retrieves an ArloLight object from the internal light list based on its name.
+        """Retrieves an ArloLight object from the internal light list based on its name or parent name.
 
         This method iterates through the `self._objs.lights` list and returns the first
-        ArloLight object whose `name` attribute matches the provided `name`.
+        ArloLight object whose `name` or `parent_name` attribute matches the provided `name`.
 
         Args:
             name: The name of the light to find.
@@ -773,7 +783,11 @@ class PyArlo:
         Returns:
             The ArloLight object if found, otherwise None.
         """
-        return next((l for l in self._objs.lights if l.name == name), None)
+        name_lower = name.lower()
+        return next(
+            (l for l in self._objs.lights if l.name.lower() == name_lower or getattr(l, "parent_name", "").lower() == name_lower),
+            None,
+        )
 
     def lookup_base_station_by_id(self, device_id) -> Union[ArloBaseStation, None]:
         """Retrieves an ArloBaseStation object from the internal base station list based on its device ID.

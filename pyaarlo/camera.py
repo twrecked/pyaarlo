@@ -1607,12 +1607,21 @@ class ArloCamera(ArloChildDevice):
     def spotlight_brightness(self, brightness: int):
         self._core.tasks.run_now(self.set_spotlight_brightness, brightness=brightness)
 
+    def _get_light(self):
+        return next((l for l in self._objs.lights if l.device_id == self.device_id), None)
+
     async def spotlight_on(self):
         """Turns the spotlight on."""
+        lt = self._get_light()
+        if lt is not None:
+            return await lt.turn_on()
         return await self._set_spotlight_properties({"enabled": True})
 
     async def spotlight_off(self):
         """Turns the spotlight off."""
+        lt = self._get_light()
+        if lt is not None:
+            return await lt.turn_off()
         return await self._set_spotlight_properties({"enabled": False})
 
     async def set_spotlight(self, on: bool):
@@ -1627,6 +1636,9 @@ class ArloCamera(ArloChildDevice):
 
         :param brightness: brightness (0-255)
         """
+        lt = self._get_light()
+        if lt is not None:
+            return await lt.set_brightness(brightness)
         # Note: Intensity is 0-100 scale, which we map from 0-255 to
         #       provide an API consistent with nightlight brightness
         return await self._set_spotlight_properties({"intensity": (brightness / 255 * 100)})
@@ -1675,10 +1687,16 @@ class ArloCamera(ArloChildDevice):
 
     async def floodlight_on(self):
         """Turns the floodlight on."""
+        lt = self._get_light()
+        if lt is not None:
+            return await lt.turn_on()
         return await self._set_floodlight_properties({"on": True})
 
     async def floodlight_off(self):
         """Turns the floodlight off."""
+        lt = self._get_light()
+        if lt is not None:
+            return await lt.turn_off()
         return await self._set_floodlight_properties({"on": False})
 
     async def set_floodlight(self, on: bool):
@@ -1690,6 +1708,9 @@ class ArloCamera(ArloChildDevice):
 
     async def set_floodlight_brightness(self, brightness):
         """Sets the floodlight brightness value (0-255)."""
+        lt = self._get_light()
+        if lt is not None:
+            return await lt.set_brightness(brightness)
         percentage = int(brightness / 255 * 100)
         return await self._set_floodlight_properties({
             FLOODLIGHT_BRIGHTNESS1_KEY: percentage,
