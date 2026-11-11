@@ -25,7 +25,7 @@ from .constant import (
 from .base_station import ArloBaseStation
 from .camera import ArloCamera
 from .core import ArloCore
-from .core.backend import ArloBackEnd
+from .core.backend import ArloBackEnd, LoginStep
 from .core.task_manager import ArloTaskManager
 from .core.cfg import ArloCfg
 from .core.logger import ArloLogger
@@ -34,6 +34,7 @@ from .device import ArloDevice
 from .doorbell import ArloDoorBell
 from .light import ArloLight
 from .location import ArloLocation
+from .login import ArloLogin
 from .media import ArloMediaLibrary, MediaFileInfo, extract_base_dir_from_format, format_bytes, prune_media_files, scan_prunable_media
 from .object import ArloObject
 from .objects import ArloObjects
@@ -132,6 +133,14 @@ class PyArlo:
     * **tfa_password** - When using IMAP, password/app-password on server.
     * **tfa_source** - (Legacy / optional) Override token retrieval source (`'push'`, `'console'`, `'imap'`).
     * **tfa_type** - (Legacy / optional) Override token delivery type (`'push'`, `'email'`, `'sms'`).
+    * **tfa_factor_id** - Use this exact 2FA factor, ignoring the type and nickname matching.
+      `PyArlo.tfa_factors()` or `pyaarlo tfa-factors` list the ids. Needed when the account has more
+      than one factor of the same type, two phones for example. A `PUSH` factor always gets the
+      phone approval flow, whatever `tfa` says.
+    * **tfa_nickname** - Match the factor with this nickname. Only used when `tfa_factor_id` is unset.
+    * **tfa_push_timeout** - How long, in seconds, to wait for a push to be approved. Default 300,
+      what the Arlo web app allows.
+    * **tfa_push_poll** - How often, in seconds, to check whether a push was approved. Default 5.
     * **cipher_list** - Set if your IMAP server is using less secure ciphers.
 
     **Infrequently used `kwargs` parameters:**
@@ -558,6 +567,17 @@ class PyArlo:
         """Returns True if this Arlo instance is connected to the servers, False otherwise.
         """
         return self._core.be.is_connected
+
+    async def tfa_factors(self) -> list[dict[str, Any]] | None:
+        """List the 2FA factors configured on the Arlo account.
+
+        Each entry carries at least `factorId`, `factorType` - `EMAIL`, `SMS`
+        or `PUSH` - `factorRole` and `factorNickname`. Pass a `factorId` back
+        in as the `tfa_factor_id` option to always use that exact factor.
+
+        Returns `None` if the list couldn't be read.
+        """
+        return await self._core.be.tfa_factors()
 
     @property
     def cameras(self) -> List[ArloCamera]:

@@ -11,6 +11,7 @@ from http.cookiejar import LWPCookieJar
 from typing import Any, Callable
 
 from ...constant import (
+    AUTH_UNTRUSTED_ERRORS,
     ORIGIN_HOST,
     REFERER_HOST,
     TRANSID_PREFIX,
@@ -42,6 +43,12 @@ class ArloSessionDetails:
         self.token64: str | None = None
         self.token_expires_in: int | None = None
         self.user_agent: str | None = None
+
+        # The user agent Arlo saw when it paired (trusted) this "browser" and
+        # the `user_agent` setting it came from. Arlo ties the trust to the
+        # browser identity, so we keep presenting the same one.
+        self.paired_user_agent: str | None = None
+        self.paired_user_agent_cfg: str | None = None
         self.headers: dict[str, Any] = {}
         self.auth_headers: dict[str, Any] = {}
 
@@ -220,6 +227,8 @@ class ArloSession:
         self.details.token = None
         self.details.token_expires_in = 0
         self.details.token64 = None
+        self.details.paired_user_agent = None
+        self.details.paired_user_agent_cfg = None
 
         try:
             def _do_load():
@@ -235,6 +244,8 @@ class ArloSession:
             self.details.sub_id = self._save_info["sub_id"]
             self.details.token = self._save_info["token"]
             self.details.token_expires_in = int(self._save_info["expires_in"])
+            self.details.paired_user_agent = self._save_info.get("user_agent")
+            self.details.paired_user_agent_cfg = self._save_info.get("user_agent_cfg")
             # Build remaining.
             self.details.token64 = to_b64(self.details.token)
             self._debug(f"load saved={self._save_info}")
@@ -260,6 +271,8 @@ class ArloSession:
                         "sub_id": self.details.sub_id,
                         "token": self.details.token,
                         "expires_in": str(self.details.token_expires_in),
+                        "user_agent": self.details.paired_user_agent,
+                        "user_agent_cfg": self.details.paired_user_agent_cfg,
                     }
                     # noinspection PyTypeChecker
                     pickle.dump(save_info, dump)
@@ -611,7 +624,7 @@ class ArloSession:
                                 retry_401=False,
                             )
                 # don't warn on untrusted errors, they just mean we need to log in
-                if body["meta"]["error"] != 9204:
+                if body["meta"].get("error") not in AUTH_UNTRUSTED_ERRORS:
                     self._log.warning("error in new response=" + str(body))
                 return meta_code, body["meta"]["message"]
 

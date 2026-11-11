@@ -235,6 +235,42 @@ PyArlo requests Arlo to send a code via email or SMS, and prompts you to type th
   arlo = await PyArlo.create(username="...", password="...", tfa="sms")
   ```
 
+### Choosing the factor
+Arlo calls each 2FA destination a _factor_: an email address, a phone number, or a phone running the Arlo app. By default PyArlo picks one by matching the `tfa` type and then `tfa_nickname`. When the account has several factors of the same type, two phones for example, name the one you want with `tfa_factor_id`; it wins over both.
+
+- **CLI:** `pyaarlo tfa-factors` lists the ids, then `pyaarlo login --factor-id <id>` or `export ARLO_TFA_FACTOR_ID="<id>"`
+- **Python:**
+  ```python
+  for factor in await arlo.tfa_factors():
+      print(factor["factorType"], factor["factorNickname"], factor["factorId"])
+
+  arlo = await PyArlo.create(username="...", password="...", tfa_factor_id="<id>")
+  ```
+
+The flow follows the factor: a `PUSH` factor always waits for the approval on the phone, whatever `tfa` says. PyArlo waits up to 5 minutes for the approval, like the Arlo web app, and stops straight away if you tap deny. Tune it with `tfa_push_timeout` and `tfa_push_poll`.
+
+### Step by step login for setup screens (`ArloLogin`)
+A setup UI can show the user their real factors and let them choose, instead of asking which 2FA method to use up front. `ArloLogin` only logs in; it doesn't read devices or start the event stream.
+
+```python
+from pyaarlo import ArloLogin, LoginStep
+
+login = ArloLogin(username="...", password="...", storage_dir=STORAGE_DIR)
+step = await login.start()
+if step == LoginStep.NEEDS_FACTOR:
+    step = await login.choose_factor(pick_one(login.factors)["factorId"])
+while step == LoginStep.AWAITING_PUSH:
+    await asyncio.sleep(login.push_poll)
+    step = await login.poll_push()
+if step == LoginStep.AWAITING_CODE:
+    step = await login.submit_code(input("Code: "))
+await login.close()
+```
+
+On `SUCCESS` the session and cookies are saved in `storage_dir` and Arlo trusts this "browser". A later `PyArlo.create()` with the same `username`, `storage_dir` and `user_agent` reuses them and doesn't need 2FA again until the trust expires.
+
+PyArlo keeps presenting the user agent a browser was paired with, as long as the `user_agent` setting doesn't change, so `random` no longer throws the trust away on every login.
+
 ---
 
 <a name="notes--recommendations"></a>
