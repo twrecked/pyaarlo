@@ -66,3 +66,33 @@ Sirens are now first-class devices in PyAarlo rather than secondary methods on o
   # List sirens:
   pyaarlo list sirens
   ```
+
+### 8. Unified Camera Spotlights & Floodlights (`ArloLight`, `pyaarlo light`)
+Following the pattern established for sirens, camera spotlights and floodlights are now instantiated as first-class `ArloLight` devices:
+* **Unified Light Management**: Camera spotlights and floodlights appear directly in `arlo.lights` and `arlo.all_devices`.
+* **Standard Light Controls**: `light.turn_on()`, `light.turn_off()`, `light.set_brightness()`, `light.is_on`, and `light.brightness` work uniformly across standalone smart lights and camera lights.
+* **Camera Method Delegation**: `camera.spotlight_on()`, `camera.spotlight_off()`, `camera.set_spotlight_brightness()`, `camera.floodlight_on()`, `camera.floodlight_off()`, and `camera.set_floodlight_brightness()` transparently delegate to the camera's child light while retaining backwards compatibility.
+* **CLI Light Group (`pyaarlo light`)**:
+  ```bash
+  # Control camera spotlight or floodlight by camera name:
+  pyaarlo light on "Driveway" -b 200
+  pyaarlo light off "Driveway"
+  pyaarlo light brightness 128 "Front"
+
+  # Control all lights simultaneously:
+  pyaarlo light on all
+  pyaarlo light off all
+  ```
+
+### 9. Dynamic 2FA Factor Selection & Resumable Login (PR #225)
+*Contributed by [Edwin ANNE](https://github.com/edwin-anne) (@edwin-anne).*
+* **Exact Factor Selection (`tfa_factor_id`)**: Supports selecting an exact 2FA factor ID ahead of nickname/type guessing—essential for accounts with multiple phones or email addresses.
+* **Resumable Step-by-Step Login (`ArloLogin`, `LoginStep`)**: Adds a state-machine login workflow designed for UI setup wizards. Suspends at the factor selection step so UIs can display the real account factors, then handles push polling or code submission.
+* **Reliable Push Approval**: Polls according to `tfa_push_timeout` and `tfa_push_poll` (default 300s, matching the official Arlo web client) and terminates immediately on denied requests (error 9239).
+* **Factor Listing**: Added `PyArlo.tfa_factors()` and CLI command `pyaarlo tfa-factors`.
+* **Persistent User-Agent Pairing**: Preserves paired browser user agents across logins to maintain Arlo cloud trust.
+
+---
+
+## 👥 Contributors
+Special thanks to **[Edwin ANNE](https://github.com/edwin-anne)** (@edwin-anne) for contributing PR [#225](https://github.com/twrecked/pyaarlo/pull/225) (Dynamic 2FA factor selection and step-by-step login).

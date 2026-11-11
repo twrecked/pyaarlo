@@ -16,6 +16,9 @@
   - Resource Role Evaluation (`is_resource`): Consolidated `types.py` into `capabilities.py`
     and added `is_resource()` to determine device roles (`camera`, `gateway`, `doorbell`, `light`,
     `siren`, `chime`, `sensor`) dynamically from `Capabilities.ResourceTypes` with static fallback.
+  - Dynamic 2FA Factor Selection & Step-by-Step Login (PR #225 by Edwin ANNE / @edwin-anne):
+    Added `tfa_factor_id` to pick exact 2FA factors, reliable push approval flow,
+    resumable `ArloLogin` / `LoginStep` for UI setup, `PyArlo.tfa_factors()`, and CLI `tfa-factors`.
   - Unified Camera Spotlights & Floodlights (`ArloLight`): Cameras with spotlights or floodlights
     now instantiate first-class `ArloLight` devices included in `arlo.lights` and `arlo.all_devices`.
     Added `pyaarlo light on/off/turn-on/turn-off/brightness` CLI support targeting cameras by parent name,
