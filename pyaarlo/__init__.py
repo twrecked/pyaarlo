@@ -303,23 +303,41 @@ class PyArlo:
 
             # Check the type and create the appropriate object. Some devices
             # will create more than one object.
+            dev_id = device.get("deviceId", None)
             interface_version = device.get("interfaceVersion")
-            if is_resource(self._core, model_id, interface_version, "basestation", device_type=device_type):
-                self._objs.base_stations.append(ArloBaseStation(device_name, self._core, self._objs, device))
-            if is_resource(self._core, model_id, interface_version, "gateway", device_type=device_type):
+
+            # Check if device acts as a base station / gateway
+            is_base = is_resource(self._core, model_id, interface_version, "basestation", device_type=device_type)
+            if not is_base and is_resource(self._core, model_id, interface_version, "gateway", device_type=device_type):
                 parent_id = device.get("parentId", None)
-                if parent_id is None or parent_id == device.get("deviceId", None):
-                    self._objs.base_stations.append(ArloBaseStation(device_name, self._core, self._objs, device))
+                if parent_id is None or parent_id == dev_id:
+                    is_base = True
+
+            if is_base and not any(b.device_id == dev_id for b in self._objs.base_stations):
+                self._objs.base_stations.append(ArloBaseStation(device_name, self._core, self._objs, device))
+
+            # Camera
             if is_resource(self._core, model_id, interface_version, "camera", device_type=device_type):
-                self._objs.cameras.append(ArloCamera(device_name, self._core, self._objs, device))
+                if not any(c.device_id == dev_id for c in self._objs.cameras):
+                    self._objs.cameras.append(ArloCamera(device_name, self._core, self._objs, device))
+
+            # Doorbell
             if is_resource(self._core, model_id, interface_version, "doorbell", device_type=device_type):
-                self._objs.doorbells.append(ArloDoorBell(device_name, self._core, self._objs, device))
+                if not any(d.device_id == dev_id for d in self._objs.doorbells):
+                    self._objs.doorbells.append(ArloDoorBell(device_name, self._core, self._objs, device))
+
+            # Light
             if is_resource(self._core, model_id, interface_version, "light", device_type=device_type):
-                self._objs.lights.append(ArloLight(device_name, self._core, self._objs, device))
+                if not any(l.device_id == dev_id for l in self._objs.lights):
+                    self._objs.lights.append(ArloLight(device_name, self._core, self._objs, device))
+
+            # Sensor
             if is_resource(self._core, model_id, interface_version, "sensor", device_type=device_type):
-                self._objs.sensors.append(ArloSensor(device_name, self._core, self._objs, device))
+                if not any(s.device_id == dev_id for s in self._objs.sensors):
+                    self._objs.sensors.append(ArloSensor(device_name, self._core, self._objs, device))
+
+            # Siren
             if is_resource(self._core, model_id, interface_version, "siren", device_type=device_type):
-                dev_id = device.get("deviceId", None)
                 if not any(s.device_id == dev_id for s in self._objs.sirens):
                     s_name = device_name if "siren" in device_name.lower() else f"{device_name} Siren"
                     self._objs.sirens.append(ArloSiren(s_name, self._core, self._objs, device, parent_name=device_name))
@@ -356,11 +374,7 @@ class PyArlo:
                 # doorbell) is registered twice under one device id, as an ArloBase
                 # and an ArloCamera. Update every object with the id, the same way
                 # the event stream dispatches to every listener.
-                targets = [
-                    d
-                    for d in self.base_stations + self.cameras + self.doorbells + self.lights
-                    if d.device_id == device_id
-                ]
+                targets = [d for d in self.all_devices if d.device_id == device_id]
                 if targets:
                     self.vdebug(f"updating {device_id} from device refresh")
                     for target in targets:

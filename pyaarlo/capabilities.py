@@ -692,7 +692,12 @@ def static_is_resource(model_id: str | None, resource: str, device_type: str = "
         return dtype in ("chime", "chimes")
 
     if res == "siren":
-        return static_camera_supports(model_id, SIREN_STATE_KEY, device_type=device_type)
+        return (
+            dtype == "siren"
+            or mid.startswith(("VMB400", "VMB450"))
+            or mid == MODEL_GO
+            or static_camera_supports(model_id, SIREN_STATE_KEY, device_type=device_type)
+        )
 
     return False
 

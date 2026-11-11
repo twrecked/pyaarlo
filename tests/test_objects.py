@@ -478,3 +478,97 @@ def test_arlo_siren_lookups():
     assert arlo.lookup_siren_by_id("SIREN-02") == siren
     assert arlo.lookup_siren_by_name("Front Siren") == siren
     assert arlo.lookup_siren_by_name("Front") == siren
+
+
+def test_pyarlo_build_objects_factory():
+    from pyaarlo import PyArlo
+    from pyaarlo.objects import ArloObjects
+
+    core = MagicMock()
+    core.cfg.extra_device_states = []
+    core.st.get.return_value = None
+
+    arlo = MagicMock(spec=PyArlo)
+    arlo._core = core
+    arlo._objs = ArloObjects()
+    arlo.info = MagicMock()
+    arlo.all_devices = PyArlo.all_devices.fget(arlo)
+
+    # Catalog of diverse devices
+    arlo._devices = [
+        # 1. Base Station with Siren
+        {
+            "deviceId": "BASE-01",
+            "deviceName": "Main Base",
+            "deviceType": "basestation",
+            "modelId": "VMB4000",
+            "state": "provisioned",
+        },
+        # Legacy phantom siren entry from Arlo for VMB4000 sharing same deviceId
+        {
+            "deviceId": "BASE-01",
+            "deviceName": "Main Base Siren",
+            "deviceType": "siren",
+            "modelId": "VMB4000-siren",
+            "state": "provisioned",
+        },
+        # 2. Standalone camera (own base station + camera + siren)
+        {
+            "deviceId": "CAM-01",
+            "deviceName": "Driveway",
+            "deviceType": "camera",
+            "modelId": "VMC4041PA",
+            "parentId": "CAM-01",
+            "state": "provisioned",
+        },
+        # 3. Classic camera attached to base
+        {
+            "deviceId": "CAM-02",
+            "deviceName": "Back Yard",
+            "deviceType": "camera",
+            "modelId": "VMC4030",
+            "parentId": "BASE-01",
+            "state": "provisioned",
+        },
+        # 4. Smart Light
+        {
+            "deviceId": "LIGHT-01",
+            "deviceName": "Garden Light",
+            "deviceType": "lights",
+            "modelId": "AL1101",
+            "parentId": "BASE-01",
+            "state": "provisioned",
+        },
+        # 5. Sensor
+        {
+            "deviceId": "SENSOR-01",
+            "deviceName": "Front Door Sensor",
+            "deviceType": "sensors",
+            "modelId": "sensor",
+            "parentId": "BASE-01",
+            "state": "provisioned",
+        },
+    ]
+
+    # Run factory
+    PyArlo._build_objects(arlo)
+
+    # Verify base stations (BASE-01 and CAM-01, exactly once each)
+    base_ids = [b.device_id for b in arlo._objs.base_stations]
+    assert base_ids == ["BASE-01", "CAM-01"]
+
+    # Verify cameras (CAM-01 and CAM-02)
+    camera_ids = [c.device_id for c in arlo._objs.cameras]
+    assert camera_ids == ["CAM-01", "CAM-02"]
+
+    # Verify lights (LIGHT-01)
+    light_ids = [l.device_id for l in arlo._objs.lights]
+    assert light_ids == ["LIGHT-01"]
+
+    # Verify sensors (SENSOR-01)
+    sensor_ids = [s.device_id for s in arlo._objs.sensors]
+    assert sensor_ids == ["SENSOR-01"]
+
+    # Verify sirens (BASE-01 and CAM-01, deduplicated)
+    siren_ids = [s.device_id for s in arlo._objs.sirens]
+    assert siren_ids == ["BASE-01", "CAM-01"]
