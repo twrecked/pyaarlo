@@ -232,9 +232,6 @@ def eval_doc_spotlight(doc: dict[str, Any]) -> bool:
 def eval_doc_floodlight(doc: dict[str, Any]) -> bool:
     """Returns True if the capability document declares floodlight support."""
     caps = doc.get("Capabilities", {})
-    res_types = caps.get("ResourceTypes", [])
-    if isinstance(res_types, list) and "Light" in res_types:
-        return True
     fl = caps.get("Floodlight")
     if not isinstance(fl, dict) or fl.get("proxy", False) is True:
         return False

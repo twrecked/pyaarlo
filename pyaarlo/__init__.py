@@ -346,14 +346,14 @@ class PyArlo:
             has_floodlight = (is_camera or has_light) and supports_floodlight(self._core, model_id, interface_version, device_type=device_type)
 
             if (has_light or has_spotlight or has_floodlight) and not any(l.device_id == dev_id for l in self._objs.lights):
-                if has_light and not (has_spotlight or has_floodlight):
-                    self._objs.lights.append(ArloLight(device_name, self._core, self._objs, device, parent_name=device_name))
+                if has_spotlight:
+                    l_name = device_name if "spotlight" in device_name.lower() or "light" in device_name.lower() else f"{device_name} Spotlight"
+                    self._objs.lights.append(ArloLight(l_name, self._core, self._objs, device, parent_name=device_name, light_type="spotlight"))
                 elif has_floodlight:
                     l_name = device_name if "floodlight" in device_name.lower() or "light" in device_name.lower() else f"{device_name} Floodlight"
                     self._objs.lights.append(ArloLight(l_name, self._core, self._objs, device, parent_name=device_name, light_type="floodlight"))
-                elif has_spotlight:
-                    l_name = device_name if "spotlight" in device_name.lower() or "light" in device_name.lower() else f"{device_name} Spotlight"
-                    self._objs.lights.append(ArloLight(l_name, self._core, self._objs, device, parent_name=device_name, light_type="spotlight"))
+                else:
+                    self._objs.lights.append(ArloLight(device_name, self._core, self._objs, device, parent_name=device_name, light_type="light"))
 
             # Sensor
             if is_resource(self._core, model_id, interface_version, "sensor", device_type=device_type):
