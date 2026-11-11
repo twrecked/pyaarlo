@@ -15,7 +15,9 @@ from ..logger import ArloLogger
 from ...constant import (
     TFA_CONSOLE_SOURCE,
     TFA_IMAP_SOURCE,
+    TFA_PUSH_SOURCE,
     TFA_REST_API_SOURCE,
+    TFA_SOURCES,
 )
 
 try:
@@ -347,7 +349,7 @@ class ArloTFA:
         """
         self._cfg = cfg
         self._log = log
-        self._type: str = cfg.tfa_source
+        self._type: str | None = cfg.tfa_source
 
         self._handler: Union[_TFABase, None] = None
         self._factor_type: str = "BROWSER"
@@ -357,26 +359,45 @@ class ArloTFA:
             self._handler = _TFAImap(cfg, log)
         elif self._type == TFA_REST_API_SOURCE:
             self._handler = _TFARestAPI(cfg, log)
-        else:
+        elif self._type == TFA_PUSH_SOURCE:
             self._handler = _TFAPush(cfg, log)
             self._factor_type = ""
-    
+        else:
+            # Don't guess. Falling back to push here meant a typo in
+            # `tfa_source` left the login waiting on a phone that was never
+            # asked anything.
+            self._log.error(
+                f"2fa: unknown tfa_source '{self._type}', expected one of: {', '.join(TFA_SOURCES)}"
+            )
+
+    @property
+    def is_push(self) -> bool:
+        return self._type == TFA_PUSH_SOURCE
+
     async def start(self) -> bool:
         if self._handler is not None:
             return await self._handler.start()
         return False
-    
+
     async def code(self) -> Union[str, None]:
         """Get the "otp" from the tfa source.
-    
+
         This returns one of 3 things:
          - a 6 digit one-time-pin code
          - None; meaning the tfa failed
          - an empty string which indicates "finishAuth" does the waiting
         """
-        if self._handler is not None:
+        if self._handler is None:
+            return None
+        # A source can raise rather than return None. The console one raises
+        # EOFError when there is no terminal, which is the normal case for a
+        # re-login from the event loop. Treat it as a failed retrieval so the
+        # caller backs off and retries instead of losing the task.
+        try:
             return await self._handler.get()
-        return None
+        except Exception as e:
+            self._log.warning(f"2fa: code retrieval raised {type(e).__name__}: {e}")
+            return None
     
     @property
     def type(self) -> Union[str, None]:
@@ -387,7 +408,8 @@ class ArloTFA:
         return self._factor_type
     
     async def stop(self):
-        await self._handler.stop()
+        if self._handler is not None:
+            await self._handler.stop()
         self._handler = None
         self._type = None
 

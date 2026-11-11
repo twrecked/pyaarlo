@@ -394,7 +394,9 @@ async def test_auth_push_too_many_requests_aborts_immediately(tmp_path):
 
     backend._auth_post = mock_auth_post
     backend._auth_options = AsyncMock(return_value=None)
-    backend._auth_find_factor_id = AsyncMock(return_value="fid-phone")
+    backend._auth_get_factors = AsyncMock(return_value=[
+        {"factorId": "fid-phone", "factorType": "PUSH", "factorNickname": "phone"},
+    ])
 
     result = await backend._auth_new_auth()
 
@@ -436,7 +438,9 @@ async def test_auth_push_expired_request_aborts_immediately(tmp_path):
 
     backend._auth_post = mock_auth_post
     backend._auth_options = AsyncMock(return_value=None)
-    backend._auth_find_factor_id = AsyncMock(return_value="fid-phone")
+    backend._auth_get_factors = AsyncMock(return_value=[
+        {"factorId": "fid-phone", "factorType": "PUSH", "factorNickname": "phone"},
+    ])
 
     result = await backend._auth_new_auth()
 
@@ -475,12 +479,15 @@ async def test_auth_push_pending_polls_until_approved(tmp_path):
             finish_calls += 1
             if finish_calls < 3:
                 return 400, "Authentication is not finished yet"
-            return 200, {"token": "approved_token", "userId": "u1", "expiresIn": 3600, "browserAuthCode": "bac1"}
+            data = {"token": "approved_token", "userId": "u1", "expiresIn": 3600, "browserAuthCode": "bac1"}
+            return 200, ({"meta": {"code": 200}, "data": data} if raw else data)
         return 400, "not found"
 
     backend._auth_post = mock_auth_post
     backend._auth_options = AsyncMock(return_value=None)
-    backend._auth_find_factor_id = AsyncMock(return_value="fid-phone")
+    backend._auth_get_factors = AsyncMock(return_value=[
+        {"factorId": "fid-phone", "factorType": "PUSH", "factorNickname": "phone"},
+    ])
 
     result = await backend._auth_new_auth()
 
