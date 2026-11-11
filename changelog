@@ -16,6 +16,12 @@
   - Resource Role Evaluation (`is_resource`): Consolidated `types.py` into `capabilities.py`
     and added `is_resource()` to determine device roles (`camera`, `gateway`, `doorbell`, `light`,
     `siren`, `chime`, `sensor`) dynamically from `Capabilities.ResourceTypes` with static fallback.
+  - Unified Camera Spotlights & Floodlights (`ArloLight`): Cameras with spotlights or floodlights
+    now instantiate first-class `ArloLight` devices included in `arlo.lights` and `arlo.all_devices`.
+    Added `pyaarlo light on/off/turn-on/turn-off/brightness` CLI support targeting cameras by parent name,
+    with transparent delegation on `ArloCamera` methods for backwards compatibility.
+  - Filtered Base Station Proxy Lights: Capability evaluator ignores `"proxy": true` so base stations
+    and gateways do not generate phantom light devices.
   - Home Assistant Integration Support: Added `--hass` CLI option to directly extract configuration
     from Home Assistant's `.storage/core.config_entries` and reuse active cloud tokens, cookies,
     and capability caches stored in `.aarlo`.
