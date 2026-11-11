@@ -19,6 +19,8 @@ from ..constant import (
     TFA_DEFAULT_HOST,
     TFA_DELAY,
     TFA_EMAIL_TYPE,
+    TFA_PUSH_SOURCE,
+    TFA_PUSH_TIMEOUT,
     TFA_RETRIES,
     USER_AGENTS,
 )
@@ -329,6 +331,10 @@ class ArloCfg:
     @property
     def tfa_type(self) -> str:
         t_type, _ = parse_tfa_spec(self.tfa)
+        # Only a PUSH factor can be approved from the phone, so `tfa_source:
+        # push` on its own means a push factor whatever the default type is.
+        if t_type == TFA_EMAIL_TYPE.lower() and self.tfa_source == TFA_PUSH_SOURCE:
+            return TFA_PUSH_SOURCE
         return t_type
 
     @property
@@ -345,6 +351,33 @@ class ArloCfg:
     @property
     def tfa_retries(self) -> int:
         return self._get_int("tfa_retries", TFA_RETRIES)
+
+    def _get_float(self, key: str, default: float) -> float:
+        val = self._kw.get(key, default)
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return default
+
+    @property
+    def tfa_push_poll(self) -> float:
+        """Seconds between checks while waiting for a push to be approved."""
+        poll = self._get_float("tfa_push_poll", self._get_float("tfa_delay", TFA_DELAY))
+        return poll if poll > 0 else TFA_DELAY
+
+    @property
+    def tfa_push_timeout(self) -> float:
+        """Seconds to wait for the user to approve the push on their phone.
+
+        `tfa_retries` used to express this as a count of `tfa_delay` sized
+        polls. It still wins when it was set explicitly, but its default only
+        gave the user 25 seconds to reach for their phone.
+        """
+        if "tfa_push_timeout" in self._kw:
+            return self._get_float("tfa_push_timeout", TFA_PUSH_TIMEOUT)
+        if "tfa_retries" in self._kw:
+            return self.tfa_retries * self.tfa_push_poll
+        return TFA_PUSH_TIMEOUT
 
     @property
     def tfa_timeout(self) -> int:
@@ -388,6 +421,15 @@ class ArloCfg:
     @property
     def tfa_nickname(self) -> str:
         return cast(str, self._kw.get("tfa_nickname", self.tfa_username))
+
+    @property
+    def tfa_factor_id(self) -> str | None:
+        """Send the 2FA request to this exact factor, ignoring type and nickname.
+
+        `PyArlo.tfa_factors()` or `pyaarlo tfa-factors` list the ids.
+        """
+        factor_id = self._kw.get("tfa_factor_id", None)
+        return cast(str, factor_id) if factor_id else None
 
     @property
     def wait_for_initial_setup(self) -> bool:

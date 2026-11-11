@@ -50,6 +50,11 @@ AUTH_GET_FACTORID = "/api/getFactorId"
 AUTH_VALIDATE_PATH = "/api/validateAccessToken"
 AUTH_START_PAIRING = "/api/startPairingFactor"
 
+# Errors getFactorId answers with when this browser has never been paired.
+# Expected on a first login, so they are not worth warning about. 9204 is the
+# classic backend, 9261 "Invalid factor data" is what the PingOne one returns.
+AUTH_UNTRUSTED_ERRORS = (9204, 9261)
+
 TFA_CONSOLE_SOURCE = "console"
 TFA_IMAP_SOURCE = "imap"
 TFA_REST_API_SOURCE = "rest-api"
@@ -59,6 +64,24 @@ TFA_SMS_TYPE = "SMS"
 TFA_PUSH_TYPE = "PUSH"
 TFA_DELAY = 5
 TFA_RETRIES = 5
+
+# How long to wait, in seconds, for the user to approve a push notification,
+# and how often to check. The Arlo web app allows five minutes and polls every
+# five seconds.
+TFA_PUSH_TIMEOUT = 300
+
+# finishAuth errors seen while waiting for a push. 9233 means "not finished
+# yet", keep polling. 9239 (PUSH_VERIFICATION_FAILURE in the my.arlo.com
+# bundle) is what comes back when the user taps deny on the phone.
+TFA_PUSH_PENDING_ERROR = 9233
+TFA_PUSH_DENIED_ERROR = 9239
+
+TFA_SOURCES = (
+    TFA_CONSOLE_SOURCE,
+    TFA_IMAP_SOURCE,
+    TFA_REST_API_SOURCE,
+    TFA_PUSH_SOURCE,
+)
 TFA_DEFAULT_HOST = "https://aarlo-dot-twrecked-tools.nn.r.appspot.com"
 
 PRELOAD_DAYS = 30

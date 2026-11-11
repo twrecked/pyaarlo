@@ -68,6 +68,7 @@ def read_env_config() -> dict[str, Any]:
         "ARLO_TFA_HOST": "tfa_host",
         "ARLO_TFA_USERNAME": "tfa_username",
         "ARLO_TFA_PASSWORD": "tfa_password",
+        "ARLO_TFA_FACTOR_ID": "tfa_factor_id",
         "ARLO_STORAGE_DIR": "storage_dir",
         "ARLO_CACHE_DIR": "cache_dir",
         "ARLO_BACKEND": "backend",

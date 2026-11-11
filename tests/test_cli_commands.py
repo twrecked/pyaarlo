@@ -304,8 +304,6 @@ def test_pyaarlo_config_create_and_update_wizard(tmp_path):
     assert saved_up["tfa_password"] == "imappass"
 
 
-
-
 def test_pyaarlo_capabilities_help():
     runner = CliRunner()
     result = runner.invoke(pyaarlo_cli, ["capabilities", "--help"])
@@ -446,3 +444,27 @@ def test_pyaarlo_siren_cli():
         assert res_all.exit_code == 0
         assert "[Front Siren] Turned ON" in res_all.output
         mock_siren.turn_on.assert_called_once()
+
+
+def test_pyaarlo_tfa_factors_command():
+    from unittest.mock import AsyncMock, MagicMock
+
+    arlo = MagicMock()
+    arlo.tfa_factors = AsyncMock(return_value=[
+        {"factorId": "fid-1", "factorType": "PUSH", "factorRole": "SECONDARY", "factorNickname": "Pixel 9"},
+    ])
+    arlo.stop = AsyncMock()
+    runner = CliRunner()
+    with patch("pyaarlo.cli.main_cmd.create_pyarlo", AsyncMock(return_value=arlo)):
+        result = runner.invoke(pyaarlo_cli, ["-u", "user@example.com", "-p", "pw", "tfa-factors"])
+    assert result.exit_code == 0, result.output
+    assert "Pixel 9" in result.output
+    assert "factor-id: fid-1" in result.output
+    arlo.stop.assert_awaited_once_with(logout=False)
+
+
+def test_pyaarlo_login_factor_id_option():
+    runner = CliRunner()
+    result = runner.invoke(pyaarlo_cli, ["login", "--help"])
+    assert result.exit_code == 0
+    assert "--factor-id" in result.output

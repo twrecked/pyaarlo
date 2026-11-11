@@ -80,6 +80,7 @@ def cli(
 @click.option("--tfa-host", default=None, help="IMAP server host for 2FA")
 @click.option("--tfa-user", default=None, help="IMAP username for 2FA")
 @click.option("--tfa-pass", default=None, help="IMAP password for 2FA")
+@click.option("--factor-id", default=None, help="Use this exact 2FA factor (see 'pyaarlo tfa-factors')")
 @click.pass_obj
 def login(
     cli_ctx: CLIContext,
@@ -90,6 +91,7 @@ def login(
     tfa_host: str | None,
     tfa_user: str | None,
     tfa_pass: str | None,
+    factor_id: str | None,
 ) -> None:
     """Log in to Arlo, verify credentials, refresh cache, or check token status."""
     if status:
@@ -109,6 +111,8 @@ def login(
         cli_ctx.cli_overrides["tfa_username"] = tfa_user
     if tfa_pass is not None:
         cli_ctx.cli_overrides["tfa_password"] = tfa_pass
+    if factor_id is not None:
+        cli_ctx.cli_overrides["tfa_factor_id"] = factor_id
 
     if force:
         clear_user_session(cli_ctx.config)
@@ -133,6 +137,39 @@ def login(
             await arlo.stop(logout=False)
 
     run_async_cli(cli_ctx, _login())
+
+
+@cli.command("tfa-factors")
+@click.pass_obj
+def tfa_factors(cli_ctx: CLIContext) -> None:
+    """List the 2FA factors configured on the Arlo account.
+
+    Pass the id of the one you want to 'login --factor-id', or set it as
+    tfa_factor_id, to always use that exact factor.
+    """
+
+    async def _list() -> int:
+        arlo = await create_pyarlo(cli_ctx.config, wait_for_setup=False, start_background=False)
+        try:
+            factors = await arlo.tfa_factors()
+            if factors is None:
+                click.echo("Error: unable to read the 2FA factor list.", err=True)
+                return 1
+            if not factors:
+                click.echo("No 2FA factors configured.")
+                return 0
+            for factor in factors:
+                name = factor.get("displayName") or factor.get("factorNickname") or "?"
+                click.echo(f"{name}")
+                click.echo(f"  factor-id: {factor.get('factorId')}")
+                click.echo(f"  type:      {factor.get('factorType')}")
+                click.echo(f"  role:      {factor.get('factorRole')}")
+                click.echo(f"  nickname:  {factor.get('factorNickname')}")
+            return 0
+        finally:
+            await arlo.stop(logout=False)
+
+    run_async_cli(cli_ctx, _list())
 
 
 # -------------------------------------------------------------------------

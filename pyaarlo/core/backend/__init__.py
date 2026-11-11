@@ -22,6 +22,8 @@ from ...constant import (
     MQTT_URL_KEY,
     NOTIFY_PATH,
     SESSION_PATH,
+    TFA_PUSH_DENIED_ERROR,
+    TFA_PUSH_TYPE,
     TRANSID_PREFIX,
 )
 from ...utils import now_strftime, time_to_arlotime, to_b64
@@ -45,6 +47,41 @@ class _AuthState(IntEnum):
     VALIDATE_TOKEN = 9,
     TRUST_BROWSER = 10,
     REVALIDATE_TOKEN = 11,
+
+
+class _FinishResult(IntEnum):
+    """What a single finishAuth call told us."""
+    SUCCESS = 0
+    PENDING = 1
+    DENIED = 2
+    FINAL = 3
+
+
+class LoginStep(IntEnum):
+    """Where an interactive `login_*` call has left the login.
+
+    `SUCCESS` - logged in, the session and cookies are saved.
+    `NEEDS_FACTOR` - call `login_choose_factor()` with one of `login_factors`.
+    `AWAITING_PUSH` - call `login_poll_push()` again in `tfa_push_poll`
+      seconds, until it stops returning this.
+    `AWAITING_CODE` - call `login_submit_code()` with the code the user typed.
+    `FAILED` - could not log in, see the logger's `last_error`.
+    """
+    FAILED = 0
+    SUCCESS = 1
+    NEEDS_FACTOR = 2
+    AWAITING_PUSH = 3
+    AWAITING_CODE = 4
+
+
+class _InteractiveDetails:
+    """State for an interactive login driven by the `login_*` methods.
+    """
+    def __init__(self):
+        self.factors: list[dict[str, Any]] = []
+        self.factor: dict[str, Any] | None = None
+        self.factor_auth_code: str | None = None
+        self.push_deadline: float = 0.0
 
 
 class _AuthDetails:
@@ -132,6 +169,7 @@ class ArloBackEnd:
 
         # This holds the auth details and state.
         self._auth: _AuthDetails = _AuthDetails()
+        self._interactive: _InteractiveDetails = _InteractiveDetails()
 
         # The event stream.
         self._event: _EventDetails = _EventDetails()
@@ -412,42 +450,73 @@ class ArloBackEnd:
             path, "OPTIONS", None, headers, False, False, timeout, self._cfg.auth_host, authpost=True
         )
 
-    async def _auth_find_factor_id(self) -> str | None:
-        """Get list of suitable 2fa options.
+    @staticmethod
+    def _describe_factor(factor: dict[str, Any]) -> str:
+        """One line description of a 2fa factor, for logs."""
+        return "{}/{} ({})".format(
+            factor.get("factorType", "?"),
+            factor.get("displayName") or factor.get("factorNickname") or "?",
+            factor.get("factorId", "?"),
+        )
 
-        Then look at the user config and figure out which one is best
-        suited for the operation.
+    @staticmethod
+    def _is_push_factor(factor: dict[str, Any]) -> bool:
+        return str(factor.get("factorType", "")).upper() == TFA_PUSH_TYPE
+
+    async def _auth_get_factors(self, headers: dict[str, Any] | None = None) -> list[dict[str, Any]] | None:
+        """Return the 2fa factors Arlo has on file, or `None` if we can't read them.
+
+        Needs a token in `headers`; either the partial one handed out in the
+        middle of a login or a full one once we are in.
         """
-        self._debug("auth: finding factor id")
-
-        # Get a list of factors to use.
+        if headers is None:
+            headers = self._auth.headers
         code, factors = await self._auth_get(
             f"{AUTH_GET_FACTORS}?data={int(time.time())}", {
             },
-            self._auth.headers
+            headers
         )
         if not isinstance(factors, dict) or "items" not in factors:
-            self._log.error("login failed: 2fa: no secondary choices available")
+            self._log.error(f"2fa: unable to read the factor list: {code} - {factors}")
+            return None
+        return list(factors["items"])
+
+    def _auth_select_factor(self, factors: list[dict[str, Any]]) -> dict[str, Any] | None:
+        """Pick the 2fa factor to use.
+
+        `tfa_factor_id` wins outright. It names one exact factor, which is the
+        only reliable way to choose when an account has several of the same
+        type; two phones, or a work and a home email. Without it we match on
+        `tfa_type` and then `tfa_nickname`, falling back to the first factor
+        of the right type.
+        """
+        known = ", ".join(self._describe_factor(f) for f in factors) or "nothing"
+
+        wanted_id = self._cfg.tfa_factor_id
+        if wanted_id is not None:
+            for factor in factors:
+                if factor.get("factorId") == wanted_id:
+                    return factor
+            self._log.error(f"login failed: 2fa: no factor with id {wanted_id}, this account has: {known}")
             return None
 
-        # Get the right types.
-        factors_of_type = []
-        for factor in factors["items"]:
-            if factor["factorType"].lower() == self._cfg.tfa_type:
-                factors_of_type.append(factor)
+        wanted_type = self._cfg.tfa_type
+        of_type = [f for f in factors if str(f.get("factorType", "")).lower() == wanted_type]
+        if not of_type:
+            self._log.error(f"login failed: 2fa: no {wanted_type} factor, this account has: {known}")
+            return None
 
-        # Match up the nickname.
-        if len(factors_of_type) > 0:
-            # Try to match the factorNickname with the tfa_nickname
-            for factor in factors_of_type:
-                if self._cfg.tfa_nickname == factor["factorNickname"]:
-                    return factor["factorId"]
-            # Otherwise fallback to using the first option
-            else:
-                return factors_of_type[0]["factorId"]
+        nickname = self._cfg.tfa_nickname
+        for factor in of_type:
+            if factor.get("factorNickname") == nickname:
+                return factor
 
-        self._log.error("login failed: 2fa: no secondary choices available")
-        return None
+        if len(of_type) > 1:
+            self._log.warning(
+                f"2fa: no {wanted_type} factor nicknamed '{nickname}', falling back to "
+                f"{self._describe_factor(of_type[0])}; set tfa_factor_id to choose"
+            )
+        return of_type[0]
 
     async def _auth_trust_browser(self) -> _AuthState:
         """Trust the device.
@@ -484,6 +553,7 @@ class ArloBackEnd:
 
         # We did it.
         self._debug("auth: pairing succeeded")
+        self._auth_remember_user_agent()
         return _AuthState.SUCCESS
 
     async def _auth_validate(self) -> _AuthState:
@@ -530,6 +600,89 @@ class ArloBackEnd:
             )
         return f"login failed: finish failed: {code} - {body}"
 
+    async def _auth_start_factor(self, factor: dict[str, Any]) -> str | None:
+        """Ask Arlo to start authentication against one factor.
+
+        For EMAIL and SMS factors this sends the code out. For a PUSH factor it
+        sends the prompt to the phone; the Arlo apps send an empty
+        `factorType` for those rather than `BROWSER`.
+
+        Returns the `factorAuthCode` finishAuth needs, or `None` on failure.
+        """
+        factor_type = "" if self._is_push_factor(factor) else "BROWSER"
+        await self._auth_options(AUTH_START_PATH, self._auth.headers)
+        code, body = await self._auth_post(
+            AUTH_START_PATH, {
+                "factorId": factor["factorId"],
+                "factorType": factor_type,
+                "userId": self._req.details.user_id
+            },
+            self._auth.headers
+        )
+        if code != 200 or not isinstance(body, dict) or "factorAuthCode" not in body:
+            self._log.error(f"login failed: start failed: {code} - {body}")
+            return None
+        return cast(str, body["factorAuthCode"])
+
+    async def _auth_finish(self, factor_auth_code: str, otp: str | None = None) -> tuple[_FinishResult, int, Any]:
+        """One finishAuth call.
+
+        Asks for the raw answer so the error number under `meta` can tell a
+        push that is still pending from one the user denied. On success the
+        new token is saved and the browser code kept for pairing.
+        """
+        payload: dict[str, Any] = {
+            "factorAuthCode": factor_auth_code,
+            "isBrowserTrusted": True
+        }
+        if otp:
+            payload["otp"] = otp
+
+        code, body = await self._auth_post(AUTH_FINISH_PATH, payload, self._auth.headers, raw=True)
+        meta = body.get("meta", {}) if isinstance(body, dict) else {}
+        if code == 200 and meta.get("code") == 200 and isinstance(body.get("data"), dict):
+            data = body["data"]
+            self._auth.browser_code = data.get("browserAuthCode", None)
+            self._req.update(data)
+            return _FinishResult.SUCCESS, 200, data
+
+        if meta:
+            code = int(meta.get("code", code))
+        message = meta.get("message", body) if meta else body
+        if meta.get("error") == TFA_PUSH_DENIED_ERROR:
+            return _FinishResult.DENIED, code, message
+        if self._tfa_finish_is_final(message):
+            return _FinishResult.FINAL, code, message
+        return _FinishResult.PENDING, code, message
+
+    async def _auth_wait_for_push(self, factor: dict[str, Any], factor_auth_code: str) -> _AuthState:
+        """Poll finishAuth until the push is approved, denied or times out."""
+        timeout = self._cfg.tfa_push_timeout
+        poll = self._cfg.tfa_push_poll
+        name = factor.get("displayName") or factor.get("factorNickname") or "your phone"
+        self._log.info(f"2fa: approve the login on {name}, waiting up to {timeout:.0f}s")
+
+        deadline = time.monotonic() + timeout
+        tries = 1
+        while True:
+            self._debug(f"finishing push auth attempt #{tries}")
+            result, code, body = await self._auth_finish(factor_auth_code)
+            if result == _FinishResult.SUCCESS:
+                return _AuthState.VALIDATE_TOKEN
+            if result == _FinishResult.DENIED:
+                self._log.error("login failed: 2fa: the push was denied")
+                return _AuthState.FAILED
+            if result == _FinishResult.FINAL:
+                self._log.error(self._tfa_finish_error(code, body))
+                return _AuthState.FAILED
+
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                self._log.error(f"login failed: 2fa: the push was not approved within {timeout:.0f}s")
+                return _AuthState.FAILED
+            await asyncio.sleep(min(poll, remaining))
+            tries += 1
+
     async def _auth_new_auth(self) -> _AuthState:
         """We have to authenticate again.
 
@@ -537,96 +690,70 @@ class ArloBackEnd:
          - get a suitable 2fa option
          - start the 2fa option we pick
          - start the authentication process with arlo
-         - get the 2fa token
+         - get the 2fa token, or wait for the push to be approved
          - finish authentication with arlo
 
          finishAuth will give us a new token.
+
+        Which of the two flows runs is decided by the factor, not by
+        `tfa_source`. A PUSH factor has no code to read so asking a code source
+        for one would just hang until it gave up.
         """
         self._debug("auth: start new auth")
 
-        # Find a factor ID to use
-        self._auth.factor_id = await self._auth_find_factor_id()
-        if self._auth.factor_id is None:
+        # Find a factor to use.
+        factors = await self._auth_get_factors()
+        if not factors:
+            self._log.error("login failed: 2fa: no secondary choices available")
             return _AuthState.FAILED
-        self._debug(f"using factor id {self._auth.factor_id}")
+        factor = self._auth_select_factor(factors)
+        if factor is None:
+            return _AuthState.FAILED
+        self._auth.factor_id = factor["factorId"]
+        self._debug(f"using factor {self._describe_factor(factor)}")
+
+        if self._is_push_factor(factor):
+            factor_auth_code = await self._auth_start_factor(factor)
+            if factor_auth_code is None:
+                return _AuthState.FAILED
+            return await self._auth_wait_for_push(factor, factor_auth_code)
 
         # Set up tfa. Call it now so it can capture state before we start
         # the authentication proper. For example, capture the current state
         # of an inbox before emails are sent.
-        self._auth.tfa_handler = ArloTFA(self._cfg, self._log)
-        await self._auth.tfa_handler.start()
+        tfa_handler = ArloTFA(self._cfg, self._log)
+        if tfa_handler.is_push:
+            self._log.error(
+                f"login failed: 2fa: tfa_source is push but {self._describe_factor(factor)} "
+                "can't be approved from the phone app; pick a PUSH factor or another tfa_source"
+            )
+            await tfa_handler.stop()
+            return _AuthState.FAILED
+        self._auth.tfa_handler = tfa_handler
+        if not await tfa_handler.start():
+            await tfa_handler.stop()
+            self._log.error("login failed: 2fa: startup failed")
+            return _AuthState.FAILED
 
         # Start authentication to send out code. Stop if this fails.
-        await self._auth_options(AUTH_START_PATH, self._auth.headers)
-        code, body = await self._auth_post(
-            AUTH_START_PATH, {
-                "factorId": self._auth.factor_id,
-                "factorType": self._auth.tfa_handler.factor_type,
-                "userId": self._req.details.user_id
-            },
-            self._auth.headers
-        )
-        if code != 200:
-            await self._auth.tfa_handler.stop()
-            self._log.error(f"login failed: new start failed1: {code} - {body}")
+        factor_auth_code = await self._auth_start_factor(factor)
+        if factor_auth_code is None:
+            await tfa_handler.stop()
             return _AuthState.FAILED
-
-        # We need this for the next step.
-        factor_auth_code = body["factorAuthCode"]
 
         # Get otp.
-        otp = await self._auth.tfa_handler.code()
-        await self._auth.tfa_handler.stop()
-
-        if otp is None:
-            self._log.error(f"login failed: 2fa: code retrieval failed")
+        otp = await tfa_handler.code()
+        await tfa_handler.stop()
+        if not otp:
+            self._log.error("login failed: 2fa: code retrieval failed")
             return _AuthState.FAILED
 
-        # Build the payload. If we returned a one-time-passcode then enter it.
-        payload = {
-            "factorAuthCode": factor_auth_code,
-            "isBrowserTrusted": True
-        }
-        if otp:
-            payload["otp"] = otp
-
-        # Now finish the auth
-        tries = 1
-        while True:
-            # finish authentication
-            self._debug(f"finishing auth attempt #{tries}")
-            code, body = await self._auth_post(
-                AUTH_FINISH_PATH,
-                payload,
-                self._auth.headers
-            )
-
-            # We're authenticated. Do two things then validate:
-            #  - save the browser auth code
-            #  - update the user info
-            if code == 200:
-                self._auth.browser_code = body.get("browserAuthCode", None)
-                self._req.update(body)
-                return _AuthState.VALIDATE_TOKEN
-
-            if self._tfa_finish_is_final(body):
-                self._log.error(self._tfa_finish_error(code, body))
-                return _AuthState.FAILED
-
-            # We have a code and we only have one attempt, so fail.
-            if otp:
-                break
-
-            # If we've tried too many time, fail.
-            if tries >= self._cfg.tfa_retries:
-                break
-
-            # Loop again.
-            self._log.warning(f"2fa finishAuth - tries {tries}")
-            await asyncio.sleep(self._cfg.tfa_delay)
-            tries += 1
-
-        self._log.error(f"login failed: finish failed: {code} - {body}")
+        # Now finish the auth. We have one attempt with a code.
+        self._debug("finishing auth")
+        result, code, body = await self._auth_finish(factor_auth_code, otp)
+        if result == _FinishResult.SUCCESS:
+            return _AuthState.VALIDATE_TOKEN
+        self._log.error(self._tfa_finish_error(code, body))
         return _AuthState.FAILED
 
     async def _auth_trusted_auth(self) -> _AuthState:
@@ -660,6 +787,8 @@ class ArloBackEnd:
             self._log.error(f"login failed: trusted start failed2: {code} - {body}")
             return _AuthState.FAILED
         else:
+            # Arlo accepted this identity as trusted, so keep using it.
+            self._auth_remember_user_agent()
             return _AuthState.VALIDATE_TOKEN
 
     async def _auth_current_factor_id(self) -> _AuthState:
@@ -871,12 +1000,62 @@ class ArloBackEnd:
         self._debug("auth: starting")
 
         await self._req.load_cookies()
-        self._req.details.user_agent = self._cfg.user_agent_string()
+        self._req.details.user_agent = self._auth_user_agent()
         self._req.details.connection = None
         self._auth.factor_id = None
         self._auth.needs_pairing = True
 
         return _AuthState.REVALIDATE_TOKEN
+
+    def _auth_user_agent(self) -> str:
+        """The user agent to log in with.
+
+        Arlo ties a trusted browser to the identity it was paired with. If we
+        paired under the current `user_agent` setting reuse exactly that
+        string, so `random`, or an updated table of user agents, doesn't throw
+        away the trust and force a full 2fa on the next login.
+        """
+        details = self._req.details
+        if details.paired_user_agent and details.paired_user_agent_cfg == self._cfg.user_agent:
+            self._debug("auth: reusing the paired user agent")
+            return details.paired_user_agent
+        return self._cfg.user_agent_string()
+
+    def _auth_remember_user_agent(self) -> None:
+        self._req.details.paired_user_agent = self._req.details.user_agent
+        self._req.details.paired_user_agent_cfg = self._cfg.user_agent
+
+    async def _auth_run(self, stop_at: tuple[_AuthState, ...] = ()) -> _AuthState:
+        """Step the auth state machine until it succeeds, fails or reaches
+        one of `stop_at`.
+        """
+        steps = {
+            _AuthState.STARTING: self._auth_starting,
+            _AuthState.REVALIDATE_TOKEN: self._auth_revalidate_token,
+            _AuthState.LOGIN: self._auth_login,
+            _AuthState.CURRENT_FACTOR_ID: self._auth_current_factor_id,
+            _AuthState.TRUSTED_AUTH: self._auth_trusted_auth,
+            _AuthState.NEW_AUTH: self._auth_new_auth,
+            _AuthState.VALIDATE_TOKEN: self._auth_validate,
+            _AuthState.TRUST_BROWSER: self._auth_trust_browser,
+        }
+        while self._auth.state not in (_AuthState.SUCCESS, _AuthState.FAILED) + stop_at:
+            step = steps.get(self._auth.state)
+            if step is None:
+                self._log.error(f"login failed: unexpected auth state {self._auth.state}")
+                self._auth.state = _AuthState.FAILED
+                break
+            self._auth.state = await step()
+        return self._auth.state
+
+    async def _auth_succeeded(self) -> None:
+        self._last_login_time = time.monotonic()
+        self._auth.force_reauth = False
+        # We are in a successful state so:
+        #  - save the session for reloading
+        #  - save the cookies for reloading
+        await self._req.save()
+        await self._req.save_cookies()
 
     async def _login_locked(self) -> bool:
         """Perform all the steps to authenticate against the Arlo servers.
@@ -889,36 +1068,146 @@ class ArloBackEnd:
             self._auth.state = _AuthState.STARTING
             self._debug("auth: restarting")
 
-        while self._auth.state != _AuthState.SUCCESS and self._auth.state != _AuthState.FAILED:
-            if self._auth.state == _AuthState.STARTING:
-                self._auth.state = await self._auth_starting()
-            if self._auth.state == _AuthState.REVALIDATE_TOKEN:
-                self._auth.state = await self._auth_revalidate_token()
-            if self._auth.state == _AuthState.LOGIN:
-                self._auth.state = await self._auth_login()
-            if self._auth.state == _AuthState.CURRENT_FACTOR_ID:
-                self._auth.state = await self._auth_current_factor_id()
-            if self._auth.state == _AuthState.TRUSTED_AUTH:
-                self._auth.state = await self._auth_trusted_auth()
-            if self._auth.state == _AuthState.NEW_AUTH:
-                self._auth.state = await self._auth_new_auth()
-            if self._auth.state == _AuthState.VALIDATE_TOKEN:
-                self._auth.state = await self._auth_validate()
-            if self._auth.state == _AuthState.TRUST_BROWSER:
-                self._auth.state = await self._auth_trust_browser()
+        await self._auth_run()
 
         self._debug(f"auth: login exit state: {self._auth.state}")
         if self._auth.state != _AuthState.SUCCESS:
             return False
 
-        self._last_login_time = time.monotonic()
-        self._auth.force_reauth = False
-        # We are in a successful state so:
-        #  - save the session for reloading
-        #  - save the cookies for reloading
-        await self._req.save()
-        await self._req.save_cookies()
+        await self._auth_succeeded()
         return True
+
+    # Interactive login. These let a caller - typically a setup UI - show the
+    # user the account's real 2fa factors and let them pick one, instead of
+    # committing to a `tfa_source`/`tfa_type` up front.
+
+    @property
+    def login_factors(self) -> list[dict[str, Any]]:
+        """The factors offered after `login_start()` returns `NEEDS_FACTOR`."""
+        return self._interactive.factors
+
+    async def _login_finish(self) -> LoginStep:
+        """Validate the new token, pair the browser and save everything."""
+        self._auth.state = _AuthState.VALIDATE_TOKEN
+        if await self._auth_run() != _AuthState.SUCCESS:
+            return LoginStep.FAILED
+        await self._auth_succeeded()
+        self._logged_in = True
+        return LoginStep.SUCCESS
+
+    async def login_start(self) -> LoginStep:
+        """Sign in with the password and see whether 2fa is needed.
+
+        Always checks the password, even if a saved token is still good, so a
+        setup flow finds out about a typo now. A browser Arlo already trusts
+        still skips 2fa.
+        """
+        async with self._login_lock:
+            await self._req.load()
+            if self._req.details.device_id is None:
+                self._req.details.device_id = str(uuid.uuid4())
+            self._interactive = _InteractiveDetails()
+            self._auth.force_reauth = True
+            self._auth.state = _AuthState.STARTING
+
+            state = await self._auth_run(stop_at=(_AuthState.NEW_AUTH,))
+            if state == _AuthState.SUCCESS:
+                await self._auth_succeeded()
+                self._logged_in = True
+                return LoginStep.SUCCESS
+            if state != _AuthState.NEW_AUTH:
+                return LoginStep.FAILED
+
+            factors = await self._auth_get_factors()
+            if not factors:
+                self._log.error("login failed: 2fa: no secondary choices available")
+                return LoginStep.FAILED
+            self._interactive.factors = factors
+            return LoginStep.NEEDS_FACTOR
+
+    async def login_choose_factor(self, factor_id: str) -> LoginStep:
+        """Start 2fa with one of the factors from `login_factors`."""
+        async with self._login_lock:
+            factor = next((f for f in self._interactive.factors if f.get("factorId") == factor_id), None)
+            if factor is None:
+                self._log.error(f"login failed: 2fa: unknown factor id {factor_id}")
+                return LoginStep.FAILED
+
+            self._debug(f"auth: interactive login with {self._describe_factor(factor)}")
+            factor_auth_code = await self._auth_start_factor(factor)
+            if factor_auth_code is None:
+                return LoginStep.FAILED
+
+            self._auth.factor_id = factor_id
+            self._interactive.factor = factor
+            self._interactive.factor_auth_code = factor_auth_code
+            if self._is_push_factor(factor):
+                self._interactive.push_deadline = time.monotonic() + self._cfg.tfa_push_timeout
+                return LoginStep.AWAITING_PUSH
+            return LoginStep.AWAITING_CODE
+
+    async def login_poll_push(self) -> LoginStep:
+        """One check of a push login started by `login_choose_factor()`."""
+        async with self._login_lock:
+            if self._interactive.factor_auth_code is None:
+                self._log.error("login failed: 2fa: no push login in progress")
+                return LoginStep.FAILED
+
+            result, code, body = await self._auth_finish(self._interactive.factor_auth_code)
+            if result == _FinishResult.SUCCESS:
+                return await self._login_finish()
+            if result == _FinishResult.DENIED:
+                self._log.error("login failed: 2fa: the push was denied")
+                return LoginStep.FAILED
+            if result == _FinishResult.FINAL:
+                self._log.error(self._tfa_finish_error(code, body))
+                return LoginStep.FAILED
+            if time.monotonic() >= self._interactive.push_deadline:
+                self._log.error("login failed: 2fa: the push was not approved in time")
+                return LoginStep.FAILED
+            return LoginStep.AWAITING_PUSH
+
+    async def login_submit_code(self, otp: str) -> LoginStep:
+        """Finish an EMAIL or SMS login with the code the user typed in.
+
+        A rejected code leaves the login where it was, so the caller can let
+        the user try again.
+        """
+        async with self._login_lock:
+            if self._interactive.factor_auth_code is None:
+                self._log.error("login failed: 2fa: no code login in progress")
+                return LoginStep.FAILED
+
+            result, code, body = await self._auth_finish(self._interactive.factor_auth_code, otp.strip())
+            if result == _FinishResult.SUCCESS:
+                return await self._login_finish()
+            self._log.error(self._tfa_finish_error(code, body))
+            if result == _FinishResult.FINAL:
+                return LoginStep.FAILED
+            return LoginStep.AWAITING_CODE
+
+    async def login_close(self) -> None:
+        """Drop the HTTP connections an interactive login opened."""
+        details = self._req.details
+        for conn in (details.connection, details.async_connection):
+            close = getattr(conn, "close", None)
+            if close is None:
+                continue
+            try:
+                result = close()
+                if inspect.isawaitable(result):
+                    await result
+            except Exception as e:
+                self._debug(f"login: close failed: {e}")
+        details.connection = None
+        details.async_connection = None
+
+    async def tfa_factors(self) -> list[dict[str, Any]] | None:
+        """Return the 2fa factors configured on the account, once logged in."""
+        headers = self._req.auth_headers()
+        headers["Authorization"] = str(self._req.details.token64 or "")
+        return await self._auth_get_factors(headers)
+
 
     async def _login(self) -> bool:
         """Serialized wrapper around _login_locked to prevent concurrent auth attempts."""
