@@ -631,6 +631,135 @@ def light_brightness(cli_ctx: CLIContext, level: int, targets: tuple[str, ...]) 
 
 
 # -------------------------------------------------------------------------
+# Siren
+# -------------------------------------------------------------------------
+@cli.group()
+def siren() -> None:
+    """Control Arlo sirens (turn on, turn off)."""
+    pass
+
+
+def _exec_siren_turn_on(cli_ctx: CLIContext, targets: tuple[str, ...], duration: int, volume: int) -> None:
+    target_names = parse_targets(targets)
+    if not target_names:
+        click.echo("Error: Please specify at least one siren name, ID, or 'all'.", err=True)
+        sys.exit(1)
+
+    async def _turn_on() -> int:
+        use_cache = not cli_ctx.ignore_cache
+        inline = bool(cli_ctx.config.get("inline_mode", False))
+        arlo = await create_pyarlo(
+            cli_ctx.config,
+            wait_for_setup=inline,
+            start_background=inline,
+            refresh_devices=not use_cache,
+        )
+        try:
+            if "all" in [t.lower() for t in target_names]:
+                matched = list(arlo.sirens)
+                missing: list[str] = []
+            else:
+                matched, missing = resolve_devices(arlo.sirens, target_names)
+                if missing and use_cache:
+                    await arlo._refresh_devices(force=True)
+                    arlo._build_objects()
+                    matched, missing = resolve_devices(arlo.sirens, target_names)
+
+            exit_code = 0
+            for name in missing:
+                click.echo(f"Error: Siren '{name}' not found.", err=True)
+                exit_code = 1
+
+            for s in matched:
+                await s.turn_on(duration=duration, volume=volume)
+                click.echo(f"[{s.name}] Turned ON (duration: {duration}s, volume: {volume})")
+
+            return exit_code
+        finally:
+            await arlo.stop(logout=False)
+
+    run_async_cli(cli_ctx, _turn_on())
+
+
+def _exec_siren_turn_off(cli_ctx: CLIContext, targets: tuple[str, ...]) -> None:
+    target_names = parse_targets(targets)
+    if not target_names:
+        click.echo("Error: Please specify at least one siren name, ID, or 'all'.", err=True)
+        sys.exit(1)
+
+    async def _turn_off() -> int:
+        use_cache = not cli_ctx.ignore_cache
+        inline = bool(cli_ctx.config.get("inline_mode", False))
+        arlo = await create_pyarlo(
+            cli_ctx.config,
+            wait_for_setup=inline,
+            start_background=inline,
+            refresh_devices=not use_cache,
+        )
+        try:
+            if "all" in [t.lower() for t in target_names]:
+                matched = list(arlo.sirens)
+                missing: list[str] = []
+            else:
+                matched, missing = resolve_devices(arlo.sirens, target_names)
+                if missing and use_cache:
+                    await arlo._refresh_devices(force=True)
+                    arlo._build_objects()
+                    matched, missing = resolve_devices(arlo.sirens, target_names)
+
+            exit_code = 0
+            for name in missing:
+                click.echo(f"Error: Siren '{name}' not found.", err=True)
+                exit_code = 1
+
+            for s in matched:
+                await s.turn_off()
+                click.echo(f"[{s.name}] Turned OFF")
+
+            return exit_code
+        finally:
+            await arlo.stop(logout=False)
+
+    run_async_cli(cli_ctx, _turn_off())
+
+
+@siren.command("turn-on")
+@click.argument("targets", nargs=-1, required=True)
+@click.option("-d", "--duration", type=int, default=300, help="Duration in seconds (default: 300)")
+@click.option("-v", "--volume", type=int, default=8, help="Volume level (1-8, default: 8)")
+@click.pass_obj
+def siren_turn_on(cli_ctx: CLIContext, targets: tuple[str, ...], duration: int, volume: int) -> None:
+    """Turn on one or more sirens by name or ID (or 'all')."""
+    _exec_siren_turn_on(cli_ctx, targets, duration, volume)
+
+
+@siren.command("turn-off")
+@click.argument("targets", nargs=-1, required=True)
+@click.pass_obj
+def siren_turn_off(cli_ctx: CLIContext, targets: tuple[str, ...]) -> None:
+    """Turn off one or more sirens by name or ID (or 'all')."""
+    _exec_siren_turn_off(cli_ctx, targets)
+
+
+@siren.command("on")
+@click.argument("targets", nargs=-1, required=True)
+@click.option("-d", "--duration", type=int, default=300, help="Duration in seconds (default: 300)")
+@click.option("-v", "--volume", type=int, default=8, help="Volume level (1-8, default: 8)")
+@click.pass_obj
+def siren_on_alias(cli_ctx: CLIContext, targets: tuple[str, ...], duration: int, volume: int) -> None:
+    """Turn on one or more sirens (alias for turn-on)."""
+    _exec_siren_turn_on(cli_ctx, targets, duration, volume)
+
+
+@siren.command("off")
+@click.argument("targets", nargs=-1, required=True)
+@click.pass_obj
+def siren_off_alias(cli_ctx: CLIContext, targets: tuple[str, ...]) -> None:
+    """Turn off one or more sirens (alias for turn-off)."""
+    _exec_siren_turn_off(cli_ctx, targets)
+
+
+# -------------------------------------------------------------------------
 # Location
 # -------------------------------------------------------------------------
 @cli.group()
@@ -1497,7 +1626,7 @@ def local_media_download(
 # -------------------------------------------------------------------------
 @cli.command("list")
 @click.argument("item", default="all", type=click.Choice(
-    ["all", "devices", "cameras", "lights", "doorbells", "bases", "locations", "sensors"],
+    ["all", "devices", "cameras", "lights", "doorbells", "bases", "locations", "sensors", "sirens"],
     case_sensitive=False,
 ))
 @click.option("-c", "--compact", is_flag=True, default=False, help="Display items in compact format")
@@ -1531,8 +1660,9 @@ def list_cmd(cli_ctx: CLIContext, item: str, compact: bool) -> None:
             "lights": ["light"],
             "doorbells": ["doorbell"],
             "sensors": ["sensor"],
-            "devices": ["camera", "light", "doorbell", "sensor", "base_station"],
-            "all": ["camera", "light", "doorbell", "sensor", "base_station"],
+            "sirens": ["siren"],
+            "devices": ["camera", "light", "doorbell", "sensor", "base_station", "siren"],
+            "all": ["camera", "light", "doorbell", "sensor", "base_station", "siren"],
         }
 
         if item_type in type_map:

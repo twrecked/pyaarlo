@@ -130,6 +130,16 @@ def fill_cache(arlo: PyArlo, cache_path: Path | str | None = None) -> dict[str, 
             "xcloud_id": xcloud_id,
         })
 
+    for sn in getattr(arlo, "sirens", []):
+        devices.append({
+            "name": sn.name,
+            "id": sn.device_id,
+            "type": "siren",
+            "model_id": getattr(sn, "model_id", None),
+            "hw_version": getattr(sn, "hw_version", None),
+            "serial_number": getattr(sn, "serial_number", None),
+        })
+
     locations: list[dict[str, Any]] = []
     for loc in arlo.locations:
         locations.append({

@@ -43,3 +43,26 @@ Device role classification previously maintained in `pyaarlo.types` has been con
 * **`is_resource(res_type)`**: Evaluates device roles (`"camera"`, `"gateway"`, `"doorbell"`, `"light"`, `"siren"`, `"chime"`) directly against Arlo's `ResourceTypes` array in cloud capability documents.
 * **`device.is_resource(...)`**: Added convenient role checks directly on `ArloDevice`.
 * **Deprecation Shim**: `pyaarlo.types` is now a thin backwards-compatible shim re-exporting `ArloTypes` and `is_resource`.
+
+### 7. First-Class Siren Device & CLI (`ArloSiren`, `pyaarlo siren`)
+Sirens are now first-class devices in PyAarlo rather than secondary methods on other objects:
+* **`ArloSiren` Class (`pyaarlo.siren`)**:
+  - `siren.is_on`, `siren.siren_state`
+  - `await siren.turn_on(duration=..., volume=...)`
+  - `await siren.turn_off()`
+* **Collections & Lookups**:
+  - `arlo.sirens`: list of discovered sirens (integrated camera/doorbell/hub sirens and standalone sirens)
+  - `arlo.lookup_siren_by_id(...)`, `arlo.lookup_siren_by_name(...)`
+* **CLI Siren Group (`pyaarlo siren`)**:
+  ```bash
+  # Control individual siren by device or parent name:
+  pyaarlo siren on "Front" -d 60 -v 8
+  pyaarlo siren off "Front"
+
+  # Control all sirens simultaneously:
+  pyaarlo siren on all
+  pyaarlo siren off all
+
+  # List sirens:
+  pyaarlo list sirens
+  ```

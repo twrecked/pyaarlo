@@ -400,3 +400,49 @@ def test_pyaarlo_hass_option(tmp_path):
         assert res.exit_code == 0
         # Check that cache path cleared is in tmp_path/.aarlo
         assert str(tmp_path / ".aarlo") in res.output
+
+
+def test_pyaarlo_siren_cli():
+    from unittest.mock import AsyncMock, MagicMock
+    runner = CliRunner()
+
+    # 1. Help text
+    res = runner.invoke(pyaarlo_cli, ["siren", "--help"])
+    assert res.exit_code == 0
+    assert "turn-on" in res.output
+    assert "turn-off" in res.output
+    assert "on" in res.output
+    assert "off" in res.output
+
+    # 2. Siren commands with mock
+    mock_siren = MagicMock()
+    mock_siren.name = "Front Siren"
+    mock_siren.parent_name = "Front"
+    mock_siren.device_id = "SIREN-01"
+    mock_siren.turn_on = AsyncMock()
+    mock_siren.turn_off = AsyncMock()
+
+    mock_arlo = MagicMock()
+    mock_arlo._core = MagicMock()
+    mock_arlo.stop = AsyncMock()
+    mock_arlo.sirens = [mock_siren]
+
+    with patch("pyaarlo.cli.main_cmd.create_pyarlo", return_value=mock_arlo):
+        # Turn on by parent name "Front"
+        res_on = runner.invoke(pyaarlo_cli, ["siren", "on", "Front", "-d", "120", "-v", "5"])
+        assert res_on.exit_code == 0
+        assert "[Front Siren] Turned ON" in res_on.output
+        mock_siren.turn_on.assert_called_once_with(duration=120, volume=5)
+
+        # Turn off by siren name "Front Siren"
+        res_off = runner.invoke(pyaarlo_cli, ["siren", "off", "Front Siren"])
+        assert res_off.exit_code == 0
+        assert "[Front Siren] Turned OFF" in res_off.output
+        mock_siren.turn_off.assert_called_once()
+
+        # Turn on all
+        mock_siren.turn_on.reset_mock()
+        res_all = runner.invoke(pyaarlo_cli, ["siren", "on", "all"])
+        assert res_all.exit_code == 0
+        assert "[Front Siren] Turned ON" in res_all.output
+        mock_siren.turn_on.assert_called_once()

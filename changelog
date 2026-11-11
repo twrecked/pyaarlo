@@ -10,6 +10,9 @@
   - CLI Diagnostics: Expanded `pyaarlo capabilities` to inspect all calculated device features,
     added `--built-in`/`--static` flag to show static fallback comparisons, and enabled friendly
     name resolution across all device types (cameras, doorbells, lights, sensors, base stations).
+  - First-Class ArloSiren Class & CLI: Added dedicated `ArloSiren` device class (`pyaarlo.siren`),
+    `arlo.sirens` collection, siren lookup helpers, and `pyaarlo siren` CLI group (`turn-on`,
+    `turn-off`, `on`, `off`) with support for targeting individual sirens or `all`.
   - Resource Role Evaluation (`is_resource`): Consolidated `types.py` into `capabilities.py`
     and added `is_resource()` to determine device roles (`camera`, `gateway`, `doorbell`, `light`,
     `siren`, `chime`, `sensor`) dynamically from `Capabilities.ResourceTypes` with static fallback.

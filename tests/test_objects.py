@@ -1,3 +1,4 @@
+from unittest.mock import MagicMock, AsyncMock
 import pytest
 import asyncio
 from tests.devices import *
@@ -399,3 +400,81 @@ async def test_v3_location_mode_propagation_and_force_flag(core_factory, objs):
     assert core.be.put.called
     assert location.mode == "disarmed"
     assert base.mode == "disarmed"
+
+
+@pytest.mark.asyncio
+async def test_arlo_siren_operations():
+    from pyaarlo.siren import ArloSiren
+
+    core = MagicMock()
+    core.be.notify = AsyncMock(return_value=True)
+    db = {}
+    core.st.get.side_effect = lambda k, d=None: db.get("/".join(k) if isinstance(k, list) else k, d)
+    core.st.set.side_effect = lambda k, v, prefix="": db.__setitem__("/".join(k) if isinstance(k, list) else k, v)
+    core.cfg.storage_dir = "/tmp"
+
+    objs = ArloObjects()
+    attrs = {
+        "deviceId": "SIREN-01",
+        "deviceName": "Driveway",
+        "deviceType": "camera",
+        "modelId": "VMC4041PA",
+        "xCloudId": "XCLOUD-1",
+    }
+    siren = ArloSiren("Driveway Siren", core, objs, attrs, parent_name="Driveway")
+
+    assert siren.name == "Driveway Siren"
+    assert siren.parent_name == "Driveway"
+    assert siren.resource_type == "siren"
+    assert siren._siren_resource_id == "siren/SIREN-01"
+    assert siren.is_on is False
+
+    # Turn on
+    await siren.turn_on(duration=60, volume=5)
+    assert core.be.notify.called
+    call_args = core.be.notify.call_args[1]
+    assert call_args["device_id"] == "SIREN-01"
+    assert call_args["body"]["properties"]["sirenState"] == "on"
+    assert call_args["body"]["properties"]["duration"] == 60
+    assert call_args["body"]["properties"]["volume"] == 5
+
+    # State update
+    siren._save_and_do_callbacks("sirenState", "on")
+    assert siren.is_on is True
+
+    # Turn off
+    core.be.notify.reset_mock()
+    await siren.turn_off()
+    assert core.be.notify.called
+    call_args = core.be.notify.call_args[1]
+    assert call_args["body"]["properties"]["sirenState"] == "off"
+
+
+def test_arlo_siren_lookups():
+    from pyaarlo.siren import ArloSiren
+    from pyaarlo import PyArlo
+
+    core = MagicMock()
+    objs = ArloObjects()
+
+    attrs = {
+        "deviceId": "SIREN-02",
+        "deviceName": "Front",
+        "deviceType": "camera",
+        "modelId": "VMC4041PA",
+    }
+    siren = ArloSiren("Front Siren", core, objs, attrs, parent_name="Front")
+    objs.sirens = [siren]
+
+    arlo = MagicMock(spec=PyArlo)
+    arlo._objs = objs
+    arlo.sirens = objs.sirens
+    arlo.lookup_siren_by_id = lambda id: next((s for s in objs.sirens if s.device_id == id), None)
+    arlo.lookup_siren_by_name = lambda name: next(
+        (s for s in objs.sirens if s.name.lower() == name.lower() or getattr(s, "parent_name", "").lower() == name.lower()),
+        None
+    )
+
+    assert arlo.lookup_siren_by_id("SIREN-02") == siren
+    assert arlo.lookup_siren_by_name("Front Siren") == siren
+    assert arlo.lookup_siren_by_name("Front") == siren

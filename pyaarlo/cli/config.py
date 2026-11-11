@@ -135,9 +135,11 @@ def read_hass_config(hass_path: Path | str | None = None) -> dict[str, Any]:
 
         if entries_file is None:
             raise FileNotFoundError(
+
                 f"Home Assistant config entries file ('core.config_entries') not found under {base_dir} or {base_dir / '.storage'} (from {hass_path})"
             )
 
+    assert entries_file is not None
     try:
         with open(entries_file, "r", encoding="utf-8") as f:
             data = json.load(f)

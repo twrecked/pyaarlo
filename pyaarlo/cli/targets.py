@@ -36,7 +36,12 @@ def match_device(device: Any, identifier: str) -> bool:
     dev_id = str(getattr(device, "device_id", "")).lower()
     dev_name = str(getattr(device, "name", "")).lower()
     dev_sn = str(getattr(device, "serial_number", "")).lower()
-    return id_lower in (dev_id, dev_name, dev_sn)
+    if id_lower in (dev_id, dev_name, dev_sn):
+        return True
+    parent_name = getattr(device, "parent_name", None)
+    if parent_name and id_lower == str(parent_name).lower().strip():
+        return True
+    return False
 
 
 def resolve_devices(candidates: list[Any], targets: list[str]) -> tuple[list[Any], list[str]]:

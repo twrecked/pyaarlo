@@ -38,6 +38,7 @@ from .media import ArloMediaLibrary, MediaFileInfo, extract_base_dir_from_format
 from .object import ArloObject
 from .objects import ArloObjects
 from .sensor import ArloSensor
+from .siren import ArloSiren
 from .capabilities import ArloTypes, is_resource
 from .utils import time_to_arlotime
 
@@ -317,6 +318,11 @@ class PyArlo:
                 self._objs.lights.append(ArloLight(device_name, self._core, self._objs, device))
             if is_resource(self._core, model_id, interface_version, "sensor", device_type=device_type):
                 self._objs.sensors.append(ArloSensor(device_name, self._core, self._objs, device))
+            if is_resource(self._core, model_id, interface_version, "siren", device_type=device_type):
+                dev_id = device.get("deviceId", None)
+                if not any(s.device_id == dev_id for s in self._objs.sirens):
+                    s_name = device_name if "siren" in device_name.lower() else f"{device_name} Siren"
+                    self._objs.sirens.append(ArloSiren(s_name, self._core, self._objs, device, parent_name=device_name))
 
     async def _refresh_devices(self, force: bool = False):
         """Read in the devices list.
@@ -612,6 +618,11 @@ class PyArlo:
         return self._objs.sensors
 
     @property
+    def sirens(self) -> List[ArloSiren]:
+        """Returns the list of sirens known to Arlo."""
+        return self._objs.sirens
+
+    @property
     def all_devices(self) -> List[ArloDevice]:
         """Return all known devices.
 
@@ -624,6 +635,7 @@ class PyArlo:
             *self.lights,
             *self.base_stations,
             *self.sensors,
+            *self.sirens,
         ]
         return devices
 
@@ -808,26 +820,38 @@ class PyArlo:
         """
         return next((b for b in self._objs.locations if b.name == name), None)
 
+    def lookup_siren_by_id(self, device_id: str) -> Union[ArloSiren, None]:
+        """Retrieves an ArloSiren object based on its device ID."""
+        return next((s for s in self._objs.sirens if s.device_id == device_id), None)
+
+    def lookup_siren_by_name(self, name: str) -> Union[ArloSiren, None]:
+        """Retrieves an ArloSiren object based on its name or parent name."""
+        name_lower = name.lower()
+        return next(
+            (s for s in self._objs.sirens if s.name.lower() == name_lower or getattr(s, "parent_name", "").lower() == name_lower),
+            None,
+        )
+
     def lookup_device_by_id(self, device_id) -> Union[ArloDevice, None]:
-        """Retrieves a device (base station, camera, doorbell, light or sensor) by its ID.
-        """
+        """Retrieves a device (base station, camera, doorbell, light, sensor or siren) by its ID."""
         return (
             self.lookup_base_station_by_id(device_id)
             or self.lookup_camera_by_id(device_id)
             or self.lookup_doorbell_by_id(device_id)
             or self.lookup_light_by_id(device_id)
             or self.lookup_sensor_by_id(device_id)
+            or self.lookup_siren_by_id(device_id)
         )
 
     def lookup_device_by_name(self, name) -> Union[ArloDevice, None]:
-        """Retrieves a device (base station, camera, doorbell, light or sensor) by its name.
-        """
+        """Retrieves a device (base station, camera, doorbell, light, sensor or siren) by its name."""
         return (
             self.lookup_base_station_by_name(name)
             or self.lookup_camera_by_name(name)
             or self.lookup_doorbell_by_name(name)
             or self.lookup_light_by_name(name)
             or self.lookup_sensor_by_name(name)
+            or self.lookup_siren_by_name(name)
         )
 
     def lookup_object_by_id(self, device_id) -> Union[ArloObject, None]:
