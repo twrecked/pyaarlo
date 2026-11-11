@@ -38,7 +38,7 @@ from .media import ArloMediaLibrary, MediaFileInfo, extract_base_dir_from_format
 from .object import ArloObject
 from .objects import ArloObjects
 from .sensor import ArloSensor
-from .types import ArloTypes
+from .capabilities import ArloTypes, is_resource
 from .utils import time_to_arlotime
 
 
@@ -302,19 +302,20 @@ class PyArlo:
 
             # Check the type and create the appropriate object. Some devices
             # will create more than one object.
-            if ArloTypes.is_a_base_station(device_type, model_id):
+            interface_version = device.get("interfaceVersion")
+            if is_resource(self._core, model_id, interface_version, "basestation", device_type=device_type):
                 self._objs.base_stations.append(ArloBaseStation(device_name, self._core, self._objs, device))
-            if ArloTypes.can_be_own_base_station(model_id):
+            if is_resource(self._core, model_id, interface_version, "gateway", device_type=device_type):
                 parent_id = device.get("parentId", None)
                 if parent_id is None or parent_id == device.get("deviceId", None):
                     self._objs.base_stations.append(ArloBaseStation(device_name, self._core, self._objs, device))
-            if ArloTypes.is_a_camera(device_type, model_id):
+            if is_resource(self._core, model_id, interface_version, "camera", device_type=device_type):
                 self._objs.cameras.append(ArloCamera(device_name, self._core, self._objs, device))
-            if device_type == "doorbell":
+            if is_resource(self._core, model_id, interface_version, "doorbell", device_type=device_type):
                 self._objs.doorbells.append(ArloDoorBell(device_name, self._core, self._objs, device))
-            if device_type == "lights":
+            if is_resource(self._core, model_id, interface_version, "light", device_type=device_type):
                 self._objs.lights.append(ArloLight(device_name, self._core, self._objs, device))
-            if device_type == "sensors":
+            if is_resource(self._core, model_id, interface_version, "sensor", device_type=device_type):
                 self._objs.sensors.append(ArloSensor(device_name, self._core, self._objs, device))
 
     async def _refresh_devices(self, force: bool = False):

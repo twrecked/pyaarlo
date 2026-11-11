@@ -127,6 +127,17 @@ class ArloDevice(ArloObject):
         """
         return self._parent_id == self.device_id
 
+    def is_resource(self, resource: str) -> bool:
+        """Is the device capable of acting as the given resource type (e.g. 'camera', 'gateway', 'doorbell', 'light', 'siren', 'chime')."""
+        from .capabilities import is_resource
+        return is_resource(
+            self._core,
+            self.model_id,
+            self.interface_version,
+            resource,
+            device_type=self.device_type,
+        )
+
     def has_capability(self, cap) -> bool:
         """Is the device capable of performing activity cap:.
 

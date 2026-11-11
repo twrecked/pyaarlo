@@ -26,6 +26,10 @@ from pyaarlo.capabilities import (
     supports_sip_streaming,
     supports_siren,
     supports_spotlight,
+    is_resource,
+    eval_doc_resource,
+    static_is_resource,
+    ArloTypes,
 )
 from pyaarlo.constant import (
     BATTERY_KEY,
@@ -236,3 +240,64 @@ class TestCapabilities(unittest.IsolatedAsyncioTestCase):
         # Essential indoor has no battery in static rules
         indoor_cam = _FakeCamera(core, "VMC2040", "i001")
         self.assertFalse(ArloCapabilities.check_camera_supports(indoor_cam, BATTERY_KEY))
+
+    def test_eval_doc_resource(self):
+        # Multi-role device (e.g. AVD2001A video doorbell)
+        doc_doorbell = {
+            "Capabilities": {
+                "ResourceTypes": ["Gateway", "Camera", "AudioDoorbell", "Siren"]
+            }
+        }
+        self.assertTrue(eval_doc_resource(doc_doorbell, "camera"))
+        self.assertTrue(eval_doc_resource(doc_doorbell, "gateway"))
+        self.assertTrue(eval_doc_resource(doc_doorbell, "doorbell"))
+        self.assertTrue(eval_doc_resource(doc_doorbell, "siren"))
+        self.assertFalse(eval_doc_resource(doc_doorbell, "light"))
+        self.assertFalse(eval_doc_resource(doc_doorbell, "chime"))
+
+        # Light device
+        doc_light = {
+            "Capabilities": {
+                "ResourceTypes": ["Light"]
+            }
+        }
+        self.assertTrue(eval_doc_resource(doc_light, "light"))
+        self.assertFalse(eval_doc_resource(doc_light, "camera"))
+
+        # Chime device
+        doc_chime = {
+            "Capabilities": {
+                "ResourceTypes": ["Chime"]
+            }
+        }
+        self.assertTrue(eval_doc_resource(doc_chime, "chime"))
+        self.assertFalse(eval_doc_resource(doc_chime, "doorbell"))
+
+    async def test_is_resource_dynamic_vs_static(self):
+        doc = {
+            "Capabilities": {
+                "ResourceTypes": ["Gateway", "Camera", "Siren"]
+            }
+        }
+        core = _FakeCore(doc)
+        await get_capabilities(core, "VMC2050A", "i011")
+
+        # Dynamic via cache
+        self.assertTrue(is_resource(core, "VMC2050A", "i011", "camera"))
+        self.assertTrue(is_resource(core, "VMC2050A", "i011", "gateway"))
+        self.assertTrue(is_resource(core, "VMC2050A", "i011", "siren"))
+        self.assertFalse(is_resource(core, "VMC2050A", "i011", "doorbell"))
+
+        # Static fallback when uncached
+        empty_core = _FakeCore()
+        self.assertTrue(is_resource(empty_core, "VMC4030", "i011", "camera", device_type="camera"))
+        self.assertFalse(is_resource(empty_core, "VMC4030", "i011", "gateway"))
+        self.assertTrue(is_resource(empty_core, "VMC4041", "i001", "gateway"))
+
+    def test_arlo_types_compatibility(self):
+        from pyaarlo.types import ArloTypes as ShimTypes
+        self.assertTrue(ArloTypes.is_a_camera("camera", "VMC3030"))
+        self.assertTrue(ShimTypes.is_a_camera("camera", "VMC3030"))
+        self.assertTrue(ArloTypes.can_be_own_base_station("VMC4041"))
+        self.assertTrue(ShimTypes.can_be_own_base_station("VMC4041"))
+        self.assertFalse(ArloTypes.can_be_own_base_station("VMC4030"))

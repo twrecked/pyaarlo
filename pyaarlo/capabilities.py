@@ -39,6 +39,7 @@ from .constant import (
     MODEL_ESSENTIAL_XL_OUTDOOR_GEN2_HD,
     MODEL_ESSENTIAL_XL_SPOTLIGHT,
     MODEL_GO,
+    MODEL_GO_2,
     MODEL_PRO_2,
     MODEL_PRO_3,
     MODEL_PRO_3_FLOODLIGHT,
@@ -81,6 +82,29 @@ FALLBACK_SIP_STREAMING_MODELS = (
     MODEL_ESSENTIAL_OUTDOOR_GEN2_2K,
     MODEL_ESSENTIAL_XL_OUTDOOR_GEN2_2K,
     MODEL_ESSENTIAL_INDOOR_GEN2_2K,
+)
+
+FALLBACK_OWN_BASE_STATION_MODELS = (
+    MODEL_WIRED_VIDEO_DOORBELL,
+    MODEL_PRO_3_FLOODLIGHT,
+    MODEL_WIRED_FLOODLIGHT,
+    MODEL_PRO_4,
+    MODEL_PRO_5,
+    MODEL_PRO_6,
+    MODEL_PRO_6_XL,
+    MODEL_ESSENTIAL_SPOTLIGHT,
+    MODEL_ESSENTIAL_XL_SPOTLIGHT,
+    MODEL_ESSENTIAL_INDOOR,
+    MODEL_ESSENTIAL_INDOOR_GEN2_2K,
+    MODEL_ESSENTIAL_INDOOR_GEN2_HD,
+    MODEL_ESSENTIAL_XL_OUTDOOR_GEN2_2K,
+    MODEL_ESSENTIAL_XL_OUTDOOR_GEN2_HD,
+    MODEL_ESSENTIAL_OUTDOOR_GEN2_2K,
+    MODEL_ESSENTIAL_OUTDOOR_GEN2_HD,
+    MODEL_WIRED_VIDEO_DOORBELL_GEN2_HD,
+    MODEL_WIRED_VIDEO_DOORBELL_GEN2_2K,
+    MODEL_ESSENTIAL_VIDEO_DOORBELL,
+    MODEL_GO_2,
 )
 
 _memory_cache: dict[str, tuple[float, dict[str, Any]]] = {}
@@ -583,6 +607,130 @@ def static_camera_supports(
             return False
         return True
     return False
+
+
+def eval_doc_resource(doc: dict[str, Any], resource: str) -> bool:
+    """Check if the capability document includes the specified resource role."""
+    caps = doc.get("Capabilities", {})
+    res_types = caps.get("ResourceTypes", [])
+    if not isinstance(res_types, list):
+        return False
+
+    res_set = {str(r).lower() for r in res_types}
+    target = resource.lower().strip()
+
+    if target in ("camera",):
+        return "camera" in res_set
+    if target in ("gateway", "can_be_own_base_station", "own_base_station"):
+        return "gateway" in res_set
+    if target in ("basestation", "base_station", "hub"):
+        return "gateway" in res_set
+    if target in ("doorbell", "audiodoorbell", "audio_doorbell"):
+        return "audiodoorbell" in res_set or "doorbell" in res_set
+    if target in ("light", "lights"):
+        return "light" in res_set or "lights" in res_set
+    if target in ("siren",):
+        return "siren" in res_set
+    if target in ("chime",):
+        return "chime" in res_set
+    if target in ("sensor", "sensors"):
+        return "sensor" in res_set or "sensors" in res_set
+
+    return target in res_set
+
+
+def static_is_resource(model_id: str | None, resource: str, device_type: str = "") -> bool:
+    """Legacy hardcoded rules for determining device resource roles."""
+    res = resource.lower().strip()
+    mid = model_id or ""
+    dtype = device_type.lower().strip()
+
+    if res in ("camera",):
+        return (
+            dtype in ("camera", "arloq", "arloqs")
+            or mid.startswith((
+                MODEL_GO,
+                MODEL_WIRED_VIDEO_DOORBELL,
+                MODEL_WIRED_VIDEO_DOORBELL_GEN2_HD,
+                MODEL_WIRED_VIDEO_DOORBELL_GEN2_2K,
+                MODEL_ESSENTIAL_VIDEO_DOORBELL,
+            ))
+        )
+
+    if res in ("gateway", "can_be_own_base_station", "own_base_station"):
+        return mid.startswith(FALLBACK_OWN_BASE_STATION_MODELS)
+
+    if res in ("basestation", "base_station", "hub"):
+        return (
+            dtype in ("basestation", "arlobridge", "arloq", "arloqs")
+            or dtype == "hub"
+            or mid.startswith(MODEL_BABY)
+            or mid.startswith(MODEL_GO)
+        )
+
+    if res in ("doorbell", "audiodoorbell", "audio_doorbell"):
+        return (
+            dtype == "doorbell"
+            or mid.startswith((
+                MODEL_WIRED_VIDEO_DOORBELL,
+                MODEL_WIRED_VIDEO_DOORBELL_GEN2_HD,
+                MODEL_WIRED_VIDEO_DOORBELL_GEN2_2K,
+                MODEL_ESSENTIAL_VIDEO_DOORBELL,
+            ))
+        )
+
+    if res in ("light", "lights"):
+        return (
+            dtype in ("lights", "light")
+            or mid.startswith((MODEL_PRO_3_FLOODLIGHT, MODEL_WIRED_FLOODLIGHT))
+        )
+
+    if res in ("sensor", "sensors"):
+        return dtype in ("sensors", "sensor")
+
+    if res == "chime":
+        return dtype in ("chime", "chimes")
+
+    if res == "siren":
+        return static_camera_supports(model_id, SIREN_STATE_KEY, device_type=device_type)
+
+    return False
+
+
+def is_resource(
+    core: Any | None,
+    model_id: str | None,
+    interface_version: int | str | None,
+    resource: str,
+    device_type: str = "",
+) -> bool:
+    """Returns True if the device supports the specified resource role."""
+    cached = get_cached_capabilities(core, model_id, interface_version)
+    if cached is not None and "Capabilities" in cached:
+        caps = cached.get("Capabilities", {})
+        if "ResourceTypes" in caps and isinstance(caps.get("ResourceTypes"), list):
+            return eval_doc_resource(cached, resource)
+    return static_is_resource(model_id, resource, device_type=device_type)
+
+
+class ArloTypes:
+    """Arlo device types.
+
+    Delegates to is_resource() with static fallbacks.
+    Maintained for backwards compatibility.
+    """
+
+    @staticmethod
+    def is_a_base_station(device_type: str, model_id: str, core: Any | None = None, interface_version: Any | None = None) -> bool:
+        return is_resource(core, model_id, interface_version, "basestation", device_type=device_type)
+
+    @staticmethod
+    def can_be_own_base_station(model_id: str, core: Any | None = None, interface_version: Any | None = None) -> bool:
+        return is_resource(core, model_id, interface_version, "gateway")
+
+    @staticmethod
+    def is_a_camera(device_type: str, model_id: str, core: Any | None = None, interface_version: Any | None = None) -> bool:
+        return is_resource(core, model_id, interface_version, "camera", device_type=device_type)
 
 
 class ArloCapabilities:

@@ -37,3 +37,9 @@ pyaarlo --hass /home/homeassistant/.homeassistant camera "Driveway" snapshot
 ```
 * **Direct Config Extraction**: Reads `username`, `password`, and 2FA parameters directly from Home Assistant's `.storage/core.config.entries` JSON.
 * **Shared Session & Capabilities Cache**: Points `storage_dir` and `cache_dir` directly to `<hass_dir>/.aarlo`, sharing the active login tokens, cookies, and cached capability documents without requiring a new 2FA login challenge.
+
+### 6. Resource Role Evaluation & Types Consolidation (`is_resource`)
+Device role classification previously maintained in `pyaarlo.types` has been consolidated into `pyaarlo.capabilities`:
+* **`is_resource(res_type)`**: Evaluates device roles (`"camera"`, `"gateway"`, `"doorbell"`, `"light"`, `"siren"`, `"chime"`) directly against Arlo's `ResourceTypes` array in cloud capability documents.
+* **`device.is_resource(...)`**: Added convenient role checks directly on `ArloDevice`.
+* **Deprecation Shim**: `pyaarlo.types` is now a thin backwards-compatible shim re-exporting `ArloTypes` and `is_resource`.
