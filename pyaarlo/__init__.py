@@ -44,7 +44,7 @@ from .capabilities import ArloTypes, is_resource, supports_spotlight, supports_f
 from .utils import time_to_arlotime
 
 
-__version__ = "0.9.0-alpha.9.post2"
+__version__ = "0.9.0-alpha.9.post3"
 
 
 class FeedMetadataError(Exception):
