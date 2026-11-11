@@ -301,6 +301,11 @@ class PyArlo:
             device_type = device.get("deviceType")
             model_id = device.get("modelId")
 
+            # Skip Arlo's legacy shadow siren sub-entries (e.g. VMB4000-siren)
+            if device_type == "siren" and model_id and model_id.endswith("-siren"):
+                self.vdebug(f"skipping legacy shadow siren sub-device: {device_name}")
+                continue
+
             # Check the type and create the appropriate object. Some devices
             # will create more than one object.
             dev_id = device.get("deviceId", None)

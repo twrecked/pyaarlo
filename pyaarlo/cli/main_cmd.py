@@ -1635,8 +1635,9 @@ def list_cmd(cli_ctx: CLIContext, item: str, compact: bool) -> None:
     """List Arlo devices, locations, or subsystems."""
     async def _list() -> int:
         # Check cache if not ignoring cache
+        cache_file = cli_ctx.cache_path if cli_ctx.hass_dir else None
         if not cli_ctx.ignore_cache:
-            cached = load_cache()
+            cached = load_cache(cache_file)
             if cached and not is_cache_stale(cached):
                 _print_cached_list(cached, item, compact)
                 return 0
@@ -1644,7 +1645,7 @@ def list_cmd(cli_ctx: CLIContext, item: str, compact: bool) -> None:
         # Live query
         arlo = await create_pyarlo(cli_ctx.config, wait_for_setup=True)
         try:
-            cache_data = fill_cache(arlo)
+            cache_data = fill_cache(arlo, cache_file)
             _print_cached_list(cache_data, item, compact)
             return 0
         finally:
