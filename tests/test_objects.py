@@ -1,3 +1,4 @@
+from unittest.mock import MagicMock, AsyncMock
 import pytest
 import asyncio
 from tests.devices import *
@@ -399,3 +400,333 @@ async def test_v3_location_mode_propagation_and_force_flag(core_factory, objs):
     assert core.be.put.called
     assert location.mode == "disarmed"
     assert base.mode == "disarmed"
+
+
+@pytest.mark.asyncio
+async def test_arlo_siren_operations():
+    from pyaarlo.siren import ArloSiren
+
+    core = MagicMock()
+    core.be.notify = AsyncMock(return_value=True)
+    db = {}
+    core.st.get.side_effect = lambda k, d=None: db.get("/".join(k) if isinstance(k, list) else k, d)
+    core.st.set.side_effect = lambda k, v, prefix="": db.__setitem__("/".join(k) if isinstance(k, list) else k, v)
+    core.cfg.storage_dir = "/tmp"
+
+    objs = ArloObjects()
+    attrs = {
+        "deviceId": "SIREN-01",
+        "deviceName": "Driveway",
+        "deviceType": "camera",
+        "modelId": "VMC4041PA",
+        "xCloudId": "XCLOUD-1",
+    }
+    siren = ArloSiren("Driveway Siren", core, objs, attrs, parent_name="Driveway")
+
+    assert siren.name == "Driveway Siren"
+    assert siren.parent_name == "Driveway"
+    assert siren.resource_type == "siren"
+    assert siren._siren_resource_id == "siren/SIREN-01"
+    assert siren.is_on is False
+
+    # Turn on
+    await siren.turn_on(duration=60, volume=5)
+    assert core.be.notify.called
+    call_args = core.be.notify.call_args[1]
+    assert call_args["device_id"] == "SIREN-01"
+    assert call_args["body"]["properties"]["sirenState"] == "on"
+    assert call_args["body"]["properties"]["duration"] == 60
+    assert call_args["body"]["properties"]["volume"] == 5
+
+    # State update
+    siren._save_and_do_callbacks("sirenState", "on")
+    assert siren.is_on is True
+
+    # Turn off
+    core.be.notify.reset_mock()
+    await siren.turn_off()
+    assert core.be.notify.called
+    call_args = core.be.notify.call_args[1]
+    assert call_args["body"]["properties"]["sirenState"] == "off"
+
+
+def test_arlo_siren_lookups():
+    from pyaarlo.siren import ArloSiren
+    from pyaarlo import PyArlo
+
+    core = MagicMock()
+    objs = ArloObjects()
+
+    attrs = {
+        "deviceId": "SIREN-02",
+        "deviceName": "Front",
+        "deviceType": "camera",
+        "modelId": "VMC4041PA",
+    }
+    siren = ArloSiren("Front Siren", core, objs, attrs, parent_name="Front")
+    objs.sirens = [siren]
+
+    arlo = MagicMock(spec=PyArlo)
+    arlo._objs = objs
+    arlo.sirens = objs.sirens
+    arlo.lookup_siren_by_id = lambda id: next((s for s in objs.sirens if s.device_id == id), None)
+    arlo.lookup_siren_by_name = lambda name: next(
+        (s for s in objs.sirens if s.name.lower() == name.lower() or getattr(s, "parent_name", "").lower() == name.lower()),
+        None
+    )
+
+    assert arlo.lookup_siren_by_id("SIREN-02") == siren
+    assert arlo.lookup_siren_by_name("Front Siren") == siren
+    assert arlo.lookup_siren_by_name("Front") == siren
+
+
+def test_pyarlo_build_objects_factory():
+    from pyaarlo import PyArlo
+    from pyaarlo.objects import ArloObjects
+
+    core = MagicMock()
+    core.cfg.extra_device_states = []
+    core.st.get.return_value = None
+
+    arlo = MagicMock(spec=PyArlo)
+    arlo._core = core
+    arlo._objs = ArloObjects()
+    arlo.info = MagicMock()
+    arlo.all_devices = PyArlo.all_devices.fget(arlo)
+
+    # Catalog of diverse devices
+    arlo._devices = [
+        # 1. Base Station with Siren
+        {
+            "deviceId": "BASE-01",
+            "deviceName": "Main Base",
+            "deviceType": "basestation",
+            "modelId": "VMB4000",
+            "state": "provisioned",
+        },
+        # Legacy phantom siren entry from Arlo for VMB4000 sharing same deviceId
+        {
+            "deviceId": "BASE-01",
+            "deviceName": "Main Base Siren",
+            "deviceType": "siren",
+            "modelId": "VMB4000-siren",
+            "state": "provisioned",
+        },
+        # 2. Standalone camera (own base station + camera + siren)
+        {
+            "deviceId": "CAM-01",
+            "deviceName": "Driveway",
+            "deviceType": "camera",
+            "modelId": "VMC4041PA",
+            "parentId": "CAM-01",
+            "state": "provisioned",
+        },
+        # 3. Classic camera attached to base
+        {
+            "deviceId": "CAM-02",
+            "deviceName": "Back Yard",
+            "deviceType": "camera",
+            "modelId": "VMC4030",
+            "parentId": "BASE-01",
+            "state": "provisioned",
+        },
+        # 4. Smart Light
+        {
+            "deviceId": "LIGHT-01",
+            "deviceName": "Garden Light",
+            "deviceType": "lights",
+            "modelId": "AL1101",
+            "parentId": "BASE-01",
+            "state": "provisioned",
+        },
+        # 5. Sensor
+        {
+            "deviceId": "SENSOR-01",
+            "deviceName": "Front Door Sensor",
+            "deviceType": "sensors",
+            "modelId": "sensor",
+            "parentId": "BASE-01",
+            "state": "provisioned",
+        },
+    ]
+
+    # Run factory
+    PyArlo._build_objects(arlo)
+
+    # Verify base stations (BASE-01 and CAM-01, exactly once each)
+    base_ids = [b.device_id for b in arlo._objs.base_stations]
+    assert base_ids == ["BASE-01", "CAM-01"]
+
+    # Verify cameras (CAM-01 and CAM-02)
+    camera_ids = [c.device_id for c in arlo._objs.cameras]
+    assert camera_ids == ["CAM-01", "CAM-02"]
+
+    # Verify lights (CAM-01 with spotlight and LIGHT-01)
+    light_ids = [l.device_id for l in arlo._objs.lights]
+    assert set(light_ids) == {"CAM-01", "LIGHT-01"}
+    cam_light = next(l for l in arlo._objs.lights if l.device_id == "CAM-01")
+    assert cam_light.name == "Driveway Spotlight"
+    assert cam_light.parent_name == "Driveway"
+
+    # Verify sensors (SENSOR-01)
+    sensor_ids = [s.device_id for s in arlo._objs.sensors]
+    assert sensor_ids == ["SENSOR-01"]
+
+    # Verify sirens (BASE-01 and CAM-01, deduplicated)
+    siren_ids = [s.device_id for s in arlo._objs.sirens]
+    assert siren_ids == ["BASE-01", "CAM-01"]
+
+
+@pytest.mark.asyncio
+async def test_arlo_light_spotlight_operations():
+    from pyaarlo.light import ArloLight
+
+    core = MagicMock()
+    core.be.notify = AsyncMock(return_value=True)
+    db = {}
+    core.st.get.side_effect = lambda k, d=None: db.get("/".join(k) if isinstance(k, list) else k, d)
+    core.st.set.side_effect = lambda k, v, prefix="": db.__setitem__("/".join(k) if isinstance(k, list) else k, v)
+    core.cfg.storage_dir = "/tmp"
+
+    objs = ArloObjects()
+    attrs = {
+        "deviceId": "CAM-SPOT-01",
+        "deviceName": "Driveway",
+        "deviceType": "camera",
+        "modelId": "VMC4041PA",
+        "parentId": "CAM-SPOT-01",
+        "xCloudId": "XCLOUD-1",
+        "properties": {
+            "spotlight": {"enabled": False, "intensity": 80},
+        },
+    }
+    light = ArloLight("Driveway Spotlight", core, objs, attrs, parent_name="Driveway", light_type="spotlight")
+
+    assert light.name == "Driveway Spotlight"
+    assert light.parent_name == "Driveway"
+    assert light.resource_type == "cameras"
+    assert light.resource_id == "cameras/CAM-SPOT-01"
+    assert light.is_spotlight is True
+    assert light.is_floodlight is False
+    assert light.is_on is False
+
+    # Turn on
+    await light.turn_on(brightness=180)
+    assert core.be.notify.called
+    call_args = core.be.notify.call_args[1]
+    assert call_args["device_id"] == "CAM-SPOT-01"
+    assert call_args["body"]["resource"] == "cameras/CAM-SPOT-01"
+    assert call_args["body"]["properties"]["spotlight"]["enabled"] is True
+    assert call_args["body"]["properties"]["spotlight"]["intensity"] == int(180 / 255 * 100)
+
+    # Event update
+    light._event_handler("cameras/CAM-SPOT-01", {"properties": {"spotlight": {"enabled": True, "intensity": 90}}})
+    assert light.is_on is True
+    assert light.brightness == int(90 / 100 * 255)
+
+    # Set brightness
+    core.be.notify.reset_mock()
+    await light.set_brightness(128)
+    assert core.be.notify.called
+    call_args = core.be.notify.call_args[1]
+    assert call_args["body"]["properties"]["spotlight"]["intensity"] == int(128 / 255 * 100)
+
+    # Turn off
+    core.be.notify.reset_mock()
+    await light.turn_off()
+    assert core.be.notify.called
+    call_args = core.be.notify.call_args[1]
+    assert call_args["body"]["properties"]["spotlight"]["enabled"] is False
+
+
+@pytest.mark.asyncio
+async def test_arlo_light_floodlight_operations():
+    from pyaarlo.light import ArloLight
+
+    core = MagicMock()
+    core.be.notify = AsyncMock(return_value=True)
+    db = {}
+    core.st.get.side_effect = lambda k, d=None: db.get("/".join(k) if isinstance(k, list) else k, d)
+    core.st.set.side_effect = lambda k, v, prefix="": db.__setitem__("/".join(k) if isinstance(k, list) else k, v)
+    core.cfg.storage_dir = "/tmp"
+
+    objs = ArloObjects()
+    attrs = {
+        "deviceId": "CAM-FLOOD-01",
+        "deviceName": "Backyard",
+        "deviceType": "camera",
+        "modelId": "FB1001",
+        "parentId": "CAM-FLOOD-01",
+        "xCloudId": "XCLOUD-2",
+        "properties": {
+            "floodlight": {"on": False, "brightness1": 50, "brightness2": 50},
+        },
+    }
+    light = ArloLight("Backyard Floodlight", core, objs, attrs, parent_name="Backyard", light_type="floodlight")
+
+    assert light.name == "Backyard Floodlight"
+    assert light.parent_name == "Backyard"
+    assert light.resource_type == "cameras"
+    assert light.is_floodlight is True
+    assert light.is_spotlight is False
+    assert light.is_on is False
+
+    # Turn on
+    await light.turn_on(brightness=200)
+    assert core.be.notify.called
+    call_args = core.be.notify.call_args[1]
+    assert call_args["device_id"] == "CAM-FLOOD-01"
+    assert call_args["body"]["properties"]["floodlight"]["on"] is True
+    assert call_args["body"]["properties"]["floodlight"]["brightness1"] == int(200 / 255 * 100)
+
+    # Event update
+    light._event_handler("cameras/CAM-FLOOD-01", {"properties": {"floodlight": {"on": True, "brightness1": 75}}})
+    assert light.is_on is True
+    assert light.brightness == int(75 / 100 * 255)
+
+    # Turn off
+    core.be.notify.reset_mock()
+    await light.turn_off()
+    assert core.be.notify.called
+    call_args = core.be.notify.call_args[1]
+    assert call_args["body"]["properties"]["floodlight"]["on"] is False
+
+
+@pytest.mark.asyncio
+async def test_arlo_camera_delegation_to_light():
+    from pyaarlo.camera import ArloCamera
+    from pyaarlo.light import ArloLight
+
+    core = MagicMock()
+    core.be.notify = AsyncMock(return_value=True)
+    db = {}
+    core.st.get.side_effect = lambda k, d=None: db.get("/".join(k) if isinstance(k, list) else k, d)
+    core.st.set.side_effect = lambda k, v, prefix="": db.__setitem__("/".join(k) if isinstance(k, list) else k, v)
+    core.cfg.storage_dir = "/tmp"
+
+    objs = ArloObjects()
+    cam_attrs = {
+        "deviceId": "CAM-DEL-01",
+        "deviceName": "Patio",
+        "deviceType": "camera",
+        "modelId": "VMC4041PA",
+        "parentId": "CAM-DEL-01",
+        "properties": {},
+    }
+    cam = ArloCamera("Patio", core, objs, cam_attrs)
+    light = ArloLight("Patio Spotlight", core, objs, cam_attrs, parent_name="Patio", light_type="spotlight")
+    objs.cameras = [cam]
+    objs.lights = [light]
+
+    light.turn_on = AsyncMock(return_value=True)
+    light.turn_off = AsyncMock(return_value=True)
+    light.set_brightness = AsyncMock(return_value=True)
+
+    await cam.spotlight_on()
+    light.turn_on.assert_awaited_once()
+
+    await cam.spotlight_off()
+    light.turn_off.assert_awaited_once()
+
+    await cam.set_spotlight_brightness(200)
+    light.set_brightness.assert_awaited_once_with(200)

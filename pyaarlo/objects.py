@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from .location import ArloLocation
     from .media import ArloMediaLibrary
     from .sensor import ArloSensor
+    from .siren import ArloSiren
 
 
 class ArloObjects:
@@ -25,5 +26,6 @@ class ArloObjects:
         self.lights: List[ArloLight] = []
         self.doorbells: List[ArloDoorBell] = []
         self.sensors: List[ArloSensor] = []
+        self.sirens: List[ArloSiren] = []
     
         self.ml: Union[ArloMediaLibrary, None] = None

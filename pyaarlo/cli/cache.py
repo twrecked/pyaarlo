@@ -29,9 +29,13 @@ def load_cache(cache_path: Path | str | None = None) -> dict[str, Any] | None:
 def save_cache(cache_data: dict[str, Any], cache_path: Path | str | None = None) -> Path:
     """Save cache data to JSON file."""
     path = Path(cache_path) if cache_path is not None else get_default_cache_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(cache_data, f, indent=2)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(cache_data, f, indent=2)
+    except (PermissionError, OSError) as err:
+        import sys
+        print(f"Warning: Unable to save cache to {path}: {err}", file=sys.stderr)
     return path
 
 
@@ -100,6 +104,7 @@ def fill_cache(arlo: PyArlo, cache_path: Path | str | None = None) -> dict[str, 
             "model_id": getattr(l, "model_id", None),
             "hw_version": getattr(l, "hw_version", None),
             "serial_number": getattr(l, "serial_number", None),
+            "parent_name": getattr(l, "parent_name", None),
             "base_station_id": bs_id,
             "xcloud_id": xcloud_id,
         })
@@ -128,6 +133,17 @@ def fill_cache(arlo: PyArlo, cache_path: Path | str | None = None) -> dict[str, 
             "serial_number": getattr(s, "serial_number", None),
             "base_station_id": bs_id,
             "xcloud_id": xcloud_id,
+        })
+
+    for sn in getattr(arlo, "sirens", []):
+        devices.append({
+            "name": sn.name,
+            "id": sn.device_id,
+            "type": "siren",
+            "model_id": getattr(sn, "model_id", None),
+            "hw_version": getattr(sn, "hw_version", None),
+            "serial_number": getattr(sn, "serial_number", None),
+            "parent_name": getattr(sn, "parent_name", None),
         })
 
     locations: list[dict[str, Any]] = []

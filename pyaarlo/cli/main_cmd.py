@@ -45,6 +45,7 @@ from ..media import (
 def cli(
     ctx: click.Context,
     config_path: str | None,
+    hass_dir: str | None,
     verbose: int,
     username: str | None,
     password: str | None,
@@ -57,6 +58,7 @@ def cli(
     setup_logging(verbose)
     ctx.obj = CLIContext(
         config_path=config_path,
+        hass_dir=hass_dir,
         ignore_cache=ignore_cache,
         verbose=verbose,
         username=username,
@@ -185,12 +187,12 @@ def cache_fill(cli_ctx: CLIContext) -> None:
     """Populate or update local cache from Arlo."""
     async def _fill() -> int:
         click.echo("Querying Arlo for fresh device and location catalog...")
+        cache_path = cli_ctx.cache_path if cli_ctx.hass_dir else get_default_cache_path()
         arlo = await create_pyarlo(cli_ctx.config, wait_for_setup=True)
         try:
-            cache_data = fill_cache(arlo)
+            cache_data = fill_cache(arlo, cache_path)
             dev_count = len(cache_data.get("devices", []))
             loc_count = len(cache_data.get("locations", []))
-            cache_path = get_default_cache_path()
             click.echo(f"Cache updated: {dev_count} devices, {loc_count} locations saved to {cache_path}")
             return 0
         finally:
@@ -203,7 +205,7 @@ def cache_fill(cli_ctx: CLIContext) -> None:
 @click.pass_obj
 def cache_clear(cli_ctx: CLIContext) -> None:
     """Remove local cache file."""
-    path = get_default_cache_path()
+    path = cli_ctx.cache_path if cli_ctx.hass_dir else get_default_cache_path()
     if clear_cache(path):
         click.echo(f"Cache cleared: {path}")
     else:
@@ -216,7 +218,7 @@ def cache_clear(cli_ctx: CLIContext) -> None:
 @click.pass_obj
 def cache_show(cli_ctx: CLIContext) -> None:
     """Display information about current cache."""
-    cache_path = get_default_cache_path()
+    cache_path = cli_ctx.cache_path if cli_ctx.hass_dir else get_default_cache_path()
     cached = load_cache(cache_path)
     if not cached:
         click.echo(f"No cache found at {cache_path}")
@@ -536,15 +538,10 @@ def light() -> None:
     pass
 
 
-@light.command("turn-on")
-@click.argument("targets", nargs=-1, required=True)
-@click.option("-b", "--brightness", type=int, default=None, help="Brightness level (0-255)")
-@click.pass_obj
-def light_turn_on(cli_ctx: CLIContext, targets: tuple[str, ...], brightness: int | None) -> None:
-    """Turn on one or more lights by name or ID."""
+def _exec_light_turn_on(cli_ctx: CLIContext, targets: tuple[str, ...], brightness: int | None) -> None:
     target_names = parse_targets(targets)
     if not target_names:
-        click.echo("Error: Please specify at least one light name or ID.", err=True)
+        click.echo("Error: Please specify at least one light name, ID, or 'all'.", err=True)
         sys.exit(1)
 
     async def _turn_on() -> int:
@@ -557,11 +554,15 @@ def light_turn_on(cli_ctx: CLIContext, targets: tuple[str, ...], brightness: int
             refresh_devices=not use_cache,
         )
         try:
-            matched, missing = resolve_devices(arlo.lights, target_names)
-            if missing and use_cache:
-                await arlo._refresh_devices(force=True)
-                arlo._build_objects()
+            if "all" in [t.lower() for t in target_names]:
+                matched = list(arlo.lights)
+                missing: list[str] = []
+            else:
                 matched, missing = resolve_devices(arlo.lights, target_names)
+                if missing and use_cache:
+                    await arlo._refresh_devices(force=True)
+                    arlo._build_objects()
+                    matched, missing = resolve_devices(arlo.lights, target_names)
 
             exit_code = 0
             for name in missing:
@@ -580,14 +581,10 @@ def light_turn_on(cli_ctx: CLIContext, targets: tuple[str, ...], brightness: int
     run_async_cli(cli_ctx, _turn_on())
 
 
-@light.command("turn-off")
-@click.argument("targets", nargs=-1, required=True)
-@click.pass_obj
-def light_turn_off(cli_ctx: CLIContext, targets: tuple[str, ...]) -> None:
-    """Turn off one or more lights by name or ID."""
+def _exec_light_turn_off(cli_ctx: CLIContext, targets: tuple[str, ...]) -> None:
     target_names = parse_targets(targets)
     if not target_names:
-        click.echo("Error: Please specify at least one light name or ID.", err=True)
+        click.echo("Error: Please specify at least one light name, ID, or 'all'.", err=True)
         sys.exit(1)
 
     async def _turn_off() -> int:
@@ -600,11 +597,15 @@ def light_turn_off(cli_ctx: CLIContext, targets: tuple[str, ...]) -> None:
             refresh_devices=not use_cache,
         )
         try:
-            matched, missing = resolve_devices(arlo.lights, target_names)
-            if missing and use_cache:
-                await arlo._refresh_devices(force=True)
-                arlo._build_objects()
+            if "all" in [t.lower() for t in target_names]:
+                matched = list(arlo.lights)
+                missing: list[str] = []
+            else:
                 matched, missing = resolve_devices(arlo.lights, target_names)
+                if missing and use_cache:
+                    await arlo._refresh_devices(force=True)
+                    arlo._build_objects()
+                    matched, missing = resolve_devices(arlo.lights, target_names)
 
             exit_code = 0
             for name in missing:
@@ -620,6 +621,40 @@ def light_turn_off(cli_ctx: CLIContext, targets: tuple[str, ...]) -> None:
             await arlo.stop(logout=False)
 
     run_async_cli(cli_ctx, _turn_off())
+
+
+@light.command("turn-on")
+@click.argument("targets", nargs=-1, required=True)
+@click.option("-b", "--brightness", type=int, default=None, help="Brightness level (0-255)")
+@click.pass_obj
+def light_turn_on(cli_ctx: CLIContext, targets: tuple[str, ...], brightness: int | None) -> None:
+    """Turn on one or more lights by name or ID (or 'all')."""
+    _exec_light_turn_on(cli_ctx, targets, brightness)
+
+
+@light.command("turn-off")
+@click.argument("targets", nargs=-1, required=True)
+@click.pass_obj
+def light_turn_off(cli_ctx: CLIContext, targets: tuple[str, ...]) -> None:
+    """Turn off one or more lights by name or ID (or 'all')."""
+    _exec_light_turn_off(cli_ctx, targets)
+
+
+@light.command("on")
+@click.argument("targets", nargs=-1, required=True)
+@click.option("-b", "--brightness", type=int, default=None, help="Brightness level (0-255)")
+@click.pass_obj
+def light_on_alias(cli_ctx: CLIContext, targets: tuple[str, ...], brightness: int | None) -> None:
+    """Turn on one or more lights (alias for turn-on)."""
+    _exec_light_turn_on(cli_ctx, targets, brightness)
+
+
+@light.command("off")
+@click.argument("targets", nargs=-1, required=True)
+@click.pass_obj
+def light_off_alias(cli_ctx: CLIContext, targets: tuple[str, ...]) -> None:
+    """Turn off one or more lights (alias for turn-off)."""
+    _exec_light_turn_off(cli_ctx, targets)
 
 
 @light.command("brightness")
@@ -643,11 +678,15 @@ def light_brightness(cli_ctx: CLIContext, level: int, targets: tuple[str, ...]) 
             refresh_devices=not use_cache,
         )
         try:
-            matched, missing = resolve_devices(arlo.lights, target_names)
-            if missing and use_cache:
-                await arlo._refresh_devices(force=True)
-                arlo._build_objects()
+            if "all" in [t.lower() for t in target_names]:
+                matched = list(arlo.lights)
+                missing: list[str] = []
+            else:
                 matched, missing = resolve_devices(arlo.lights, target_names)
+                if missing and use_cache:
+                    await arlo._refresh_devices(force=True)
+                    arlo._build_objects()
+                    matched, missing = resolve_devices(arlo.lights, target_names)
 
             exit_code = 0
             for name in missing:
@@ -663,6 +702,135 @@ def light_brightness(cli_ctx: CLIContext, level: int, targets: tuple[str, ...]) 
             await arlo.stop(logout=False)
 
     run_async_cli(cli_ctx, _set_brightness())
+
+
+# -------------------------------------------------------------------------
+# Siren
+# -------------------------------------------------------------------------
+@cli.group()
+def siren() -> None:
+    """Control Arlo sirens (turn on, turn off)."""
+    pass
+
+
+def _exec_siren_turn_on(cli_ctx: CLIContext, targets: tuple[str, ...], duration: int, volume: int) -> None:
+    target_names = parse_targets(targets)
+    if not target_names:
+        click.echo("Error: Please specify at least one siren name, ID, or 'all'.", err=True)
+        sys.exit(1)
+
+    async def _turn_on() -> int:
+        use_cache = not cli_ctx.ignore_cache
+        inline = bool(cli_ctx.config.get("inline_mode", False))
+        arlo = await create_pyarlo(
+            cli_ctx.config,
+            wait_for_setup=inline,
+            start_background=inline,
+            refresh_devices=not use_cache,
+        )
+        try:
+            if "all" in [t.lower() for t in target_names]:
+                matched = list(arlo.sirens)
+                missing: list[str] = []
+            else:
+                matched, missing = resolve_devices(arlo.sirens, target_names)
+                if missing and use_cache:
+                    await arlo._refresh_devices(force=True)
+                    arlo._build_objects()
+                    matched, missing = resolve_devices(arlo.sirens, target_names)
+
+            exit_code = 0
+            for name in missing:
+                click.echo(f"Error: Siren '{name}' not found.", err=True)
+                exit_code = 1
+
+            for s in matched:
+                await s.turn_on(duration=duration, volume=volume)
+                click.echo(f"[{s.name}] Turned ON (duration: {duration}s, volume: {volume})")
+
+            return exit_code
+        finally:
+            await arlo.stop(logout=False)
+
+    run_async_cli(cli_ctx, _turn_on())
+
+
+def _exec_siren_turn_off(cli_ctx: CLIContext, targets: tuple[str, ...]) -> None:
+    target_names = parse_targets(targets)
+    if not target_names:
+        click.echo("Error: Please specify at least one siren name, ID, or 'all'.", err=True)
+        sys.exit(1)
+
+    async def _turn_off() -> int:
+        use_cache = not cli_ctx.ignore_cache
+        inline = bool(cli_ctx.config.get("inline_mode", False))
+        arlo = await create_pyarlo(
+            cli_ctx.config,
+            wait_for_setup=inline,
+            start_background=inline,
+            refresh_devices=not use_cache,
+        )
+        try:
+            if "all" in [t.lower() for t in target_names]:
+                matched = list(arlo.sirens)
+                missing: list[str] = []
+            else:
+                matched, missing = resolve_devices(arlo.sirens, target_names)
+                if missing and use_cache:
+                    await arlo._refresh_devices(force=True)
+                    arlo._build_objects()
+                    matched, missing = resolve_devices(arlo.sirens, target_names)
+
+            exit_code = 0
+            for name in missing:
+                click.echo(f"Error: Siren '{name}' not found.", err=True)
+                exit_code = 1
+
+            for s in matched:
+                await s.turn_off()
+                click.echo(f"[{s.name}] Turned OFF")
+
+            return exit_code
+        finally:
+            await arlo.stop(logout=False)
+
+    run_async_cli(cli_ctx, _turn_off())
+
+
+@siren.command("turn-on")
+@click.argument("targets", nargs=-1, required=True)
+@click.option("-d", "--duration", type=int, default=300, help="Duration in seconds (default: 300)")
+@click.option("-v", "--volume", type=int, default=8, help="Volume level (1-8, default: 8)")
+@click.pass_obj
+def siren_turn_on(cli_ctx: CLIContext, targets: tuple[str, ...], duration: int, volume: int) -> None:
+    """Turn on one or more sirens by name or ID (or 'all')."""
+    _exec_siren_turn_on(cli_ctx, targets, duration, volume)
+
+
+@siren.command("turn-off")
+@click.argument("targets", nargs=-1, required=True)
+@click.pass_obj
+def siren_turn_off(cli_ctx: CLIContext, targets: tuple[str, ...]) -> None:
+    """Turn off one or more sirens by name or ID (or 'all')."""
+    _exec_siren_turn_off(cli_ctx, targets)
+
+
+@siren.command("on")
+@click.argument("targets", nargs=-1, required=True)
+@click.option("-d", "--duration", type=int, default=300, help="Duration in seconds (default: 300)")
+@click.option("-v", "--volume", type=int, default=8, help="Volume level (1-8, default: 8)")
+@click.pass_obj
+def siren_on_alias(cli_ctx: CLIContext, targets: tuple[str, ...], duration: int, volume: int) -> None:
+    """Turn on one or more sirens (alias for turn-on)."""
+    _exec_siren_turn_on(cli_ctx, targets, duration, volume)
+
+
+@siren.command("off")
+@click.argument("targets", nargs=-1, required=True)
+@click.pass_obj
+def siren_off_alias(cli_ctx: CLIContext, targets: tuple[str, ...]) -> None:
+    """Turn off one or more sirens (alias for turn-off)."""
+    _exec_siren_turn_off(cli_ctx, targets)
 
 
 # -------------------------------------------------------------------------
@@ -1532,7 +1700,7 @@ def local_media_download(
 # -------------------------------------------------------------------------
 @cli.command("list")
 @click.argument("item", default="all", type=click.Choice(
-    ["all", "devices", "cameras", "lights", "doorbells", "bases", "locations", "sensors"],
+    ["all", "devices", "cameras", "lights", "doorbells", "bases", "locations", "sensors", "sirens"],
     case_sensitive=False,
 ))
 @click.option("-c", "--compact", is_flag=True, default=False, help="Display items in compact format")
@@ -1541,8 +1709,9 @@ def list_cmd(cli_ctx: CLIContext, item: str, compact: bool) -> None:
     """List Arlo devices, locations, or subsystems."""
     async def _list() -> int:
         # Check cache if not ignoring cache
+        cache_file = cli_ctx.cache_path if cli_ctx.hass_dir else None
         if not cli_ctx.ignore_cache:
-            cached = load_cache()
+            cached = load_cache(cache_file)
             if cached and not is_cache_stale(cached):
                 _print_cached_list(cached, item, compact)
                 return 0
@@ -1550,7 +1719,7 @@ def list_cmd(cli_ctx: CLIContext, item: str, compact: bool) -> None:
         # Live query
         arlo = await create_pyarlo(cli_ctx.config, wait_for_setup=True)
         try:
-            cache_data = fill_cache(arlo)
+            cache_data = fill_cache(arlo, cache_file)
             _print_cached_list(cache_data, item, compact)
             return 0
         finally:
@@ -1566,8 +1735,9 @@ def list_cmd(cli_ctx: CLIContext, item: str, compact: bool) -> None:
             "lights": ["light"],
             "doorbells": ["doorbell"],
             "sensors": ["sensor"],
-            "devices": ["camera", "light", "doorbell", "sensor", "base_station"],
-            "all": ["camera", "light", "doorbell", "sensor", "base_station"],
+            "sirens": ["siren"],
+            "devices": ["camera", "light", "doorbell", "sensor", "base_station", "siren"],
+            "all": ["camera", "light", "doorbell", "sensor", "base_station", "siren"],
         }
 
         if item_type in type_map:
@@ -1599,8 +1769,16 @@ def list_cmd(cli_ctx: CLIContext, item: str, compact: bool) -> None:
 @cli.command("capabilities")
 @click.argument("target_or_model")
 @click.argument("version", required=False, default=None)
+@click.option(
+    "--built-in",
+    "--static",
+    "built_in",
+    is_flag=True,
+    default=False,
+    help="Show built-in/static fallback values alongside calculated values.",
+)
 @click.pass_obj
-def capabilities_cmd(cli_ctx: CLIContext, target_or_model: str, version: str | None) -> None:
+def capabilities_cmd(cli_ctx: CLIContext, target_or_model: str, version: str | None, built_in: bool) -> None:
     """Inspect device capability document from Arlo by camera name or model+version."""
     async def _capabilities() -> int:
         arlo = await create_pyarlo(cli_ctx.config, wait_for_setup=True)
@@ -1608,21 +1786,46 @@ def capabilities_cmd(cli_ctx: CLIContext, target_or_model: str, version: str | N
             import json
             from ..capabilities import (
                 get_capabilities,
-                supports_sip_streaming,
-                supports_sip_push_to_talk,
-                has_full_duplex_push_to_talk,
+                eval_doc_motion_detection,
+                eval_doc_audio_detection,
+                eval_doc_siren,
+                eval_doc_spotlight,
+                eval_doc_floodlight,
+                eval_doc_battery,
+                eval_doc_sip_streaming,
+                eval_doc_sip_push_to_talk,
+                eval_doc_full_duplex_talk,
+                eval_doc_temperature,
+                eval_doc_humidity,
+                eval_doc_air_quality,
+                eval_doc_nightlight,
+                static_camera_supports,
             )
-            model = target_or_model
-            doc_version = version
-            if doc_version is None:
-                matched, _ = resolve_devices(arlo.cameras, [target_or_model])
-                if matched:
-                    cam = matched[0]
-                    model = cam.model_id or target_or_model
-                    doc_version = str(cam.interface_version or "i001")
-                    click.echo(f"Resolved camera '{cam.name}': model={model}, version={doc_version}")
-                else:
-                    doc_version = "i001"
+            from ..constant import (
+                MOTION_DETECTED_KEY,
+                AUDIO_DETECTED_KEY,
+                SIREN_STATE_KEY,
+                SPOTLIGHT_KEY,
+                FLOODLIGHT_KEY,
+                BATTERY_KEY,
+                SIP_STREAMING_KEY,
+                SIP_PUSH_TO_TALK_KEY,
+                TEMPERATURE_KEY,
+                HUMIDITY_KEY,
+                AIR_QUALITY_KEY,
+                NIGHTLIGHT_KEY,
+            )
+            matched, _ = resolve_devices(arlo.all_devices, [target_or_model])
+            if matched:
+                dev = matched[0]
+                model = dev.model_id or target_or_model
+                doc_version = version or str(dev.interface_version or "i001")
+                device_type = getattr(dev, "device_type", "camera")
+                click.echo(f"Resolved device '{dev.name}': model={model}, version={doc_version}")
+            else:
+                model = target_or_model
+                doc_version = version or "i001"
+                device_type = "camera"
 
             click.echo(f"Fetching capabilities for model={model}, version={doc_version}...")
             doc = await get_capabilities(arlo._core, model, doc_version)
@@ -1630,13 +1833,31 @@ def capabilities_cmd(cli_ctx: CLIContext, target_or_model: str, version: str | N
                 click.echo("No capability document returned from cloud.")
             else:
                 click.echo(json.dumps(doc, indent=2))
-            sip_stream = supports_sip_streaming(arlo._core, model, doc_version)
-            sip_ptt = supports_sip_push_to_talk(arlo._core, model, doc_version)
-            sip_fd = has_full_duplex_push_to_talk(arlo._core, model, doc_version)
+
             click.echo(f"\nCalculated capabilities:")
-            click.echo(f"  SIP Streaming: {sip_stream}")
-            click.echo(f"  SIP Push-To-Talk: {sip_ptt}")
-            click.echo(f"  Full Duplex Talk: {sip_fd}")
+            items = [
+                ("Motion Detection", eval_doc_motion_detection(doc) if doc else static_camera_supports(model, MOTION_DETECTED_KEY, device_type), static_camera_supports(model, MOTION_DETECTED_KEY, device_type)),
+                ("Audio Detection", eval_doc_audio_detection(doc) if doc else static_camera_supports(model, AUDIO_DETECTED_KEY, device_type), static_camera_supports(model, AUDIO_DETECTED_KEY, device_type)),
+                ("Siren", eval_doc_siren(doc) if doc else static_camera_supports(model, SIREN_STATE_KEY, device_type), static_camera_supports(model, SIREN_STATE_KEY, device_type)),
+                ("Spotlight", eval_doc_spotlight(doc) if doc else static_camera_supports(model, SPOTLIGHT_KEY, device_type), static_camera_supports(model, SPOTLIGHT_KEY, device_type)),
+                ("Floodlight", eval_doc_floodlight(doc) if doc else static_camera_supports(model, FLOODLIGHT_KEY, device_type), static_camera_supports(model, FLOODLIGHT_KEY, device_type)),
+                ("Battery", eval_doc_battery(doc) if doc else static_camera_supports(model, BATTERY_KEY, device_type), static_camera_supports(model, BATTERY_KEY, device_type)),
+                ("SIP Streaming", eval_doc_sip_streaming(doc) if doc else static_camera_supports(model, SIP_STREAMING_KEY, device_type), static_camera_supports(model, SIP_STREAMING_KEY, device_type)),
+                ("SIP Push-To-Talk", eval_doc_sip_push_to_talk(doc) if doc else static_camera_supports(model, SIP_PUSH_TO_TALK_KEY, device_type), static_camera_supports(model, SIP_PUSH_TO_TALK_KEY, device_type)),
+                ("Full Duplex Talk", eval_doc_full_duplex_talk(doc) if doc else False, False),
+            ]
+            if (doc and eval_doc_temperature(doc)) or static_camera_supports(model, TEMPERATURE_KEY, device_type):
+                items.append(("Temperature", eval_doc_temperature(doc) if doc else static_camera_supports(model, TEMPERATURE_KEY, device_type), static_camera_supports(model, TEMPERATURE_KEY, device_type)))
+            if (doc and eval_doc_humidity(doc)) or static_camera_supports(model, HUMIDITY_KEY, device_type):
+                items.append(("Humidity", eval_doc_humidity(doc) if doc else static_camera_supports(model, HUMIDITY_KEY, device_type), static_camera_supports(model, HUMIDITY_KEY, device_type)))
+            if (doc and eval_doc_air_quality(doc)) or static_camera_supports(model, AIR_QUALITY_KEY, device_type):
+                items.append(("Air Quality", eval_doc_air_quality(doc) if doc else static_camera_supports(model, AIR_QUALITY_KEY, device_type), static_camera_supports(model, AIR_QUALITY_KEY, device_type)))
+            if (doc and eval_doc_nightlight(doc)) or static_camera_supports(model, NIGHTLIGHT_KEY, device_type):
+                items.append(("Nightlight", eval_doc_nightlight(doc) if doc else static_camera_supports(model, NIGHTLIGHT_KEY, device_type), static_camera_supports(model, NIGHTLIGHT_KEY, device_type)))
+
+            for label, calc_val, static_val in items:
+                suffix = f" [built-in: {static_val}]" if built_in else ""
+                click.echo(f"  {label}: {calc_val}{suffix}")
             return 0
         finally:
             await arlo.stop(logout=False)

@@ -1,3 +1,4 @@
+from typing import Any
 from pathlib import Path
 from unittest.mock import patch
 
@@ -112,3 +113,113 @@ def test_cli_config_compound_env_vars(tmp_path):
         assert cfg["tfa_type"] == "sms"
         assert cfg["tfa_source"] == "console"
 
+
+
+def test_read_hass_config(tmp_path: Path):
+    from pyaarlo.cli.config import read_hass_config
+    import json
+    import pytest
+
+    storage_dir = tmp_path / ".storage"
+    storage_dir.mkdir(parents=True)
+    entries_file = storage_dir / "core.config.entries"
+
+    sample_entries: dict[str, Any] = {
+        "version": 1,
+        "key": "core.config.entries",
+        "data": {
+            "entries": [
+                {
+                    "domain": "other_component",
+                    "data": {"foo": "bar"}
+                },
+                {
+                    "domain": "aarlo",
+                    "data": {
+                        "username": "ha_user@example.com",
+                        "password": "ha_password",
+                        "tfa": "push",
+                        "tfa_type": "push",
+                        "tfa_source": "push"
+                    },
+                    "options": {}
+                }
+            ]
+        }
+    }
+    with open(entries_file, "w") as f:
+        json.dump(sample_entries, f)
+
+    # 1. Parse from directory
+    cfg_dir = read_hass_config(tmp_path)
+    assert cfg_dir["username"] == "ha_user@example.com"
+    assert cfg_dir["password"] == "ha_password"
+    assert cfg_dir["tfa"] == "push"
+    assert cfg_dir["storage_dir"] == str(tmp_path / ".aarlo")
+    assert cfg_dir["cache_dir"] == str(tmp_path / ".aarlo")
+
+    # 2. Parse from file directly
+    cfg_file = read_hass_config(entries_file)
+    assert cfg_file["username"] == "ha_user@example.com"
+    assert cfg_file["storage_dir"] == str(tmp_path / ".aarlo")
+
+    # 3. Missing aarlo domain
+    sample_entries = {"data": {"entries": [{"domain": "other"}]}}
+    with open(entries_file, "w") as f:
+        json.dump(sample_entries, f)
+    with pytest.raises(ValueError, match="No 'aarlo' integration entry found"):
+        read_hass_config(tmp_path)
+
+    # 4. Missing core.config.entries file
+    empty_dir = tmp_path / "nonexistent"
+    empty_dir.mkdir()
+    with pytest.raises(FileNotFoundError):
+        read_hass_config(empty_dir)
+
+
+def test_load_config_with_hass(tmp_path: Path):
+    import json
+
+    storage_dir = tmp_path / ".storage"
+    storage_dir.mkdir(parents=True)
+    entries_file = storage_dir / "core.config.entries"
+
+    sample_entries: dict[str, Any] = {
+        "version": 1,
+        "key": "core.config.entries",
+        "data": {
+            "entries": [
+                {
+                    "domain": "aarlo",
+                    "data": {
+                        "username": "ha_user@example.com",
+                        "password": "ha_password",
+                        "tfa": "push"
+                    },
+                    "options": {}
+                }
+            ]
+        }
+    }
+    with open(entries_file, "w") as f:
+        json.dump(sample_entries, f)
+
+    # File cfg with different user
+    cfg_file = tmp_path / "config.json"
+    save_config_file({"username": "file_user@example.com", "password": "file_password"}, cfg_file)
+
+    # CLI override
+    cli_overrides = {"password": "override_password"}
+
+    final_cfg = load_config(
+        cli_overrides=cli_overrides,
+        config_path=cfg_file,
+        hass_path=tmp_path,
+    )
+
+    # HASS overrides config.json
+    assert final_cfg["username"] == "ha_user@example.com"
+    # CLI overrides HASS
+    assert final_cfg["password"] == "override_password"
+    # Storage dir set to .aarlo
+    assert final_cfg["storage_dir"] == str(tmp_path / ".aarlo")

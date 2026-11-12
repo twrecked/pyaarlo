@@ -39,11 +39,12 @@ from .media import ArloMediaLibrary, MediaFileInfo, extract_base_dir_from_format
 from .object import ArloObject
 from .objects import ArloObjects
 from .sensor import ArloSensor
-from .types import ArloTypes
+from .siren import ArloSiren
+from .capabilities import ArloTypes, is_resource, supports_spotlight, supports_floodlight
 from .utils import time_to_arlotime
 
 
-__version__ = "0.9.0-alpha.8"
+__version__ = "0.9.0-alpha.9"
 
 
 class FeedMetadataError(Exception):
@@ -309,22 +310,61 @@ class PyArlo:
             device_type = device.get("deviceType")
             model_id = device.get("modelId")
 
+            # Skip Arlo's legacy shadow siren sub-entries (e.g. VMB4000-siren)
+            if device_type == "siren" and model_id and model_id.endswith("-siren"):
+                self.vdebug(f"skipping legacy shadow siren sub-device: {device_name}")
+                continue
+
             # Check the type and create the appropriate object. Some devices
             # will create more than one object.
-            if ArloTypes.is_a_base_station(device_type, model_id):
-                self._objs.base_stations.append(ArloBaseStation(device_name, self._core, self._objs, device))
-            if ArloTypes.can_be_own_base_station(model_id):
+            dev_id = device.get("deviceId", None)
+            interface_version = device.get("interfaceVersion")
+
+            # Check if device acts as a base station / gateway
+            is_base = is_resource(self._core, model_id, interface_version, "basestation", device_type=device_type)
+            if not is_base and is_resource(self._core, model_id, interface_version, "gateway", device_type=device_type):
                 parent_id = device.get("parentId", None)
-                if parent_id is None or parent_id == device.get("deviceId", None):
-                    self._objs.base_stations.append(ArloBaseStation(device_name, self._core, self._objs, device))
-            if ArloTypes.is_a_camera(device_type, model_id):
+                if parent_id is None or parent_id == dev_id:
+                    is_base = True
+
+            if is_base and not any(b.device_id == dev_id for b in self._objs.base_stations):
+                self._objs.base_stations.append(ArloBaseStation(device_name, self._core, self._objs, device))
+
+            # Camera
+            is_camera = is_resource(self._core, model_id, interface_version, "camera", device_type=device_type)
+            if is_camera and not any(c.device_id == dev_id for c in self._objs.cameras):
                 self._objs.cameras.append(ArloCamera(device_name, self._core, self._objs, device))
-            if device_type == "doorbell":
-                self._objs.doorbells.append(ArloDoorBell(device_name, self._core, self._objs, device))
-            if device_type == "lights":
-                self._objs.lights.append(ArloLight(device_name, self._core, self._objs, device))
-            if device_type == "sensors":
-                self._objs.sensors.append(ArloSensor(device_name, self._core, self._objs, device))
+
+            # Doorbell
+            if is_resource(self._core, model_id, interface_version, "doorbell", device_type=device_type):
+                if not any(d.device_id == dev_id for d in self._objs.doorbells):
+                    self._objs.doorbells.append(ArloDoorBell(device_name, self._core, self._objs, device))
+
+            # Light
+            has_light = is_resource(self._core, model_id, interface_version, "light", device_type=device_type)
+            has_spotlight = is_camera and supports_spotlight(self._core, model_id, interface_version, device_type=device_type)
+            has_floodlight = (is_camera or has_light) and supports_floodlight(self._core, model_id, interface_version, device_type=device_type)
+
+            if (has_light or has_spotlight or has_floodlight) and not any(l.device_id == dev_id for l in self._objs.lights):
+                if has_spotlight:
+                    l_name = device_name if "spotlight" in device_name.lower() or "light" in device_name.lower() else f"{device_name} Spotlight"
+                    self._objs.lights.append(ArloLight(l_name, self._core, self._objs, device, parent_name=device_name, light_type="spotlight"))
+                elif has_floodlight:
+                    l_name = device_name if "floodlight" in device_name.lower() or "light" in device_name.lower() else f"{device_name} Floodlight"
+                    self._objs.lights.append(ArloLight(l_name, self._core, self._objs, device, parent_name=device_name, light_type="floodlight"))
+                else:
+                    self._objs.lights.append(ArloLight(device_name, self._core, self._objs, device, parent_name=device_name, light_type="light"))
+
+            # Sensor
+            if is_resource(self._core, model_id, interface_version, "sensor", device_type=device_type):
+                if not any(s.device_id == dev_id for s in self._objs.sensors):
+                    self._objs.sensors.append(ArloSensor(device_name, self._core, self._objs, device))
+
+            # Siren
+            if is_resource(self._core, model_id, interface_version, "siren", device_type=device_type):
+                if not any(s.device_id == dev_id for s in self._objs.sirens):
+                    s_name = device_name if "siren" in device_name.lower() else f"{device_name} Siren"
+                    self._objs.sirens.append(ArloSiren(s_name, self._core, self._objs, device, parent_name=device_name))
 
     async def _refresh_devices(self, force: bool = False):
         """Read in the devices list.
@@ -358,11 +398,7 @@ class PyArlo:
                 # doorbell) is registered twice under one device id, as an ArloBase
                 # and an ArloCamera. Update every object with the id, the same way
                 # the event stream dispatches to every listener.
-                targets = [
-                    d
-                    for d in self.base_stations + self.cameras + self.doorbells + self.lights
-                    if d.device_id == device_id
-                ]
+                targets = [d for d in self.all_devices if d.device_id == device_id]
                 if targets:
                     self.vdebug(f"updating {device_id} from device refresh")
                     for target in targets:
@@ -500,8 +536,23 @@ class PyArlo:
         self._core.tasks.run_now(self._refresh_bases, initial=False)
         self._core.tasks.run_now(self._refresh_ambient_sensors)
 
+    async def _refresh_capabilities(self):
+        """Pre-fetch capabilities for all unique model/interfaceVersion pairs."""
+        seen: set[tuple[str, Any]] = set()
+        for dev in getattr(self, "_devices", []):
+            mid = dev.get("modelId")
+            iver = dev.get("interfaceVersion")
+            if mid and iver is not None and (mid, iver) not in seen:
+                seen.add((mid, iver))
+                try:
+                    from .capabilities import get_capabilities
+                    await get_capabilities(self._core, mid, iver)
+                except Exception as e:
+                    self.vdebug(f"prefetch capabilities failed for {mid}/{iver}: {e}")
+
     async def _initial_refresh(self, wait: bool):
         self.debug(f"initial refresh, wait={wait}")
+        await self._refresh_capabilities()
         await self._refresh_bases(initial=True)
         await self._refresh_modes()
         await self._refresh_ambient_sensors()
@@ -616,6 +667,11 @@ class PyArlo:
         return self._objs.sensors
 
     @property
+    def sirens(self) -> List[ArloSiren]:
+        """Returns the list of sirens known to Arlo."""
+        return self._objs.sirens
+
+    @property
     def all_devices(self) -> List[ArloDevice]:
         """Return all known devices.
 
@@ -628,6 +684,7 @@ class PyArlo:
             *self.lights,
             *self.base_stations,
             *self.sensors,
+            *self.sirens,
         ]
         return devices
 
@@ -715,10 +772,10 @@ class PyArlo:
         return next((l for l in self._objs.lights if l.device_id == device_id), None)
 
     def lookup_light_by_name(self, name) -> Union[ArloLight, None]:
-        """Retrieves an ArloLight object from the internal light list based on its name.
+        """Retrieves an ArloLight object from the internal light list based on its name or parent name.
 
         This method iterates through the `self._objs.lights` list and returns the first
-        ArloLight object whose `name` attribute matches the provided `name`.
+        ArloLight object whose `name` or `parent_name` attribute matches the provided `name`.
 
         Args:
             name: The name of the light to find.
@@ -726,7 +783,11 @@ class PyArlo:
         Returns:
             The ArloLight object if found, otherwise None.
         """
-        return next((l for l in self._objs.lights if l.name == name), None)
+        name_lower = name.lower()
+        return next(
+            (l for l in self._objs.lights if l.name.lower() == name_lower or getattr(l, "parent_name", "").lower() == name_lower),
+            None,
+        )
 
     def lookup_base_station_by_id(self, device_id) -> Union[ArloBaseStation, None]:
         """Retrieves an ArloBaseStation object from the internal base station list based on its device ID.
@@ -812,26 +873,38 @@ class PyArlo:
         """
         return next((b for b in self._objs.locations if b.name == name), None)
 
+    def lookup_siren_by_id(self, device_id: str) -> Union[ArloSiren, None]:
+        """Retrieves an ArloSiren object based on its device ID."""
+        return next((s for s in self._objs.sirens if s.device_id == device_id), None)
+
+    def lookup_siren_by_name(self, name: str) -> Union[ArloSiren, None]:
+        """Retrieves an ArloSiren object based on its name or parent name."""
+        name_lower = name.lower()
+        return next(
+            (s for s in self._objs.sirens if s.name.lower() == name_lower or getattr(s, "parent_name", "").lower() == name_lower),
+            None,
+        )
+
     def lookup_device_by_id(self, device_id) -> Union[ArloDevice, None]:
-        """Retrieves a device (base station, camera, doorbell, light or sensor) by its ID.
-        """
+        """Retrieves a device (base station, camera, doorbell, light, sensor or siren) by its ID."""
         return (
             self.lookup_base_station_by_id(device_id)
             or self.lookup_camera_by_id(device_id)
             or self.lookup_doorbell_by_id(device_id)
             or self.lookup_light_by_id(device_id)
             or self.lookup_sensor_by_id(device_id)
+            or self.lookup_siren_by_id(device_id)
         )
 
     def lookup_device_by_name(self, name) -> Union[ArloDevice, None]:
-        """Retrieves a device (base station, camera, doorbell, light or sensor) by its name.
-        """
+        """Retrieves a device (base station, camera, doorbell, light, sensor or siren) by its name."""
         return (
             self.lookup_base_station_by_name(name)
             or self.lookup_camera_by_name(name)
             or self.lookup_doorbell_by_name(name)
             or self.lookup_light_by_name(name)
             or self.lookup_sensor_by_name(name)
+            or self.lookup_siren_by_name(name)
         )
 
     def lookup_object_by_id(self, device_id) -> Union[ArloObject, None]:

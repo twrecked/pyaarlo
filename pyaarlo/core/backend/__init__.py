@@ -97,6 +97,7 @@ class _AuthDetails:
         self.attempt: int = 1
         self.curves: list[str] = []
         self.force_reauth: bool = False
+        self.was_reused_from_disk: bool = False
 
 
 class _EventDetails:
@@ -930,6 +931,7 @@ class ArloBackEnd:
 
         # Token is unexpired. Optimistically reuse without validateAccessToken network round-trip.
         self._debug("auth: token is unexpired, reusing without pre-validation")
+        self._auth.was_reused_from_disk = True
         self._auth.attempt = 1
         self._auth.curves = self._cfg.ecdh_curves.copy()
         if self._auth_get_connection():
@@ -1004,6 +1006,7 @@ class ArloBackEnd:
         self._req.details.connection = None
         self._auth.factor_id = None
         self._auth.needs_pairing = True
+        self._auth.was_reused_from_disk = False
 
         return _AuthState.REVALIDATE_TOKEN
 
@@ -1049,13 +1052,14 @@ class ArloBackEnd:
         return self._auth.state
 
     async def _auth_succeeded(self) -> None:
-        self._last_login_time = time.monotonic()
+        if not self._auth.was_reused_from_disk:
+            self._last_login_time = time.monotonic()
+            # We are in a successful state so:
+            #  - save the session for reloading
+            #  - save the cookies for reloading
+            await self._req.save()
+            await self._req.save_cookies()
         self._auth.force_reauth = False
-        # We are in a successful state so:
-        #  - save the session for reloading
-        #  - save the cookies for reloading
-        await self._req.save()
-        await self._req.save_cookies()
 
     async def _login_locked(self) -> bool:
         """Perform all the steps to authenticate against the Arlo servers.
@@ -1224,7 +1228,7 @@ class ArloBackEnd:
 
     async def _relogin(self) -> bool:
         async with self._login_lock:
-            if time.monotonic() - self._last_login_time < 10:
+            if not self._auth.force_reauth and (time.monotonic() - self._last_login_time < 10):
                 self._debug("relogin skipped: already logged in within last 10s")
                 return True
             self._debug("re-logging in after 401 or token expiration")

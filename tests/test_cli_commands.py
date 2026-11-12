@@ -304,6 +304,146 @@ def test_pyaarlo_config_create_and_update_wizard(tmp_path):
     assert saved_up["tfa_password"] == "imappass"
 
 
+def test_pyaarlo_capabilities_help():
+    runner = CliRunner()
+    result = runner.invoke(pyaarlo_cli, ["capabilities", "--help"])
+    assert result.exit_code == 0
+    assert "--built-in" in result.output
+    assert "--static" in result.output
+
+
+def test_pyaarlo_capabilities_command():
+    from unittest.mock import AsyncMock, MagicMock
+    runner = CliRunner()
+    mock_dev = MagicMock()
+    mock_dev.name = "Front"
+    mock_dev.device_id = "cam_front"
+    mock_dev.serial_number = "sn_front"
+    mock_dev.model_id = "VMC4040"
+    mock_dev.interface_version = "i001"
+    mock_dev.device_type = "camera"
+
+    mock_arlo = MagicMock()
+    mock_arlo._core = MagicMock()
+    mock_arlo.stop = AsyncMock()
+    mock_arlo.all_devices = [mock_dev]
+
+    doc = {
+        "Capabilities": {
+            "Automation3.0": {
+                "AutomationTriggers": {"motionStart": {}},
+                "AutomationActions": {"sirenOn": {}},
+            },
+            "PowerSource": {
+                "Battery": {"batteryTech": ["Rechargeable"]},
+            },
+            "Streaming": {
+                "SIPStreaming": True,
+            },
+            "PushToTalk": {
+                "signal": ["sip"],
+                "fullDuplex": True,
+            },
+        }
+    }
+
+    with patch("pyaarlo.cli.main_cmd.create_pyarlo", return_value=mock_arlo):
+        with patch("pyaarlo.capabilities.get_capabilities", return_value=doc):
+            res = runner.invoke(pyaarlo_cli, ["capabilities", "Front", "--built-in"])
+            assert res.exit_code == 0
+            assert "Calculated capabilities:" in res.output
+            assert "Motion Detection: True [built-in: True]" in res.output
+            assert "SIP Streaming: True [built-in: False]" in res.output
+            assert "SIP Push-To-Talk: True [built-in: False]" in res.output
+            assert "Full Duplex Talk: True [built-in: False]" in res.output
+
+
+def test_pyaarlo_hass_option(tmp_path):
+    import json
+    from unittest.mock import AsyncMock, MagicMock
+
+    storage_dir = tmp_path / ".storage"
+    storage_dir.mkdir(parents=True)
+    entries_file = storage_dir / "core.config.entries"
+
+    sample_entries = {
+        "version": 1,
+        "key": "core.config.entries",
+        "data": {
+            "entries": [
+                {
+                    "domain": "aarlo",
+                    "data": {
+                        "username": "ha_user@example.com",
+                        "password": "ha_password",
+                        "tfa": "push"
+                    },
+                    "options": {}
+                }
+            ]
+        }
+    }
+    with open(entries_file, "w") as f:
+        json.dump(sample_entries, f)
+
+    runner = CliRunner()
+    mock_arlo = MagicMock()
+    mock_arlo._core = MagicMock()
+    mock_arlo.stop = AsyncMock()
+    mock_arlo.is_connected = True
+    mock_arlo.all_devices = []
+
+    with patch("pyaarlo.cli.main_cmd.create_pyarlo", return_value=mock_arlo) as mock_create:
+        res = runner.invoke(pyaarlo_cli, ["--hass", str(tmp_path), "cache", "clear"])
+        assert res.exit_code == 0
+        # Check that cache path cleared is in tmp_path/.aarlo
+        assert str(tmp_path / ".aarlo") in res.output
+
+
+def test_pyaarlo_siren_cli():
+    from unittest.mock import AsyncMock, MagicMock
+    runner = CliRunner()
+
+    # 1. Help text
+    res = runner.invoke(pyaarlo_cli, ["siren", "--help"])
+    assert res.exit_code == 0
+    assert "turn-on" in res.output
+    assert "turn-off" in res.output
+    assert "on" in res.output
+    assert "off" in res.output
+
+    # 2. Siren commands with mock
+    mock_siren = MagicMock()
+    mock_siren.name = "Front Siren"
+    mock_siren.parent_name = "Front"
+    mock_siren.device_id = "SIREN-01"
+    mock_siren.turn_on = AsyncMock()
+    mock_siren.turn_off = AsyncMock()
+
+    mock_arlo = MagicMock()
+    mock_arlo._core = MagicMock()
+    mock_arlo.stop = AsyncMock()
+    mock_arlo.sirens = [mock_siren]
+
+    with patch("pyaarlo.cli.main_cmd.create_pyarlo", return_value=mock_arlo):
+        # Turn on by parent name "Front"
+        res_on = runner.invoke(pyaarlo_cli, ["siren", "on", "Front", "-d", "120", "-v", "5"])
+        assert res_on.exit_code == 0
+        assert "[Front Siren] Turned ON" in res_on.output
+        mock_siren.turn_on.assert_called_once_with(duration=120, volume=5)
+
+        # Turn off by siren name "Front Siren"
+        res_off = runner.invoke(pyaarlo_cli, ["siren", "off", "Front Siren"])
+        assert res_off.exit_code == 0
+        assert "[Front Siren] Turned OFF" in res_off.output
+        mock_siren.turn_off.assert_called_once()
+
+        # Turn on all
+        mock_siren.turn_on.reset_mock()
+        res_all = runner.invoke(pyaarlo_cli, ["siren", "on", "all"])
+        assert res_all.exit_code == 0
+        assert "[Front Siren] Turned ON" in res_all.output
+        mock_siren.turn_on.assert_called_once()
 
 
 def test_pyaarlo_tfa_factors_command():
@@ -328,3 +468,53 @@ def test_pyaarlo_login_factor_id_option():
     result = runner.invoke(pyaarlo_cli, ["login", "--help"])
     assert result.exit_code == 0
     assert "--factor-id" in result.output
+
+
+def test_pyaarlo_light_cli():
+    from unittest.mock import AsyncMock, MagicMock
+    runner = CliRunner()
+
+    # 1. Help text
+    res = runner.invoke(pyaarlo_cli, ["light", "--help"])
+    assert res.exit_code == 0
+    assert "turn-on" in res.output
+    assert "turn-off" in res.output
+    assert "brightness" in res.output
+
+    # 2. Mock Arlo & light
+    mock_arlo = MagicMock()
+    mock_light = MagicMock()
+    mock_light.name = "Front Spotlight"
+    mock_light.parent_name = "Front"
+    mock_light.device_id = "LIGHT-01"
+    mock_light.turn_on = AsyncMock()
+    mock_light.turn_off = AsyncMock()
+    mock_light.set_brightness = AsyncMock()
+
+    mock_arlo.lights = [mock_light]
+    mock_arlo.stop = AsyncMock()
+
+    with patch("pyaarlo.cli.main_cmd.create_pyarlo", return_value=mock_arlo):
+        # Turn on by parent name "Front" with brightness
+        res_on = runner.invoke(pyaarlo_cli, ["light", "on", "Front", "-b", "200"])
+        assert res_on.exit_code == 0
+        assert "Turned ON" in res_on.output
+        mock_light.turn_on.assert_called_once_with(brightness=200)
+
+        # Set brightness
+        res_bright = runner.invoke(pyaarlo_cli, ["light", "brightness", "150", "Front"])
+        assert res_bright.exit_code == 0
+        assert "Brightness set to 150" in res_bright.output
+        mock_light.set_brightness.assert_called_once_with(150)
+
+        # Turn off by light name "Front Spotlight"
+        res_off = runner.invoke(pyaarlo_cli, ["light", "off", "Front Spotlight"])
+        assert res_off.exit_code == 0
+        assert "Turned OFF" in res_off.output
+        mock_light.turn_off.assert_called_once()
+
+        # Turn on all
+        mock_light.turn_on.reset_mock()
+        res_all = runner.invoke(pyaarlo_cli, ["light", "on", "all"])
+        assert res_all.exit_code == 0
+        mock_light.turn_on.assert_called_once()

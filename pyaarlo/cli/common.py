@@ -18,6 +18,7 @@ class CLIContext:
     def __init__(
         self,
         config_path: str | None = None,
+        hass_dir: str | None = None,
         ignore_cache: bool = False,
         verbose: int = 0,
         username: str | None = None,
@@ -27,6 +28,7 @@ class CLIContext:
         debug_report: str | None = None,
     ) -> None:
         self.config_path = config_path
+        self.hass_dir = hass_dir
         self.ignore_cache = ignore_cache
         self.verbose = verbose
         self.debug_report = debug_report
@@ -53,8 +55,17 @@ class CLIContext:
     @property
     def config(self) -> dict[str, Any]:
         if self._config is None:
-            self._config = load_config(self.cli_overrides, self.config_path)
+            self._config = load_config(self.cli_overrides, self.config_path, self.hass_dir)
         return self._config
+
+    @property
+    def cache_path(self) -> Any:
+        from pathlib import Path
+        cache_dir = self.config.get("cache_dir")
+        if cache_dir:
+            return Path(cache_dir) / "cache.json"
+        from .config import get_default_cache_path
+        return get_default_cache_path()
 
     def finish_debug_report(
         self,
@@ -93,6 +104,7 @@ def common_options(f: Callable[..., Any]) -> Callable[..., Any]:
     """Decorator to apply common CLI options across commands."""
     options = [
         click.option("-c", "--config", "config_path", default=None, help="Path to JSON config file"),
+        click.option("--hass", "hass_dir", is_flag=False, flag_value="/config", default=None, help="Use Home Assistant configuration and tokens (defaults to /config, or specify path)"),
         click.option("-v", "--verbose", count=True, help="Increase verbosity (-v for INFO, -vv for DEBUG, -vvv for packet trace)"),
         click.option("-u", "--username", default=None, help="Arlo username (overrides config/env)"),
         click.option("-p", "--password", default=None, help="Arlo password (overrides config/env)"),
@@ -242,11 +254,13 @@ def get_auth_status(cfg: dict[str, Any]) -> dict[str, Any]:
         "session_expires_at": None,
         "session_remaining": None,
         "session_valid": False,
+        "session_permission_denied": False,
         "has_browser_trust": False,
         "browser_trust_name": None,
         "browser_trust_expires_at": None,
         "browser_trust_remaining": None,
         "browser_trust_valid": False,
+        "cookies_permission_denied": False,
     }
 
     if not storage_dir or username == "unknown":
@@ -272,6 +286,8 @@ def get_auth_status(cfg: dict[str, Any]) -> dict[str, Any]:
                         rem = exp_ts - now
                         status["session_remaining"] = rem
                         status["session_valid"] = rem > 0
+        except PermissionError:
+            status["session_permission_denied"] = True
         except Exception:
             pass
 
@@ -291,6 +307,8 @@ def get_auth_status(cfg: dict[str, Any]) -> dict[str, Any]:
                         status["browser_trust_remaining"] = rem
                         status["browser_trust_valid"] = rem > 0
                     break
+        except PermissionError:
+            status["cookies_permission_denied"] = True
         except Exception:
             pass
 
@@ -316,8 +334,13 @@ def print_auth_status(status: dict[str, Any]) -> int:
     sys.stdout.write("Authentication Status:\n")
     sys.stdout.write(f"  User:                     {username}\n")
 
+    session_perm = status.get("session_permission_denied", False)
+    cookies_perm = status.get("cookies_permission_denied", False)
+
     # Session token
-    if has_session and session_exp and session_rem is not None:
+    if session_perm:
+        sys.stdout.write("  Session Token:            PERMISSION DENIED (check file permissions or run with sudo)\n")
+    elif has_session and session_exp and session_rem is not None:
         dt_str = datetime.datetime.fromtimestamp(session_exp).strftime("%Y-%m-%d %H:%M:%S")
         delta_str = format_time_delta(session_rem)
         state_label = "ACTIVE" if session_valid else "EXPIRED"
@@ -329,7 +352,9 @@ def print_auth_status(status: dict[str, Any]) -> int:
         sys.stdout.write("  Session Token:            NOT FOUND\n")
 
     # Browser trust token
-    if has_trust and trust_exp and trust_rem is not None:
+    if cookies_perm:
+        sys.stdout.write("  2FA Browser Trust Token:  PERMISSION DENIED (check file permissions or run with sudo)\n")
+    elif has_trust and trust_exp and trust_rem is not None:
         dt_str = datetime.datetime.fromtimestamp(trust_exp).strftime("%Y-%m-%d %H:%M:%S")
         delta_str = format_time_delta(trust_rem)
         state_label = "ACTIVE" if trust_valid else "EXPIRED"
@@ -342,7 +367,10 @@ def print_auth_status(status: dict[str, Any]) -> int:
         sys.stdout.write("  2FA Browser Trust Token:  NOT FOUND\n")
 
     sys.stdout.write("\nSummary: ")
-    if session_valid and trust_valid:
+    if session_perm or cookies_perm:
+        sys.stdout.write("Permission denied reading token files. Try running with sudo or adjust file permissions in storage directory.\n")
+        return 1
+    elif session_valid and trust_valid:
         sys.stdout.write("Both tokens are valid. Background renewals will not require 2FA.\n")
         return 0
     elif session_valid:
@@ -361,14 +389,15 @@ async def ensure_cache(
     force_refresh: bool = False,
 ) -> dict[str, Any]:
     """Ensure cache is populated, refreshing from Arlo if empty, stale, or forced."""
+    c_path = ctx.cache_path if ctx.hass_dir else None
     if not force_refresh and not ctx.ignore_cache:
-        cached = load_cache()
+        cached = load_cache(c_path)
         if cached is not None and not is_cache_stale(cached):
             return cached
 
     arlo = await create_pyarlo(ctx.config, wait_for_setup=True)
     try:
-        cache_data = fill_cache(arlo)
+        cache_data = fill_cache(arlo, c_path)
         return cache_data
     finally:
         await arlo.stop(logout=False)
