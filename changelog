@@ -1,3 +1,20 @@
+0.9.0-beta.1
+  Beta 1 Milestone — Modern Async-First Architecture & First-Class Devices
+  - Native Async-First Core: Entire library modernized to native asyncio coroutines across
+    session management, network requests, streaming, event streams, and device controls.
+  - First-Class ArloSiren Class (`pyaarlo.siren`): Sirens operate as first-class devices
+    in `arlo.sirens` with dedicated on/off, volume, and duration controls.
+  - Unified Camera Lights (`pyaarlo.light`): Camera spotlights and floodlights instantiate
+    first-class `ArloLight` devices in `arlo.lights` and `arlo.all_devices`.
+  - Dynamic Capability Resolution (`pyaarlo.capabilities`): Replaces static model tuples with
+    dynamic cloud capability document inspection for motion, audio, sirens, lights, and power sources.
+  - Native WebRTC SIP Protocol (`pyaarlo.sip`): Full WebRTC signaling with trickle ICE candidate
+    buffering and STUN/TURN server retrieval for sub-second streaming on capable cameras.
+  - Resumable 2FA Login Flow: Multi-step interactive and headless login supporting push notifications,
+    IMAP, and REST-API factor selection.
+  - Diagnostic & Feature CLI: Modernized CLI providing `capabilities`, `siren`, `light`, `stream`,
+    `diagnostics`, `tfa-factors`, and `--hass` Home Assistant configuration support.
+
 0.9.0-alpha.9
   Dynamic Device Capabilities & Diagnostics
   - Dynamic Capability Resolution: Replaced static model checks in `ArloCapabilities` with
