@@ -852,3 +852,83 @@ async def test_arlo_camera_delegation_to_light():
 
     await cam.set_spotlight_brightness(200)
     light.set_brightness.assert_awaited_once_with(200)
+
+
+@pytest.mark.asyncio
+async def test_device_shared_and_access_rights(core_factory, objs):
+    from pyaarlo.device import ArloDevice
+
+    core = core_factory()
+
+    # 1. Primary owner device (ownerId == userId)
+    owner_attrs = {
+        "deviceId": "DEV-OWNER-01",
+        "deviceName": "Owner Camera",
+        "deviceType": "camera",
+        "userId": "USER-123",
+        "userRole": "ADMIN",
+        "owner": {"ownerId": "USER-123"},
+    }
+    dev_owner = ArloDevice("Owner Camera", core, objs, owner_attrs)
+    assert dev_owner.owner_id == "USER-123"
+    assert dev_owner.is_shared is False
+    assert dev_owner.has_access_rights is True
+
+    # 2. Shared device WITH Admin access rights (ownerId != userId, userRole == ADMIN)
+    shared_admin_attrs = {
+        "deviceId": "DEV-SHARED-01",
+        "deviceName": "Shared Admin Camera",
+        "deviceType": "camera",
+        "userId": "USER-FRIEND-456",
+        "userRole": "ADMIN",
+        "owner": {"ownerId": "USER-OWNER-123"},
+    }
+    dev_shared_admin = ArloDevice("Shared Admin Camera", core, objs, shared_admin_attrs)
+    assert dev_shared_admin.owner_id == "USER-OWNER-123"
+    assert dev_shared_admin.is_shared is True
+    assert dev_shared_admin.has_access_rights is True
+
+    # 3. Shared device WITHOUT access rights (ownerId != userId, userRole != ADMIN)
+    shared_guest_attrs = {
+        "deviceId": "DEV-SHARED-02",
+        "deviceName": "Shared Restricted Light",
+        "deviceType": "lights",
+        "userId": "USER-FRIEND-456",
+        "userRole": "GUEST",
+        "owner": {"ownerId": "USER-OWNER-123"},
+    }
+    dev_shared_guest = ArloDevice("Shared Restricted Light", core, objs, shared_guest_attrs)
+    assert dev_shared_guest.owner_id == "USER-OWNER-123"
+    assert dev_shared_guest.is_shared is True
+    assert dev_shared_guest.has_access_rights is False
+
+
+@pytest.mark.asyncio
+async def test_refresh_devices_restricted_access_warning(core_factory, objs):
+    from unittest.mock import AsyncMock, MagicMock
+    from pyaarlo import PyArlo
+
+    core = core_factory()
+    core.be.devices = AsyncMock(return_value=[
+        {
+            "deviceId": "DEV-RESTRICTED-01",
+            "deviceName": "Restricted Light",
+            "deviceType": "lights",
+            "userId": "USER-FRIEND-456",
+            "userRole": "GUEST",
+            "owner": {"ownerId": "USER-OWNER-123"},
+        }
+    ])
+    core.log.warning = MagicMock()
+
+    arlo = PyArlo.__new__(PyArlo)
+    arlo._core = core
+    arlo._objs = objs
+    arlo._devices = []
+
+    await arlo._refresh_devices()
+
+    core.log.warning.assert_called()
+    warn_msg = core.log.warning.call_args[0][0]
+    assert "Restricted Light" in warn_msg
+    assert "Allow Access Rights" in warn_msg
