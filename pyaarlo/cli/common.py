@@ -18,6 +18,7 @@ class CLIContext:
     def __init__(
         self,
         config_path: str | None = None,
+        hass: bool = False,
         hass_dir: str | None = None,
         ignore_cache: bool = False,
         verbose: int = 0,
@@ -28,7 +29,11 @@ class CLIContext:
         debug_report: str | None = None,
     ) -> None:
         self.config_path = config_path
-        self.hass_dir = hass_dir
+        self.hass_dir: str | None = None
+        if hass_dir:
+            self.hass_dir = hass_dir
+        elif hass:
+            self.hass_dir = "/config" 
         self.ignore_cache = ignore_cache
         self.verbose = verbose
         self.debug_report = debug_report
@@ -104,7 +109,8 @@ def common_options(f: Callable[..., Any]) -> Callable[..., Any]:
     """Decorator to apply common CLI options across commands."""
     options = [
         click.option("-c", "--config", "config_path", default=None, help="Path to JSON config file"),
-        click.option("--hass", "hass_dir", is_flag=False, flag_value="/config", default=None, help="Use Home Assistant configuration and tokens (defaults to /config, or specify path)"),
+        click.option("--hass", is_flag=True, default=False, help="Use Home Assistant configuration and tokens (defaults to /config)"),
+        click.option("--hass-dir", default=None, help="Path to Home Assistant configuration directory (implies --hass)"),
         click.option("-v", "--verbose", count=True, help="Increase verbosity (-v for INFO, -vv for DEBUG, -vvv for packet trace)"),
         click.option("-u", "--username", default=None, help="Arlo username (overrides config/env)"),
         click.option("-p", "--password", default=None, help="Arlo password (overrides config/env)"),

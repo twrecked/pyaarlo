@@ -39,6 +39,8 @@ def cli(
     json_output: bool,
     raw: bool,
     config_path: str | None,
+    hass: bool,
+    hass_dir: str | None,
     verbose: int,
     username: str | None,
     password: str | None,
@@ -53,6 +55,8 @@ def cli(
         backend = "sse"
     cli_ctx = CLIContext(
         config_path=config_path,
+        hass=hass,
+        hass_dir=hass_dir,
         ignore_cache=ignore_cache,
         verbose=verbose,
         username=username,

@@ -394,10 +394,16 @@ def test_pyaarlo_hass_option(tmp_path):
     mock_arlo.all_devices = []
 
     with patch("pyaarlo.cli.main_cmd.create_pyarlo", return_value=mock_arlo) as mock_create:
-        res = runner.invoke(pyaarlo_cli, ["--hass", str(tmp_path), "cache", "clear"])
+        res = runner.invoke(pyaarlo_cli, ["--hass-dir", str(tmp_path), "cache", "clear"])
         assert res.exit_code == 0
         # Check that cache path cleared is in tmp_path/.aarlo
         assert str(tmp_path / ".aarlo") in res.output
+
+        # Test --hass as pure flag followed by command
+        with patch("pyaarlo.cli.common.load_config", return_value={}) as mock_load:
+            res_flag = runner.invoke(pyaarlo_cli, ["--hass", "cache", "clear"])
+            assert res_flag.exit_code == 0
+            mock_load.assert_called_with({}, None, "/config")
 
 
 def test_pyaarlo_siren_cli():
@@ -518,3 +524,63 @@ def test_pyaarlo_light_cli():
         res_all = runner.invoke(pyaarlo_cli, ["light", "on", "all"])
         assert res_all.exit_code == 0
         mock_light.turn_on.assert_called_once()
+
+
+def test_monitor_and_utils_hass_option(tmp_path):
+    import json
+    from unittest.mock import AsyncMock, MagicMock
+    from pyaarlo.cli.monitor_cmd import cli as monitor_cli
+    from pyaarlo.cli.utils_cmd import cli as utils_cli
+
+    storage_dir = tmp_path / ".storage"
+    storage_dir.mkdir(parents=True)
+    entries_file = storage_dir / "core.config.entries"
+
+    sample_entries = {
+        "version": 1,
+        "key": "core.config.entries",
+        "data": {
+            "entries": [
+                {
+                    "domain": "aarlo",
+                    "data": {
+                        "username": "ha_user@example.com",
+                        "password": "ha_password",
+                        "tfa": "push",
+                    },
+                    "options": {},
+                }
+            ]
+        },
+    }
+    with open(entries_file, "w") as f:
+        json.dump(sample_entries, f)
+
+    runner = CliRunner()
+    mock_arlo = MagicMock()
+    mock_arlo._core = MagicMock()
+    mock_arlo.stop = AsyncMock()
+    mock_arlo.is_connected = True
+    mock_arlo.base_stations = []
+    mock_arlo.cameras = []
+    mock_arlo.lights = []
+    mock_arlo.doorbells = []
+    mock_arlo.sensors = []
+    mock_arlo.locations = []
+
+    with patch("pyaarlo.cli.monitor_cmd.create_pyarlo", return_value=mock_arlo):
+        with patch("asyncio.Event.wait", new_callable=AsyncMock):
+            res = runner.invoke(monitor_cli, ["--hass-dir", str(tmp_path), "--compact"])
+            assert res.exit_code == 0
+            with patch("pyaarlo.cli.common.load_config", return_value={}) as mock_load:
+                res_flag = runner.invoke(monitor_cli, ["--hass", "--compact"])
+                assert res_flag.exit_code == 0
+                mock_load.assert_called_with({}, None, "/config")
+
+    with patch("pyaarlo.cli.utils_cmd.create_pyarlo", return_value=mock_arlo):
+        res = runner.invoke(utils_cli, ["dump", "--hass-dir", str(tmp_path)])
+        assert res.exit_code == 0
+
+    with patch("pyaarlo.cli.utils_cmd.load_cache", return_value={"devices": []}):
+        res = runner.invoke(utils_cli, ["anonymize", "--hass-dir", str(tmp_path)], input="hello test")
+        assert res.exit_code == 0

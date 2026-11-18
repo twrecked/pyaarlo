@@ -1,3 +1,4 @@
+from typing import Any
 
 from .constant import (
     ALS_STATE_KEY,
@@ -34,6 +35,23 @@ class ArloSensor(ArloChildDevice):
 
         # pass on to lower layer
         super()._event_handler(resource, event)
+
+    def handle_exception_sensors(self, event: dict[str, Any]) -> None:
+        """Handle automation/exceptionSensors event from Keypad Sensor Hub (SH1001)."""
+        raw_props = event.get("properties", {})
+        if "properties" in raw_props:
+            raw_props = raw_props.get("properties", {})
+        exception_sensors = raw_props.get("exceptionSensors", {})
+
+        is_open = False
+        for mode_sensors in exception_sensors.values():
+            if isinstance(mode_sensors, dict):
+                state = mode_sensors.get(self.device_id)
+                if state and str(state).lower() == "open":
+                    is_open = True
+                    break
+
+        self._save_and_do_callbacks(CONTACT_STATE_KEY, is_open)
 
     @property
     def has_motion(self):

@@ -86,6 +86,8 @@ def decrypt(private_key_file: str, passphrase: str | None) -> None:
 @common_options
 def anonymize(
     config_path: str | None,
+    hass: bool,
+    hass_dir: str | None,
     verbose: int,
     username: str | None,
     password: str | None,
@@ -100,6 +102,8 @@ def anonymize(
     setup_logging(verbose)
     cli_ctx = CLIContext(
         config_path=config_path,
+        hass=hass,
+        hass_dir=hass_dir,
         ignore_cache=ignore_cache,
         verbose=verbose,
         username=username,
@@ -114,7 +118,8 @@ def anonymize(
 
         # Check cache first
         if not ignore_cache:
-            cache_data = load_cache()
+            cache_file = cli_ctx.cache_path if cli_ctx.hass_dir else None
+            cache_data = load_cache(cache_file)
             if cache_data and "devices" in cache_data:
                 raw_devices = cache_data["devices"]
 
@@ -154,6 +159,8 @@ def dump(
     encrypt: bool,
     public_key_file: str | None,
     config_path: str | None,
+    hass: bool,
+    hass_dir: str | None,
     verbose: int,
     username: str | None,
     password: str | None,
@@ -168,6 +175,8 @@ def dump(
     setup_logging(verbose)
     cli_ctx = CLIContext(
         config_path=config_path,
+        hass=hass,
+        hass_dir=hass_dir,
         ignore_cache=ignore_cache,
         verbose=verbose,
         username=username,

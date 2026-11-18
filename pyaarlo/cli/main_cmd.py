@@ -45,6 +45,7 @@ from ..media import (
 def cli(
     ctx: click.Context,
     config_path: str | None,
+    hass: bool,
     hass_dir: str | None,
     verbose: int,
     username: str | None,
@@ -58,6 +59,7 @@ def cli(
     setup_logging(verbose)
     ctx.obj = CLIContext(
         config_path=config_path,
+        hass=hass,
         hass_dir=hass_dir,
         ignore_cache=ignore_cache,
         verbose=verbose,

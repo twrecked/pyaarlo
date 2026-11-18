@@ -403,6 +403,128 @@ async def test_v3_location_mode_propagation_and_force_flag(core_factory, objs):
 
 
 @pytest.mark.asyncio
+async def test_location_exception_sensors_contact_state(core_factory, objs):
+    from pyaarlo.location import ArloLocation
+    from pyaarlo.sensor import ArloSensor
+    from pyaarlo.constant import CONTACT_STATE_KEY, AUTOMATION_EXCEPTION_SENSORS
+
+    core = core_factory()
+
+    loc_data = {
+        "locationId": "loc-uuid-1",
+        "locationName": "Home",
+        "gatewayDeviceIds": ["HUB-SH1001-01"],
+    }
+    location = ArloLocation(core, objs, loc_data, user=True)
+
+    sensor1_data = {
+        "deviceId": "SENSOR-MS1001-01",
+        "deviceName": "Deck Door",
+        "deviceType": "sensors",
+        "modelId": "MS1001",
+        "parentId": "HUB-SH1001-01",
+        "properties": {CONTACT_STATE_KEY: False},
+    }
+    sensor1 = ArloSensor("Deck Door", core, objs, sensor1_data)
+
+    sensor2_data = {
+        "deviceId": "SENSOR-MS1001-02",
+        "deviceName": "Front Door",
+        "deviceType": "sensors",
+        "modelId": "MS1001",
+        "parentId": "HUB-SH1001-01",
+        "properties": {CONTACT_STATE_KEY: False},
+    }
+    sensor2 = ArloSensor("Front Door", core, objs, sensor2_data)
+
+    objs.locations = [location]
+    objs.sensors = [sensor1, sensor2]
+
+    assert sensor1.is_open is False
+    assert sensor2.is_open is False
+
+    # Simulate Deck Door opening event
+    event_open = {
+        "resource": AUTOMATION_EXCEPTION_SENSORS,
+        "properties": {
+            "properties": {
+                "exceptionSensors": {
+                    "armAway": {"SENSOR-MS1001-01": "open"},
+                    "armHome": {"SENSOR-MS1001-01": "open"},
+                    "standby": {},
+                }
+            },
+            "source": "HUB-SH1001-01",
+        },
+    }
+    location._event_handler(AUTOMATION_EXCEPTION_SENSORS, event_open)
+
+    assert sensor1.is_open is True
+    assert sensor2.is_open is False
+
+    # Simulate Deck Door closing event (exception list empty)
+    event_closed = {
+        "resource": AUTOMATION_EXCEPTION_SENSORS,
+        "properties": {
+            "properties": {
+                "exceptionSensors": {
+                    "armAway": {},
+                    "armHome": {},
+                    "standby": {},
+                }
+            },
+            "source": "HUB-SH1001-01",
+        },
+    }
+    location._event_handler(AUTOMATION_EXCEPTION_SENSORS, event_closed)
+
+    assert sensor1.is_open is False
+    assert sensor2.is_open is False
+
+
+@pytest.mark.asyncio
+async def test_sensor_handle_exception_sensors_direct(core_factory, objs):
+    from pyaarlo.sensor import ArloSensor
+    from pyaarlo.constant import CONTACT_STATE_KEY
+
+    core = core_factory()
+    sensor_data = {
+        "deviceId": "SENSOR-DIRECT-01",
+        "deviceName": "Direct Sensor",
+        "deviceType": "sensors",
+        "modelId": "MS1001",
+        "parentId": "HUB-01",
+        "properties": {CONTACT_STATE_KEY: False},
+    }
+    sensor = ArloSensor("Direct Sensor", core, objs, sensor_data)
+    assert sensor.is_open is False
+
+    # 1. Event with sensor open
+    sensor.handle_exception_sensors({
+        "properties": {
+            "properties": {
+                "exceptionSensors": {
+                    "armAway": {"SENSOR-DIRECT-01": "open"},
+                }
+            }
+        }
+    })
+    assert sensor.is_open is True
+
+    # 2. Event with sensor closed
+    sensor.handle_exception_sensors({
+        "properties": {
+            "properties": {
+                "exceptionSensors": {
+                    "armAway": {},
+                }
+            }
+        }
+    })
+    assert sensor.is_open is False
+
+
+@pytest.mark.asyncio
 async def test_arlo_siren_operations():
     from pyaarlo.siren import ArloSiren
 
