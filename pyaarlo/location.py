@@ -1,4 +1,5 @@
 from .constant import (
+    AUTOMATION_EXCEPTION_SENSORS,
     MODE_ID_TO_NAME_KEY,
     MODE_KEY,
     MODE_NAME_TO_ID_KEY,
@@ -159,6 +160,23 @@ class ArloLocation(ArloObject):
             if mode is not None:
                 self._save_and_do_callbacks(MODE_KEY, mode)
                 self._propagate_mode_to_bases(mode)
+
+        # Handle Keypad Sensor Hub (SH1001) sensor open/close events
+        if resource == AUTOMATION_EXCEPTION_SENSORS:
+            self._parse_exception_sensors(event)
+
+    def _parse_exception_sensors(self, event):
+        if not self._objs:
+            return
+
+        source_hub = event.get("properties", {}).get("source")
+        for sensor in self._objs.sensors:
+            if source_hub and sensor.parent_id and sensor.parent_id != source_hub:
+                continue
+            if not source_hub and self._device_ids and sensor.parent_id not in self._device_ids:
+                continue
+
+            sensor.handle_exception_sensors(event)
 
     @property
     def available_modes(self):
