@@ -1,3 +1,14 @@
+0.9.0-beta.2
+  Keypad Sensor Hub Support & CLI Enhancements
+  - MS1001 Exception Sensors: Handled `automation/exceptionSensors` events from Keypad
+    Sensor Hubs (SH1001), dynamically updating `contactState` on `ArloSensor` devices
+    in real time (fixes twrecked/hass-aarlo#1190).
+  - Clean Sensor Delegation: Routed exception events from `ArloLocation` directly to child
+    `ArloSensor.handle_exception_sensors()` methods, preserving clean encapsulation.
+  - Home Assistant CLI Options: Split `--hass` into a pure boolean flag (defaulting to
+    `/config`) and an explicit `--hass-dir <PATH>` option across `pyaarlo`, `pyaarlo-monitor`,
+    and `pyaarlo-utils`.
+
 0.9.0-beta.1
   Beta 1 Milestone — Modern Async-First Architecture & First-Class Devices
   - Native Async-First Core: Entire library modernized to native asyncio coroutines across
