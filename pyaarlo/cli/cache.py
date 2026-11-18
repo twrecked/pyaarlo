@@ -71,7 +71,14 @@ def fill_cache(arlo: PyArlo, cache_path: Path | str | None = None) -> dict[str, 
             return getattr(bs, "device_id", None), getattr(bs, "xcloud_id", None)
         return None, getattr(device, "xcloud_id", None)
 
+    def _extract_access_info(device: Any) -> tuple[bool, bool, str | None]:
+        is_shared = getattr(device, "is_shared", False)
+        has_access = getattr(device, "has_access_rights", True)
+        user_role = getattr(device, "user_role", None)
+        return is_shared, has_access, user_role
+
     for b in arlo.base_stations:
+        sh, acc, role = _extract_access_info(b)
         devices.append({
             "name": b.name,
             "id": b.device_id,
@@ -80,10 +87,14 @@ def fill_cache(arlo: PyArlo, cache_path: Path | str | None = None) -> dict[str, 
             "hw_version": getattr(b, "hw_version", None),
             "serial_number": getattr(b, "serial_number", None),
             "xcloud_id": getattr(b, "xcloud_id", None),
+            "is_shared": sh,
+            "has_access_rights": acc,
+            "user_role": role,
         })
 
     for c in arlo.cameras:
         bs_id, xcloud_id = _extract_base_info(c)
+        sh, acc, role = _extract_access_info(c)
         devices.append({
             "name": c.name,
             "id": c.device_id,
@@ -93,10 +104,14 @@ def fill_cache(arlo: PyArlo, cache_path: Path | str | None = None) -> dict[str, 
             "serial_number": getattr(c, "serial_number", None),
             "base_station_id": bs_id,
             "xcloud_id": xcloud_id,
+            "is_shared": sh,
+            "has_access_rights": acc,
+            "user_role": role,
         })
 
     for l in arlo.lights:
         bs_id, xcloud_id = _extract_base_info(l)
+        sh, acc, role = _extract_access_info(l)
         devices.append({
             "name": l.name,
             "id": l.device_id,
@@ -107,10 +122,14 @@ def fill_cache(arlo: PyArlo, cache_path: Path | str | None = None) -> dict[str, 
             "parent_name": getattr(l, "parent_name", None),
             "base_station_id": bs_id,
             "xcloud_id": xcloud_id,
+            "is_shared": sh,
+            "has_access_rights": acc,
+            "user_role": role,
         })
 
     for d in arlo.doorbells:
         bs_id, xcloud_id = _extract_base_info(d)
+        sh, acc, role = _extract_access_info(d)
         devices.append({
             "name": d.name,
             "id": d.device_id,
@@ -120,10 +139,14 @@ def fill_cache(arlo: PyArlo, cache_path: Path | str | None = None) -> dict[str, 
             "serial_number": getattr(d, "serial_number", None),
             "base_station_id": bs_id,
             "xcloud_id": xcloud_id,
+            "is_shared": sh,
+            "has_access_rights": acc,
+            "user_role": role,
         })
 
     for s in arlo.sensors:
         bs_id, xcloud_id = _extract_base_info(s)
+        sh, acc, role = _extract_access_info(s)
         devices.append({
             "name": s.name,
             "id": s.device_id,
@@ -133,9 +156,13 @@ def fill_cache(arlo: PyArlo, cache_path: Path | str | None = None) -> dict[str, 
             "serial_number": getattr(s, "serial_number", None),
             "base_station_id": bs_id,
             "xcloud_id": xcloud_id,
+            "is_shared": sh,
+            "has_access_rights": acc,
+            "user_role": role,
         })
 
     for sn in getattr(arlo, "sirens", []):
+        sh, acc, role = _extract_access_info(sn)
         devices.append({
             "name": sn.name,
             "id": sn.device_id,
@@ -144,6 +171,9 @@ def fill_cache(arlo: PyArlo, cache_path: Path | str | None = None) -> dict[str, 
             "hw_version": getattr(sn, "hw_version", None),
             "serial_number": getattr(sn, "serial_number", None),
             "parent_name": getattr(sn, "parent_name", None),
+            "is_shared": sh,
+            "has_access_rights": acc,
+            "user_role": role,
         })
 
     locations: list[dict[str, Any]] = []
