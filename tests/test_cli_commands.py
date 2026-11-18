@@ -584,3 +584,57 @@ def test_monitor_and_utils_hass_option(tmp_path):
     with patch("pyaarlo.cli.utils_cmd.load_cache", return_value={"devices": []}):
         res = runner.invoke(utils_cli, ["anonymize", "--hass-dir", str(tmp_path)], input="hello test")
         assert res.exit_code == 0
+
+
+def test_pyaarlo_list_access_display():
+    from unittest.mock import patch
+    from click.testing import CliRunner
+    from pyaarlo.cli.main_cmd import cli as pyaarlo_cli
+
+    runner = CliRunner()
+    mock_cache = {
+        "timestamp": 1234567890.0,
+        "devices": [
+            {
+                "name": "Owner Cam",
+                "id": "DEV-1",
+                "type": "camera",
+                "model_id": "VMC4041P",
+                "serial_number": "SN1",
+                "is_shared": False,
+                "has_access_rights": True,
+                "user_role": "ADMIN",
+            },
+            {
+                "name": "Shared Restricted Light",
+                "id": "DEV-2",
+                "type": "light",
+                "model_id": "AL1101",
+                "serial_number": "SN2",
+                "is_shared": True,
+                "has_access_rights": False,
+                "user_role": "GUEST",
+            },
+        ],
+        "locations": [],
+    }
+
+    with patch("pyaarlo.cli.main_cmd.load_cache", return_value=mock_cache):
+        with patch("pyaarlo.cli.main_cmd.is_cache_stale", return_value=False):
+            # 1. Standard list
+            res = runner.invoke(pyaarlo_cli, ["list", "devices"])
+            assert res.exit_code == 0
+            assert "Access:        Owner" in res.output
+            assert "Access:        Shared (GUEST - Restricted: No Access Rights ⚠️)" in res.output
+
+            # 2. Compact list
+            res_compact = runner.invoke(pyaarlo_cli, ["list", "devices", "--compact"])
+            assert res_compact.exit_code == 0
+            assert "Access: GUEST ⚠️" in res_compact.output
+
+            # 3. Status warning
+            with patch("pyaarlo.cli.main_cmd.get_auth_status", return_value={"username": "test", "session_valid": True, "browser_trust_valid": True}):
+                res_status = runner.invoke(pyaarlo_cli, ["login", "--status"])
+                assert res_status.exit_code == 0
+                assert "⚠️  Warning: 1 shared device(s) lack 'Allow Access Rights'" in res_status.output
+                assert "Shared Restricted Light" in res_status.output

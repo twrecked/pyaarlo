@@ -110,6 +110,26 @@ class ArloDevice(ArloObject):
         return self._attrs.get("userRole", None)
 
     @property
+    def owner_id(self) -> str | None:
+        """Returns the primary account owner ID."""
+        owner = self._attrs.get("owner")
+        if isinstance(owner, dict):
+            return owner.get("ownerId")
+        return None
+
+    @property
+    def is_shared(self) -> bool:
+        """Returns True if this device is shared from a different primary account."""
+        return bool(self.owner_id and self.user_id and self.user_id != self.owner_id)
+
+    @property
+    def has_access_rights(self) -> bool:
+        """Returns True if the logged-in account has full access/control rights."""
+        if not self.is_shared:
+            return True
+        return str(self.user_role or "").upper() == "ADMIN"
+
+    @property
     def xcloud_id(self):
         """Returns the device's xcloud id."""
         return self._load(XCLOUD_ID_KEY, "UNKNOWN")

@@ -44,7 +44,7 @@ from .capabilities import ArloTypes, is_resource, supports_spotlight, supports_f
 from .utils import time_to_arlotime
 
 
-__version__ = "0.9.0-beta.2"
+__version__ = "0.9.0-beta.3"
 
 
 class FeedMetadataError(Exception):
@@ -388,6 +388,21 @@ class PyArlo:
             self._core.st.set(["ARLO", "DEVICES"], self._devices, prefix="aarlo")
         self.vdebug(f"devices={pprint.pformat(self._devices)}")
         
+        # Check for shared devices with restricted permissions
+        for device in self._devices:
+            owner = device.get("owner")
+            owner_id = owner.get("ownerId") if isinstance(owner, dict) else None
+            user_id = device.get("userId")
+            user_role = str(device.get("userRole", "")).upper()
+            if owner_id and user_id and user_id != owner_id and user_role != "ADMIN":
+                dev_name = device.get("deviceName", device.get("deviceId", "Unknown"))
+                dev_id = device.get("deviceId", "Unknown")
+                self.warning(
+                    f"Device '{dev_name}' ({dev_id}) is shared from another account without 'Allow Access Rights' "
+                    f"(userRole={user_role}). Control features, capabilities, and streaming will be restricted. "
+                    f"Please enable 'Allow Access Rights' for this account in the primary Arlo app under Grant Access."
+                )
+
         # Newer devices include information in this response. Be sure to update it.
         for device in self._devices:
             device_id = device.get("deviceId", None)

@@ -1,3 +1,14 @@
+0.9.0-beta.3
+  Shared Device Permissions Detection & CLI Visibility
+  - Device Access Rights: Added `owner_id`, `is_shared`, and `has_access_rights` properties
+    to `ArloDevice` to detect shared devices with restricted user permissions.
+  - Restricted Account Warning: Emits a startup warning in `PyArlo._refresh_devices()` when
+    devices are shared without administrative access (`userRole != "ADMIN"`).
+  - CLI Status & Listing: Updated `pyaarlo list` and `pyaarlo login --status` to display device
+    ownership and flag restricted shared devices.
+  - Cache Persistence: Persisted shared state and access permissions across all device types
+    in the CLI cache.
+
 0.9.0-beta.2
   Keypad Sensor Hub Support & CLI Enhancements
   - MS1001 Exception Sensors: Handled `automation/exceptionSensors` events from Keypad

@@ -99,6 +99,18 @@ def login(
     if status:
         auth_status = get_auth_status(cli_ctx.config)
         code = print_auth_status(auth_status)
+        cache_file = cli_ctx.cache_path if cli_ctx.hass_dir else None
+        cached = load_cache(cache_file)
+        if cached:
+            restricted = [
+                d for d in cached.get("devices", [])
+                if d.get("is_shared") and not d.get("has_access_rights", True)
+            ]
+            if restricted:
+                names = ", ".join(d.get("name", d.get("id")) for d in restricted)
+                click.echo(f"\n⚠️  Warning: {len(restricted)} shared device(s) lack 'Allow Access Rights' (userRole: GUEST).")
+                click.echo("    Control features, capabilities, and streaming will be restricted.")
+                click.echo(f"    Affected: {names}")
         cli_ctx.finish_debug_report()
         sys.exit(code)
 
@@ -1745,14 +1757,29 @@ def list_cmd(cli_ctx: CLIContext, item: str, compact: bool) -> None:
         if item_type in type_map:
             filtered = [d for d in devices if d.get("type") in type_map[item_type]]
             for d in filtered:
+                is_shared = d.get("is_shared", False)
+                has_access = d.get("has_access_rights", True)
+                user_role = d.get("user_role")
+
+                if is_shared:
+                    role_str = str(user_role or "GUEST").upper()
+                    if not has_access:
+                        access_str = f"Shared ({role_str} - Restricted: No Access Rights ⚠️)"
+                    else:
+                        access_str = f"Shared ({role_str})"
+                else:
+                    access_str = "Owner"
+
                 if is_compact:
-                    click.echo(f"[{d.get('type')}] {d.get('name')} (ID: {d.get('id')}, SN: {d.get('serial_number')})")
+                    access_compact = f", Access: {user_role or 'GUEST'} ⚠️" if (is_shared and not has_access) else ""
+                    click.echo(f"[{d.get('type')}] {d.get('name')} (ID: {d.get('id')}, SN: {d.get('serial_number')}{access_compact})")
                 else:
                     click.echo(f"{d.get('name')}:")
                     click.echo(f"  Type:          {d.get('type')}")
                     click.echo(f"  Device ID:     {d.get('id')}")
                     click.echo(f"  Model:         {d.get('model_id')}")
                     click.echo(f"  Serial Number: {d.get('serial_number')}")
+                    click.echo(f"  Access:        {access_str}")
 
         if item_type in ("all", "locations"):
             for loc in locations:
