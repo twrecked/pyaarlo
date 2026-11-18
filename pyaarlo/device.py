@@ -127,7 +127,7 @@ class ArloDevice(ArloObject):
         """Returns True if the logged-in account has full access/control rights."""
         if not self.is_shared:
             return True
-        return str(self.user_role or "").upper() == "ADMIN" 
+        return str(self.user_role or "").upper() == "ADMIN"
 
     @property
     def xcloud_id(self):
