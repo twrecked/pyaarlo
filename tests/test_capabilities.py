@@ -33,6 +33,8 @@ from pyaarlo.capabilities import (
 )
 from pyaarlo.constant import (
     BATTERY_KEY,
+    MEDIA_PLAYER_KEY,
+    MODEL_BABY,
     MOTION_DETECTED_KEY,
     AUDIO_DETECTED_KEY,
     SIREN_STATE_KEY,
@@ -237,6 +239,33 @@ class TestCapabilities(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(ArloCapabilities.check_camera_supports(cam, SIREN_STATE_KEY))
         self.assertTrue(ArloCapabilities.check_camera_supports(cam, SPOTLIGHT_KEY))
         self.assertTrue(ArloCapabilities.check_camera_supports(cam, BATTERY_KEY))
+
+    async def test_media_player_capability_with_cache(self):
+        cases = (
+            ("AVD2001A", "i007", {"Melody": {}}, False),
+            ("CUSTOM_CAM", "i001", {"AudioPlayback": {}}, True),
+            (MODEL_BABY, "i001", {"Melody": {}}, True),
+            (MODEL_BABY, "i002", {}, False),
+        )
+        for model, version, capabilities, expected in cases:
+            with self.subTest(model=model, version=version):
+                doc = {"Capabilities": capabilities}
+                core = _FakeCore(doc)
+                self.assertEqual(await get_capabilities(core, model, version), doc)
+                cam = _FakeCamera(core, model, version)
+                self.assertEqual(
+                    ArloCapabilities.check_camera_supports(cam, MEDIA_PLAYER_KEY),
+                    expected,
+                )
+
+    def test_media_player_capability_without_cache(self):
+        core = _FakeCore()
+        baby = _FakeCamera(core, MODEL_BABY)
+        doorbell = _FakeCamera(core, "AVD2001A", "i007")
+        self.assertTrue(ArloCapabilities.check_camera_supports(baby, MEDIA_PLAYER_KEY))
+        self.assertFalse(
+            ArloCapabilities.check_camera_supports(doorbell, MEDIA_PLAYER_KEY)
+        )
 
     def test_static_camera_supports_fallback_when_uncached(self):
         core = _FakeCore()
