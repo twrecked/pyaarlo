@@ -71,6 +71,7 @@ class ArloCamera(ArloChildDevice):
     def __init__(self, name: str, core: ArloCore, objs: ArloObjects, attrs):
         super().__init__(name, core, objs, attrs)
         self._stream_lock = asyncio.Lock()
+        self._recording_start_lock = asyncio.Lock()
         self._recent = False
         self._recent_job = None
         self._cache_count = None
@@ -1149,64 +1150,82 @@ class ArloCamera(ArloChildDevice):
         await self._stop_activity()
         return True
 
-    async def start_recording(self, duration=None):
-        """Request the camera start recording.
+    async def start_recording(
+        self, duration: int | None = None, *, fallback_timezone: str | None = None
+    ) -> str | None:
+        """Start a cloud recording and return the stream URL on acceptance.
 
-        :param duration: seconds for recording to run, `None` means no stopping.
+        :param duration: recording length in seconds, or None for no scheduled stop.
+        :param fallback_timezone: IANA time zone to use if Arlo provides none.
 
-        **Note:** Arlo will stop the recording after 30 seconds if nothing
-        connects to the stream.
-        **Note:** Arlo will stop the recording after 30 minutes anyway.
+        Arlo stops the recording after 30 seconds if no client connects to
+        the stream, and limits recordings to 30 minutes.
         """
-        if not self.has_any_local_users:
-            return None
-        if self.has_user_request("recording"):
-            return self._stream_url
-        self._user_requests.add("recording")
-        self._dump_activities("start_recording")
+        async with self._recording_start_lock:
+            source = self._stream_url
+            if not self.has_any_local_users or not source:
+                return None
+            if self.has_user_request("recording"):
+                return source
 
-        body = {
-            "parentId": self.parent_id,
-            "deviceId": self.device_id,
-            "olsonTimeZone": self.timezone,
-        }
-        self.debug("starting recording")
-        self._save_and_do_callbacks(ACTIVITY_STATE_KEY, "alertStreamActive")
-        await self._core.be.post(
-            path=RECORD_START_PATH,
-            params=body,
-            headers={"xcloudId": self.xcloud_id},
-        )
+            time_zone = self.timezone or (fallback_timezone or "").strip()
+            if not time_zone:
+                self._core.log.warning(
+                    f"Cannot start Arlo recording for {self.name}: no time zone is available"
+                )
+                return None
 
-        # Queue up stop.
-        if duration is not None:
-            self.debug("queueing stop")
-            self._core.tasks.run_in(self.stop_recording, duration)
+            body = {
+                "parentId": self.parent_id,
+                "deviceId": self.device_id,
+                "olsonTimeZone": time_zone,
+            }
+            self.debug("starting recording")
+            status, _ = await self._core.be.post_with_status(
+                path=RECORD_START_PATH,
+                params=body,
+                headers={"xcloudId": self.xcloud_id},
+            )
+            if status != 200:
+                self._core.log.warning(
+                    f"Arlo rejected startRecord for {self.name} (status {status})"
+                )
+                return None
 
-        return self._stream_url
+            self._user_requests.add("recording")
+            self._dump_activities("start_recording")
+            self._save_and_do_callbacks(ACTIVITY_STATE_KEY, "alertStreamActive")
+            if duration is not None:
+                self.debug("queueing stop")
+                self._core.tasks.run_in(self.stop_recording, duration)
+            return source
 
-    async def stop_recording(self):
-        """Request the camera stop recording."""
-        if not self.has_user_request("recording") and not self.has_remote_user(
-            "recording"
-        ):
-            return
+    async def stop_recording(self, *, release_stream: bool = True) -> bool:
+        """Stop a cloud recording and report whether Arlo accepted the request.
+
+        Set release_stream=False when the caller owns the stream's cleanup.
+        """
+        if not self.has_user_request("recording") and not self.has_remote_user("recording"):
+            return False
         self._user_requests.discard("recording")
         self._dump_activities("stop_recording")
 
-        body = {
-            "parentId": self.parent_id,
-            "deviceId": self.device_id,
-        }
+        body = {"parentId": self.parent_id, "deviceId": self.device_id}
         self.debug("stopping recording")
-        await self._core.be.post(
-            path=RECORD_STOP_PATH,
-            params=body,
-            headers={"xcloudId": self.xcloud_id},
-        )
-
-        # stop stream
-        self._core.tasks.run_in(self.stop_recording_stream, 1)
+        try:
+            status, _ = await self._core.be.post_with_status(
+                path=RECORD_STOP_PATH,
+                params=body,
+                headers={"xcloudId": self.xcloud_id},
+            )
+            if status != 200:
+                self._core.log.warning(
+                    f"Arlo rejected stopRecord for {self.name} (status {status})"
+                )
+            return status == 200
+        finally:
+            if release_stream:
+                self._core.tasks.run_in(self.stop_recording_stream, 1)
 
     @property
     def _siren_resource_id(self):

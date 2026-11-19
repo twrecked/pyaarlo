@@ -6,7 +6,8 @@ from .constant import (
     LOCATION_MODES_PATH_FORMAT,
     LOCATION_AUTOMATION_PATH_FORMAT,
     LOCATION_ACTIVEMODE_PATH_FORMAT,
-    MODE_REVISION_KEY
+    MODE_REVISION_KEY,
+    TIMEZONE_KEY,
 )
 from .core import ArloCore
 from .object import ArloObject
@@ -204,6 +205,14 @@ class ArloLocation(ArloObject):
         return self._device_ids
 
     @property
+    def timezone(self) -> str | None:
+        """Return the last time zone reported by the V3 automation API."""
+        zone = self._load(TIMEZONE_KEY)
+        if isinstance(zone, str):
+            return zone.strip() or None
+        return None
+
+    @property
     def mode(self) -> str:
         """Returns the current mode."""
         return self._load(MODE_KEY, "unknown")
@@ -313,6 +322,12 @@ class ArloLocation(ArloObject):
         if data is None:
             self._core.log.error("failed to read modes.")
             return
+
+        info = data.get("info")
+        properties = info.get("properties") if isinstance(info, dict) else None
+        zone = properties.get(TIMEZONE_KEY) if isinstance(properties, dict) else None
+        if isinstance(zone, str) and zone.strip():
+            self._save(TIMEZONE_KEY, zone.strip())
 
         # Parse standard modes (standby, armHome, armAway)
         modes = data.get("modes", {}).get("properties", {})
