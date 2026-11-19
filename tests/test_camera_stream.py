@@ -7,6 +7,7 @@ import pytest
 
 from pyaarlo.camera import ArloCamera
 from pyaarlo.core.storage import ArloStorage
+from pyaarlo.location import ArloLocation
 
 
 @pytest.fixture
@@ -19,6 +20,7 @@ def camera():
     objs = MagicMock()
     objs.cameras = []
     objs.base_stations = []
+    objs.locations = []
     return ArloCamera("Synthetic camera", arlo, objs, {
         "deviceId": "test-device", "deviceType": "camera",
         "parentId": "test-base", "userId": "test-user", "modelId": "TEST",
@@ -131,3 +133,110 @@ async def test_failed_start_does_not_erase_a_remote_activity(camera):
     assert not camera.has_local_user("streaming")
     assert camera.has_local_user("remote")
     assert camera.has_remote_user("recording")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("camera_zone", "base_zone", "expected"),
+    [
+        ("Europe/Paris", "Europe/London", "Europe/Paris"),
+        (" ", "Europe/London", "Europe/London"),
+        (None, None, "America/New_York"),
+    ],
+)
+async def test_start_recording_time_zone_priority(camera, camera_zone, base_zone, expected):
+    camera._attrs["properties"] = {"olsonTimeZone": camera_zone}
+    camera._objs.base_stations = [MagicMock(device_id=camera.parent_id, timezone=base_zone)]
+    camera._local_users.add("recording")
+    camera._stream_url = "rtsps://example.invalid/current"
+    camera._core.be.post_with_status = AsyncMock(return_value=(200, {}))
+
+    assert await camera.start_recording(30, fallback_timezone="America/New_York") == camera._stream_url
+    assert camera._core.be.post_with_status.await_args.kwargs["params"]["olsonTimeZone"] == expected
+    assert camera.has_user_request("recording")
+    camera._core.tasks.run_in.assert_called_once_with(camera.stop_recording, 30)
+
+
+@pytest.mark.asyncio
+async def test_start_recording_without_a_time_zone_does_not_send_request(camera):
+    camera._local_users.add("recording")
+    camera._stream_url = "rtsps://example.invalid/current"
+    camera._core.be.post_with_status = AsyncMock()
+
+    assert await camera.start_recording(30) is None
+    camera._core.be.post_with_status.assert_not_awaited()
+    camera._core.tasks.run_in.assert_not_called()
+    assert not camera.has_user_request("recording")
+
+
+@pytest.mark.asyncio
+async def test_rejected_start_recording_does_not_publish_state_and_can_retry(camera):
+    camera._local_users.add("recording")
+    camera._stream_url = "rtsps://example.invalid/current"
+    camera._core.be.post_with_status = AsyncMock(side_effect=[(400, None), (200, {})])
+    camera._save_and_do_callbacks = MagicMock()
+
+    assert await camera.start_recording(30, fallback_timezone="UTC") is None
+    assert not camera.has_user_request("recording")
+    camera._save_and_do_callbacks.assert_not_called()
+    camera._core.tasks.run_in.assert_not_called()
+
+    assert await camera.start_recording(30, fallback_timezone="UTC") == camera._stream_url
+    assert camera._core.be.post_with_status.await_count == 2
+    camera._core.tasks.run_in.assert_called_once_with(camera.stop_recording, 30)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [200, 400])
+async def test_stop_recording_reports_cloud_status(camera, status):
+    camera._user_requests.add("recording")
+    camera._core.be.post_with_status = AsyncMock(return_value=(status, {}))
+
+    assert await camera.stop_recording(release_stream=False) is (status == 200)
+    assert camera._core.be.post_with_status.await_args.kwargs["path"].endswith("/stopRecord")
+    camera._core.tasks.run_in.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("gateway_ids", "location_id", "duplicate", "expected"),
+    [
+        (["test-base"], None, False, "America/New_York"),
+        (["owner_test-base"], None, False, "America/New_York"),
+        (["test-device"], None, False, "America/New_York"),
+        ([], "home", False, "America/New_York"),
+        (["test-base"], "missing", False, "UTC"),
+        (["unrelated-base"], None, False, "UTC"),
+        (["test-base"], None, True, "UTC"),
+    ],
+)
+async def test_recording_uses_only_an_associated_location_zone(
+    camera, gateway_ids, location_id, duplicate, expected
+):
+    core, objs = camera._core, camera._objs
+    camera._attrs["locationId"] = location_id
+    objs.base_stations = [MagicMock(device_id="unrelated-base", timezone="Europe/Paris")]
+    other = ArloLocation(core, objs, {
+        "locationId": "other",
+        "gatewayDeviceIds": [camera.parent_id if duplicate else "different-gateway"],
+    })
+    home = ArloLocation(core, objs, {"locationId": "home", "gatewayDeviceIds": gateway_ids})
+    objs.locations = [other, home]
+    core.be.get = AsyncMock(side_effect=[
+        {"info": {"properties": {"olsonTimeZone": "Europe/London"}}},
+        {"info": {"properties": {"olsonTimeZone": "America/New_York"}}},
+        {},
+        {"info": {"properties": {"olsonTimeZone": " "}}},
+    ])
+    await other.update_modes()
+    await home.update_modes()
+    await home.update_modes()
+    await home.update_modes()
+    assert home.timezone == "America/New_York"
+
+    camera._local_users.add("recording")
+    camera._stream_url = "rtsps://example.invalid/current"
+    core.be.post_with_status = AsyncMock(return_value=(200, {}))
+    fallback = "UTC" if expected == "UTC" else None
+    assert await camera.start_recording(30, fallback_timezone=fallback) == camera._stream_url
+    assert core.be.post_with_status.await_args.kwargs["params"]["olsonTimeZone"] == expected

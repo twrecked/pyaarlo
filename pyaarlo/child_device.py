@@ -53,16 +53,38 @@ class ArloChildDevice(ArloDevice):
         return self.device_id
 
     @property
-    def timezone(self):
-        """Returns the timezone.
-
-        Tries to be clever. If it doesn't have a timezone it will try its
-        basestation.
-        """
+    def timezone(self) -> str | None:
+        """Return the device, associated base station, or location time zone."""
         time_zone = super().timezone
-        if time_zone is None:
-            return self.base_station.timezone
-        return time_zone
+        if isinstance(time_zone, str) and time_zone.strip():
+            return time_zone.strip()
+
+        device_ids = {self.parent_id, self.device_id}
+        base = self.base_station
+        # base_station can fall back to an unrelated base when no ID matches.
+        if base is not None and base.device_id in device_ids:
+            time_zone = base.timezone
+            if isinstance(time_zone, str) and time_zone.strip():
+                return time_zone.strip()
+
+        location_id = self._attrs.get("locationId")
+        if isinstance(location_id, str) and location_id:
+            matches = [loc for loc in self._objs.locations if loc.device_id == location_id]
+        else:
+            # Arlo sometimes prefixes gateway IDs with the owning user ID.
+            identifiers = {
+                device_id for device_id in device_ids if isinstance(device_id, str) and device_id
+            }
+            matches = [
+                loc for loc in self._objs.locations
+                if isinstance(loc.device_ids, list) and any(
+                    isinstance(gateway, str) and (
+                        gateway in identifiers or gateway.rsplit("_", 1)[-1] in identifiers
+                    )
+                    for gateway in loc.device_ids
+                )
+            ]
+        return matches[0].timezone if len(matches) == 1 else None
 
     @property
     def base_station(self):
