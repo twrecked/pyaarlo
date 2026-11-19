@@ -295,10 +295,19 @@ def eval_doc_nightlight(doc: dict[str, Any]) -> bool:
     return "NightLight" in caps or "Nightlight" in caps
 
 
-def eval_doc_media_player(doc: dict[str, Any]) -> bool:
-    """Returns True if device has audio playback or melodies."""
+def eval_doc_media_player(
+    doc: dict[str, Any], *, model_id: str | None = None
+) -> bool:
+    """Check for playback support, accepting Melody alone only on Arlo Baby."""
     caps = doc.get("Capabilities", {})
-    return "AudioPlayback" in caps or "Melody" in caps
+    if "AudioPlayback" in caps:
+        return True
+    # Doorbells can advertise Melody without exposing the audioPlayback resource.
+    return (
+        "Melody" in caps
+        and model_id is not None
+        and model_id.startswith(MODEL_BABY)
+    )
 
 
 def supports_sip_streaming(core: Any | None, model_id: str | None, interface_version: int | str | None) -> bool:
@@ -437,7 +446,9 @@ async def async_supports_spotlight(core: ArloCore, model_id: str | None, interfa
     return static_camera_supports(model_id, SPOTLIGHT_KEY, device_type=device_type)
 
 
-def dynamic_camera_supports(doc: dict[str, Any], cap: str) -> bool | None:
+def dynamic_camera_supports(
+    doc: dict[str, Any], cap: str, *, model_id: str | None = None
+) -> bool | None:
     """Evaluate whether capability doc indicates support for cap.
 
     Returns True or False if determined from the document schema.
@@ -472,7 +483,7 @@ def dynamic_camera_supports(doc: dict[str, Any], cap: str) -> bool | None:
     if cap in (NIGHTLIGHT_KEY,):
         return eval_doc_nightlight(doc)
     if cap in (MEDIA_PLAYER_KEY,):
-        return eval_doc_media_player(doc)
+        return eval_doc_media_player(doc, model_id=model_id)
 
     return None
 
@@ -848,7 +859,7 @@ class ArloCapabilities:
         interface_version = getattr(camera, "interface_version", None)
         doc = get_cached_capabilities(core, model_id, interface_version)
         if doc and "Capabilities" in doc:
-            dyn = dynamic_camera_supports(doc, cap)
+            dyn = dynamic_camera_supports(doc, cap, model_id=model_id)
             if dyn is not None:
                 return dyn
         return static_camera_supports(
