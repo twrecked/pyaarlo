@@ -1,4 +1,5 @@
 Unreleased
+  - CLI: Add `pyaarlo camera record` for timed Arlo cloud recordings using FFmpeg.
   - Cloud recording: Use the matched Arlo location time zone when the camera and base station
     omit it, with a caller-provided fallback. Only mark a recording active or schedule its stop
     after Arlo accepts the request.

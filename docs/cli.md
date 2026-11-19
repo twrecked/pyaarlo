@@ -245,6 +245,26 @@ pyaarlo camera stream "Driveway"
 pyaarlo camera stream "Driveway" --start-ffmpeg
 ```
 
+### `pyaarlo camera record`
+Starts a timed recording in the **Arlo cloud library**. FFmpeg must be on `PATH`;
+it keeps the stream open without writing a local file.
+
+```bash
+pyaarlo camera record "Test 03" --duration 30
+pyaarlo camera record "Test 03" --duration 30 --timezone America/New_York
+pyaarlo --hass camera record "Test 03" --duration 30
+```
+
+The duration defaults to 30 seconds (allowed range: 1–1800). If Arlo does not
+report a time zone for the camera, its base station, or its matched location,
+the CLI uses `--timezone` or, in Home Assistant mode, the time zone saved in
+`.storage/core.config`. If the
+Home Assistant zone is only set in YAML, pass `--timezone` explicitly.
+
+The command reports whether Arlo accepted start and stop, not whether the clip
+was uploaded. Use `pyaarlo media list -c "Test 03"` to verify the clip and
+`pyaarlo media download` to save it locally.
+
 ### `pyaarlo list`
 Displays discovered devices, locations, or subsystems.
 

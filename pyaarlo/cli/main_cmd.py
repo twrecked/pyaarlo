@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import datetime
 import os
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -29,6 +30,7 @@ from .config import (
     read_config_file,
     save_config_file,
 )
+from .recording import record_camera, recording_timezone
 from .targets import parse_targets, resolve_devices, resolve_location
 from .. import PyArlo
 from ..media import (
@@ -1007,6 +1009,35 @@ def camera_stream(cli_ctx: CLIContext, target: str, start_ffmpeg: bool) -> None:
             await arlo.stop(logout=False)
 
     run_async_cli(cli_ctx, _stream())
+
+@camera.command("record")
+@click.argument("target")
+@click.option("--duration", type=click.IntRange(1, 1800), default=30, show_default=True,
+              help="Cloud recording length in seconds.")
+@click.option("--timezone", help="Fallback IANA time zone, e.g. America/New_York.")
+@click.pass_obj
+def camera_record(cli_ctx: CLIContext, target: str, duration: int, timezone: str | None) -> None:
+    """Record a camera to the Arlo cloud library (requires FFmpeg)."""
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        raise click.ClickException("FFmpeg is required for camera record")
+    zone = recording_timezone(timezone, cli_ctx.hass_dir)
+
+    async def _record() -> int:
+        arlo = await create_pyarlo(cli_ctx.config, wait_for_setup=True, start_background=True)
+        try:
+            matched, _ = resolve_devices(arlo.cameras, [target])
+            if not matched:
+                raise click.ClickException(f"Camera '{target}' not found")
+            if len(matched) != 1:
+                raise click.ClickException(f"Camera '{target}' is ambiguous; use its device ID")
+            await record_camera(matched[0], ffmpeg, duration, zone)
+            return 0
+        finally:
+            await arlo.stop(logout=False)
+
+    run_async_cli(cli_ctx, _record())
+
 
 @camera.command("sip-info")
 @click.argument("target")
