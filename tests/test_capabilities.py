@@ -142,6 +142,31 @@ class TestCapabilities(unittest.IsolatedAsyncioTestCase):
         camera = _FakeCamera(core, model, 1)
         self.assertFalse(ArloCapabilities.check_camera_supports(camera, SIP_STREAMING_KEY))
 
+    async def test_sip_streaming_configuration_enables_unlisted_camera(self):
+        doc = {
+            "Capabilities": {
+                "Streaming": {
+                    "SIPStreaming": {
+                        "protocol": "sip",
+                        "continuous": False,
+                        "eventBased": False,
+                        "transport": {"options": ["tcp", "udp"], "default": "udp"},
+                        "codec": {"options": ["avc"], "default": "avc"},
+                    }
+                }
+            }
+        }
+        model, version = "VMC4030", "i011"
+        core = _FakeCore(doc)
+        camera = _FakeCamera(core, model, version)
+
+        self.assertFalse(static_camera_supports(model, SIP_STREAMING_KEY))
+        self.assertTrue(await async_supports_sip_streaming(core, model, version))
+        self.assertTrue(supports_sip_streaming(core, model, version))
+        self.assertTrue(
+            ArloCapabilities.check_camera_supports(camera, SIP_STREAMING_KEY)
+        )
+
     async def test_missing_sip_streaming_uses_model_fallback(self):
         doc = {
             "Capabilities": {

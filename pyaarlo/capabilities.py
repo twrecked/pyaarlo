@@ -260,6 +260,8 @@ def eval_doc_sip_streaming(doc: dict[str, Any]) -> bool | None:
     if not isinstance(streaming, dict):
         return None
     value = streaming.get("SIPStreaming")
+    if isinstance(value, dict):
+        return bool(value)
     return value if isinstance(value, bool) else None
 
 

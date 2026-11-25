@@ -51,7 +51,7 @@ Example `config.json`:
 
 ## Checking SIP/WebRTC support
 
-Run `pyaarlo capabilities --built-in AVD4001A i016` to compare Arlo's capability document with PyArlo's built-in model list. The calculated **SIP Streaming** value uses the explicit `Streaming.SIPStreaming` flag when present, and the built-in list when the flag is missing. The built-in value is a fallback, not a live playback test.
+Run `pyaarlo capabilities --built-in AVD4001A i016` to compare Arlo's capability document with PyArlo's built-in model list. The calculated **SIP Streaming** value uses the advertised `Streaming.SIPStreaming` boolean or configuration object before consulting the built-in list. A non-empty configuration object indicates support. The built-in value is a fallback, not a live playback test.
 
 ## Common Options
 
