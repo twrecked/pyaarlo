@@ -1852,7 +1852,7 @@ def capabilities_cmd(cli_ctx: CLIContext, target_or_model: str, version: str | N
                 eval_doc_spotlight,
                 eval_doc_floodlight,
                 eval_doc_battery,
-                eval_doc_sip_streaming,
+                resolve_sip_streaming,
                 eval_doc_sip_push_to_talk,
                 eval_doc_full_duplex_talk,
                 eval_doc_temperature,
@@ -1902,7 +1902,11 @@ def capabilities_cmd(cli_ctx: CLIContext, target_or_model: str, version: str | N
                 ("Spotlight", eval_doc_spotlight(doc) if doc else static_camera_supports(model, SPOTLIGHT_KEY, device_type), static_camera_supports(model, SPOTLIGHT_KEY, device_type)),
                 ("Floodlight", eval_doc_floodlight(doc) if doc else static_camera_supports(model, FLOODLIGHT_KEY, device_type), static_camera_supports(model, FLOODLIGHT_KEY, device_type)),
                 ("Battery", eval_doc_battery(doc) if doc else static_camera_supports(model, BATTERY_KEY, device_type), static_camera_supports(model, BATTERY_KEY, device_type)),
-                ("SIP Streaming", eval_doc_sip_streaming(doc) if doc else static_camera_supports(model, SIP_STREAMING_KEY, device_type), static_camera_supports(model, SIP_STREAMING_KEY, device_type)),
+                (
+                    "SIP Streaming",
+                    resolve_sip_streaming(doc, model),
+                    static_camera_supports(model, SIP_STREAMING_KEY, device_type),
+                ),
                 ("SIP Push-To-Talk", eval_doc_sip_push_to_talk(doc) if doc else static_camera_supports(model, SIP_PUSH_TO_TALK_KEY, device_type), static_camera_supports(model, SIP_PUSH_TO_TALK_KEY, device_type)),
                 ("Full Duplex Talk", eval_doc_full_duplex_talk(doc) if doc else False, False),
             ]

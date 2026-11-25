@@ -1,3 +1,8 @@
+0.9.0-beta.6
+  - SIP/WebRTC: Use the built-in model list when Arlo omits `Streaming.SIPStreaming`.
+    Explicit `true` or `false` still takes precedence. The CLI reports the same
+    decision as the camera capability check (twrecked/hass-aarlo#1156).
+
 0.9.0-beta.5
   - Media player: Stop sending unsupported `audioPlayback` requests at startup to doorbells
     that advertise only `Melody`, while preserving Arlo Baby playback support.

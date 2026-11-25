@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock
 from pyaarlo.capabilities import (
     FALLBACK_SIP_STREAMING_MODELS,
     ArloCapabilities,
+    async_supports_sip_streaming,
     eval_doc_audio_detection,
     eval_doc_battery,
     eval_doc_floodlight,
@@ -136,8 +137,35 @@ class TestCapabilities(unittest.IsolatedAsyncioTestCase):
         }
         core = _FakeCore(doc)
         model = FALLBACK_SIP_STREAMING_MODELS[0]
-        await get_capabilities(core, model, 1)
+        self.assertFalse(await async_supports_sip_streaming(core, model, 1))
         self.assertFalse(supports_sip_streaming(core, model, 1))
+        camera = _FakeCamera(core, model, 1)
+        self.assertFalse(ArloCapabilities.check_camera_supports(camera, SIP_STREAMING_KEY))
+
+    async def test_missing_sip_streaming_uses_model_fallback(self):
+        doc = {
+            "Capabilities": {
+                "Streaming": {"CloudStreaming": {"protocol": "rtsp"}},
+                "PushToTalk": {"signal": ["websocket", "sip"]},
+            }
+        }
+        self.assertIsNone(eval_doc_sip_streaming(doc))
+        for model, version, expected in (
+            ("AVD2001A", "i007", True),
+            ("AVD4001A", "i016", True),
+            ("VMC3030", "i001", False),
+        ):
+            with self.subTest(model=model, version=version):
+                core = _FakeCore(doc)
+                self.assertEqual(
+                    await async_supports_sip_streaming(core, model, version), expected
+                )
+                self.assertEqual(supports_sip_streaming(core, model, version), expected)
+                camera = _FakeCamera(core, model, version)
+                self.assertEqual(
+                    ArloCapabilities.check_camera_supports(camera, SIP_STREAMING_KEY),
+                    expected,
+                )
 
     def test_eval_doc_motion_detection(self):
         # Automation 3.0 trigger
