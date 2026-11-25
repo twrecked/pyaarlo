@@ -253,10 +253,24 @@ def eval_doc_battery(doc: dict[str, Any]) -> bool:
     return True
 
 
-def eval_doc_sip_streaming(doc: dict[str, Any]) -> bool:
-    """Returns True if SIP streaming is supported in document."""
+def eval_doc_sip_streaming(doc: dict[str, Any]) -> bool | None:
+    """Return advertised SIP support, or None if unspecified."""
     caps = doc.get("Capabilities", {})
-    return bool(caps.get("Streaming", {}).get("SIPStreaming", False))
+    streaming = caps.get("Streaming") if isinstance(caps, dict) else None
+    if not isinstance(streaming, dict):
+        return None
+    value = streaming.get("SIPStreaming")
+    return value if isinstance(value, bool) else None
+
+
+def resolve_sip_streaming(
+    doc: dict[str, Any] | None, model_id: str | None
+) -> bool:
+    """Use advertised SIP support before consulting the built-in model list."""
+    advertised = eval_doc_sip_streaming(doc) if doc is not None else None
+    if advertised is not None:
+        return advertised
+    return static_camera_supports(model_id, SIP_STREAMING_KEY)
 
 
 def eval_doc_sip_push_to_talk(doc: dict[str, Any]) -> bool:
@@ -317,11 +331,7 @@ def supports_sip_streaming(core: Any | None, model_id: str | None, interface_ver
     falls back to the hardcoded model list.
     """
     cached = get_cached_capabilities(core, model_id, interface_version)
-    if cached is not None and "Capabilities" in cached:
-        return eval_doc_sip_streaming(cached)
-    return model_id is not None and model_id.upper().startswith(
-        tuple(model.upper() for model in FALLBACK_SIP_STREAMING_MODELS)
-    )
+    return resolve_sip_streaming(cached, model_id)
 
 
 def supports_sip_push_to_talk(core: Any | None, model_id: str | None, interface_version: int | str | None) -> bool:
@@ -390,11 +400,7 @@ def supports_floodlight(core: Any | None, model_id: str | None, interface_versio
 
 async def async_supports_sip_streaming(core: ArloCore, model_id: str | None, interface_version: int | str | None) -> bool:
     doc = await get_capabilities(core, model_id, interface_version)
-    if doc and "Capabilities" in doc:
-        return eval_doc_sip_streaming(doc)
-    return model_id is not None and model_id.upper().startswith(
-        tuple(model.upper() for model in FALLBACK_SIP_STREAMING_MODELS)
-    )
+    return resolve_sip_streaming(doc, model_id)
 
 
 async def async_supports_sip_push_to_talk(core: ArloCore, model_id: str | None, interface_version: int | str | None) -> bool:
