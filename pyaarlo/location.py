@@ -223,21 +223,28 @@ class ArloLocation(ArloObject):
         """
         self._core.tasks.run_now(self.set_mode, id_or_name=id_or_name)
 
-    def _propagate_mode_to_bases(self, mode_id: str | None) -> None:
-        """Update MODE_KEY on all base stations associated with this location."""
+    def _propagate_mode_to_bases(self, mode_id: str | None, device_id: str | None = None) -> None:
+        """Update MODE_KEY on the base stations associated with this location.
+
+        :param device_id: only update this base (a per-base custom mode change)
+        """
         if not mode_id:
             return
         for base in self._objs.base_stations:
+            if device_id is not None and base.device_id != device_id:
+                continue
             for gid in self._device_ids:
                 if gid == base.device_id or gid.endswith("_" + base.device_id):
                     base._save_and_do_callbacks(MODE_KEY, mode_id)
                     break
 
-    async def set_mode(self, id_or_name, force: bool = False):
+    async def set_mode(self, id_or_name, force: bool = False, device_id: str | None = None):
         """Set the location mode.
 
         :param id_or_name: mode to use, as returned by available_modes:
         :param force: if True, send mode change even if location.mode already matches
+        :param device_id: the base station asking for its own custom mode; the
+            mode is then resolved for that base only
         """
         # Convert to an ID.
         mode_id = self._name_to_id(id_or_name)
@@ -258,14 +265,32 @@ class ArloLocation(ArloObject):
 
         # Build the PUT body - standard modes vs V3 custom modes
         custom_uuid = None
+        base_id = device_id
+        if base_id is not None:
+            # A base asked for its own mode. Resolve it for that base only: in a
+            # location with several bases, other bases have custom modes with the
+            # same names ("disarmed", "Home"), and picking theirs changes the
+            # wrong base.
+            base_modes = list(self._load_matching([CUSTOM_MODE_UUID_KEY, base_id, "*"]))
+            uuid = self._custom_uuid_for_device(base_id, mode_id)
+            if uuid is None:
+                for key, stored_uuid in base_modes:
+                    if key.split("/")[-1].lower() == mode_id.lower():
+                        uuid = stored_uuid
+                        break
+            if uuid is not None:
+                custom_uuid = (base_id, uuid)
+            elif base_modes:
+                self._core.log.error(f"base {base_id} has no custom mode {id_or_name}, not changing mode")
+                return
         # First try with _device_ids (exact match)
-        for device_id in self._device_ids:
+        for device_id in ([] if base_id is not None else self._device_ids):
             uuid = self._custom_uuid_for_device(device_id, mode_id)
             if uuid is not None:
                 custom_uuid = (device_id, uuid)
                 break
         # If not found, search all device_ids in the custom mode cache (case-insensitive)
-        if custom_uuid is None:
+        if custom_uuid is None and base_id is None:
             for key, uuid in self._load_matching([CUSTOM_MODE_UUID_KEY, "*", "*"]):
                 # key format: customModeUuid/<device_id>/<mode_name>
                 parts = key.split("/")
@@ -300,7 +325,7 @@ class ArloLocation(ArloObject):
 
         self._save_and_do_callbacks(MODE_KEY, mode_id)
         self._save(MODE_REVISION_KEY, mode_revision)
-        self._propagate_mode_to_bases(mode_id)
+        self._propagate_mode_to_bases(mode_id, base_id if custom_uuid and base_id else None)
 
     async def update_mode(self):
         """Check and update the base's current mode."""
