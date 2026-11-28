@@ -932,3 +932,59 @@ async def test_refresh_devices_restricted_access_warning(core_factory, objs):
     warn_msg = core.log.warning.call_args[0][0]
     assert "Restricted Light" in warn_msg
     assert "Allow Access Rights" in warn_msg
+
+
+@pytest.mark.asyncio
+async def test_v3_base_mode_targets_its_own_base(core_factory, objs):
+    """Two bases in one location with same-named custom modes: a base's mode
+    change must name that base, never the first base owning the mode name."""
+    from unittest.mock import AsyncMock
+    from pyaarlo.location import ArloLocation, CUSTOM_MODE_UUID_KEY
+    from pyaarlo.constant import MODE_KEY
+
+    core = core_factory()
+    core.cfg._kw["mode_api"] = "v3"
+    core.be.put = AsyncMock(return_value={"revision": 2})
+
+    loc_data = {
+        "locationId": "loc-uuid-1",
+        "locationName": "Home",
+        "gatewayDeviceIds": ["BASE-A", "BASE-B"],
+    }
+    location = ArloLocation(core, objs, loc_data, user=True)
+    for dev, home_uuid in (("BASE-A", "uuid-a-home"), ("BASE-B", "uuid-b-home")):
+        location._save([CUSTOM_MODE_UUID_KEY, dev, "disarmed"], "disarmed")
+        location._save([CUSTOM_MODE_UUID_KEY, dev, "Home"], home_uuid)
+
+    bases = []
+    for dev in ("BASE-A", "BASE-B"):
+        base = ArloBaseStation(dev, core, objs, {
+            "deviceId": dev,
+            "deviceName": dev,
+            "deviceType": "basestation",
+            "modelId": "VMB4540",
+            "state": "provisioned",
+        })
+        base._save_and_do_callbacks(MODE_KEY, "armed")
+        bases.append(base)
+    base_a, base_b = bases
+    objs.locations = [location]
+    objs.base_stations = bases
+
+    # Disarming the second base names the second base only.
+    await base_b.set_mode("disarmed")
+    params = core.be.put.call_args.kwargs["params"]
+    assert params == {"mode": "custom", "custom": {"BASE-B": "disarmed"}}
+    assert base_a.mode == "armed"
+
+    # Mode names match regardless of case ("home" from the alarm panel vs "Home").
+    core.be.put.reset_mock()
+    await base_b.set_mode("home")
+    params = core.be.put.call_args.kwargs["params"]
+    assert params == {"mode": "custom", "custom": {"BASE-B": "uuid-b-home"}}
+    assert base_a.mode == "armed"
+
+    # A mode the base does not have is refused, never borrowed from another base.
+    core.be.put.reset_mock()
+    await base_b.set_mode("night")
+    assert not core.be.put.called

@@ -265,7 +265,7 @@ class ArloBaseStation(ArloDevice):
                     if gid == self.device_id or gid.endswith("_" + self.device_id):
                         force = (self.mode != mode_name)
                         self.debug(f"V3: delegating mode={mode_name} to location {location.name} (force={force})")
-                        await location.set_mode(mode_name, force=force)
+                        await location.set_mode(mode_name, force=force, device_id=self.device_id)
                         return
             self.debug(f"V3: no location found for base {self.device_id}, ignoring mode change")
             return
